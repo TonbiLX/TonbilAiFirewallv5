@@ -1055,6 +1055,8 @@ async def _get_wan_bridge_port() -> str:
 async def ensure_bridge_masquerade():
     """Bridge seviyesinde MAC yeniden yazimi ve IP MASQUERADE kurallari.
 
+    DEPRECATED: Use ensure_bridge_isolation() instead. Removed in Phase 4 (main.py lifespan swap).
+
     ZTE gibi bazi modem/router'lar, kendi DHCP'sinden IP almamis yeni
     cihazlarin internet trafigini iletmez. Bu fonksiyon:
     1. br_netfilter modülünü yukler ve bridge-nf-call-iptables'i aktif eder
@@ -1134,6 +1136,133 @@ table {BRIDGE_MASQ_TABLE} {{
 
     # 4. Kurallari persist et
     await persist_nftables()
+
+
+async def ensure_bridge_isolation():
+    """Apply bridge isolation: drop L2 forwarding, enable router mode.
+
+    Safe to call multiple times (idempotent via comment anchors).
+    Steps are ordered to prevent SSH lockout — do not reorder.
+
+    Transforms Pi from transparent bridge mode (modem sees all LAN device MACs)
+    to router mode (modem sees only Pi's MAC). All 7 steps must run in order:
+    Steps 1-4 establish routing BEFORE Step 5 applies the L2 forward drop.
+    """
+    # Step 1: Enable IP forwarding (Pi must route packets after bridge isolation)
+    await _run_system_cmd(["sudo", "sysctl", "-w", "net.ipv4.ip_forward=1"], check=False)
+
+    # Step 2: Load br_netfilter and enable bridge→inet hook bridging
+    # (Required so existing inet tonbilai forward rules still fire for LAN traffic)
+    await _run_system_cmd(["sudo", "modprobe", "br_netfilter"], check=False)
+    await _run_system_cmd(
+        ["sudo", "sysctl", "-w", "net.bridge.bridge-nf-call-iptables=1"], check=False
+    )
+
+    # Step 3: Disable ICMP redirects — prevent Pi from redirecting clients past itself
+    await _run_system_cmd(
+        ["sudo", "sysctl", "-w", "net.ipv4.conf.all.send_redirects=0"], check=False
+    )
+    await _run_system_cmd(
+        ["sudo", "sysctl", "-w", "net.ipv4.conf.br0.send_redirects=0"], check=False
+    )
+
+    # Step 4: Verify MASQUERADE rule is present BEFORE applying drop rules
+    # CRITICAL: Do not apply drop rules without NAT — SSH lockout has no remote recovery path
+    wan_iface = await _get_wan_bridge_port()
+    lan_subnet = await _detect_lan_subnet()
+    ruleset = await run_nft(["list", "ruleset"], check=False) or ""
+
+    if "bridge_lan_masq" not in ruleset:
+        await ensure_nat_postrouting_chain()
+        masq_rule = (
+            f'add rule inet nat postrouting '
+            f'ip saddr {lan_subnet} ip daddr != {lan_subnet} '
+            f'masquerade comment "bridge_lan_masq"'
+        )
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", NFT_BIN, "-f", "-",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr_bytes = await proc.communicate(input=masq_rule.encode())
+        if proc.returncode != 0:
+            logger.error(
+                f"MASQUERADE kurali eklenemedi: {stderr_bytes.decode().strip()} "
+                f"— drop kurallari UYGULANMADI (SSH lockout onleme)"
+            )
+            return  # ABORT — do not proceed to drop rules without confirmed NAT
+        logger.info(f"LAN MASQUERADE kurali eklendi ({lan_subnet})")
+
+    # Step 5: Apply L2 forward drop rules ATOMICALLY (both directions in one nft -f - transaction)
+    # Both rules must be in a single transaction to avoid asymmetric isolation window.
+    if "bridge_isolation_lan_wan" not in ruleset or "bridge_isolation_wan_lan" not in ruleset:
+        drop_rules = (
+            f'add rule bridge filter forward '
+            f'iifname "eth1" oifname "{wan_iface}" drop comment "bridge_isolation_lan_wan"\n'
+            f'add rule bridge filter forward '
+            f'iifname "{wan_iface}" oifname "eth1" drop comment "bridge_isolation_wan_lan"\n'
+        )
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", NFT_BIN, "-f", "-",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr_bytes = await proc.communicate(input=drop_rules.encode())
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"Bridge isolation drop rules failed: {stderr_bytes.decode().strip()}"
+            )
+        logger.info(f"Bridge isolation: L2 forwarding blocked (eth1<->{wan_iface})")
+
+    # Step 6: Delete masquerade_fix table — safe ONLY after drop rules are active
+    # (masquerade_fix rewrites MACs for bridge-forwarded packets; now that bridge
+    # forwarding is dropped, the table is inactive and can be removed cleanly)
+    if BRIDGE_MASQ_TABLE in ruleset:
+        await run_nft(["delete", "table", BRIDGE_MASQ_TABLE], check=False)
+        logger.info("Bridge masquerade_fix tablosu kaldirildi (router modunda gereksiz)")
+
+    # Step 7: Persist ruleset to disk
+    await persist_nftables()
+    logger.info("Bridge isolation active — router mode")
+
+
+async def remove_bridge_isolation():
+    """Remove bridge isolation rules — return to transparent bridge mode.
+
+    Uses live handle lookup — never caches handles (they change on reboot).
+    Handles are re-queried at call time via nft -a list chain so this function
+    works correctly even after nftables.service reloads persisted rules on reboot.
+
+    Note: Does NOT remove the MASQUERADE rule (bridge_lan_masq) — it does not
+    harm transparent bridge mode and removing it could affect other NAT rules.
+    """
+    # Step 1: Live handle lookup and deletion of bridge_isolation rules
+    out = await run_nft(["-a", "list", "chain", "bridge", "filter", "forward"], check=False)
+    if out:
+        for line in out.splitlines():
+            if "bridge_isolation" in line and "handle" in line:
+                handle_match = re.search(r"handle\s+(\d+)", line)
+                if handle_match:
+                    handle = handle_match.group(1)
+                    await run_nft(
+                        ["delete", "rule", "bridge", "filter", "forward", "handle", handle],
+                        check=False,
+                    )
+                    logger.info(f"Bridge isolation kurali kaldirildi (handle {handle})")
+
+    # Step 2: Restore ICMP redirects (were disabled by ensure_bridge_isolation step 3)
+    await _run_system_cmd(
+        ["sudo", "sysctl", "-w", "net.ipv4.conf.all.send_redirects=1"], check=False
+    )
+    await _run_system_cmd(
+        ["sudo", "sysctl", "-w", "net.ipv4.conf.br0.send_redirects=1"], check=False
+    )
+
+    # Step 3: Persist ruleset to disk
+    await persist_nftables()
+    logger.info("Bridge isolation removed — transparent bridge mode restored")
 
 
 async def remove_bridge_masquerade():
