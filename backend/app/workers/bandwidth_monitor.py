@@ -34,8 +34,10 @@ REDIS_HISTORY_TOTAL = "bw:history:total"
 REDIS_KEY_TTL = 120  # 2 dakika TTL
 HISTORY_MAX_LEN = 300  # ~50 dk (10s aralıkla)
 
-# Onceki counter degerleri (delta hesaplama)
-_previous_counters: dict[str, dict[str, int]] = {}
+# nft reset semantigi: her read_device_counters() cagrisi counter'lari sifirlar ve
+# delta deger dondurur. Onceki counter takibine gerek kalmaz.
+# Kumulatif toplam (upload_total/download_total) Redis'e yazilmak uzere burada izlenir.
+_cumulative_totals: dict[str, dict[str, int]] = {}
 _last_snapshot_hour: int = -1
 
 
@@ -89,8 +91,16 @@ async def _calculate_and_store_bandwidth(
     redis_client,
     elapsed_seconds: float,
 ):
-    """Counter deltalarini hesapla, Redis'e yaz."""
-    global _previous_counters
+    """nft reset counter delta'larini isleme, Redis'e yaz.
+
+    nft reset semantigi: read_device_counters() her cagrisinda counter'lar
+    sifirlanir ve o araliktaki delta deger dondurulur. Dolayisiyla degerler
+    DIREKT delta'dir — onceki degerden cikarma gerekmez.
+
+    Kumulatif toplam (upload_total / download_total) Redis'e yazmak icin
+    modul seviyesi _cumulative_totals dict'i kullanilir.
+    """
+    global _cumulative_totals
 
     now_ts = int(time.time())
     total_upload_bps = 0
@@ -99,16 +109,11 @@ async def _calculate_and_store_bandwidth(
     pipe = redis_client.pipeline(transaction=False)
 
     for mac, current in counters.items():
-        prev = _previous_counters.get(mac)
-        if prev is None:
-            # Ilk okuma - sadece baseline al
-            continue
-
-        # Delta hesapla
-        delta_up_bytes = max(0, current["upload_bytes"] - prev["upload_bytes"])
-        delta_down_bytes = max(0, current["download_bytes"] - prev["download_bytes"])
-        delta_up_pkts = max(0, current["upload_packets"] - prev["upload_packets"])
-        delta_down_pkts = max(0, current["download_packets"] - prev["download_packets"])
+        # nft reset: dondurilen degerler dogrudan delta'dir, cikarma gerekmez
+        delta_up_bytes = current["upload_bytes"]
+        delta_down_bytes = current["download_bytes"]
+        delta_up_pkts = current["upload_packets"]
+        delta_down_pkts = current["download_packets"]
 
         # bps hesapla
         if elapsed_seconds > 0:
@@ -125,15 +130,26 @@ async def _calculate_and_store_bandwidth(
         if device_id is None:
             continue
 
+        # Kumulatif toplam izle (nft reset her cycle'da sifirladigi icin)
+        if mac not in _cumulative_totals:
+            _cumulative_totals[mac] = {"upload_bytes": 0, "download_bytes": 0,
+                                        "upload_packets": 0, "download_packets": 0}
+        _cumulative_totals[mac]["upload_bytes"] += delta_up_bytes
+        _cumulative_totals[mac]["download_bytes"] += delta_down_bytes
+        _cumulative_totals[mac]["upload_packets"] += delta_up_pkts
+        _cumulative_totals[mac]["download_packets"] += delta_down_pkts
+
+        cumulative = _cumulative_totals[mac]
+
         # Per-device Redis HASH
         device_key = f"{REDIS_PREFIX_DEVICE}{device_id}"
         pipe.hset(device_key, mapping={
             "upload_bps": upload_bps,
             "download_bps": download_bps,
-            "upload_total": current["upload_bytes"],
-            "download_total": current["download_bytes"],
-            "upload_packets": current["upload_packets"],
-            "download_packets": current["download_packets"],
+            "upload_total": cumulative["upload_bytes"],
+            "download_total": cumulative["download_bytes"],
+            "upload_packets": cumulative["upload_packets"],
+            "download_packets": cumulative["download_packets"],
             "mac": mac,
             "ts": now_ts,
         })
@@ -173,9 +189,6 @@ async def _calculate_and_store_bandwidth(
     except Exception as e:
         logger.error(f"Redis bandwidth yazma hatasi: {e}")
 
-    # Onceki counter'lari güncelle
-    _previous_counters = counters.copy()
-
     return total_upload_bps, total_download_bps
 
 
@@ -184,7 +197,11 @@ async def _write_hourly_snapshot(
     mac_to_id: dict[str, int],
     redis_client,
 ):
-    """Saatlik agrega snapshot'i DB'ye yaz."""
+    """Saatlik agrega snapshot'i DB'ye yaz.
+
+    nft reset semantigi: counters sadece son 10s delta'yi icerir.
+    Kumulatif toplamlar icin _cumulative_totals kullanilir.
+    """
     global _last_snapshot_hour
 
     current_hour = now_local().replace(minute=0, second=0, microsecond=0)
@@ -199,7 +216,9 @@ async def _write_hourly_snapshot(
 
     try:
         async with async_session_factory() as session:
-            for mac, data in counters.items():
+            # nft reset: kumulatif degerler icin _cumulative_totals kullanilir
+            snapshot_source = _cumulative_totals if _cumulative_totals else counters
+            for mac, data in snapshot_source.items():
                 device_id = mac_to_id.get(mac)
                 if device_id is None:
                     continue
@@ -266,11 +285,10 @@ async def start_bandwidth_monitor():
         await nft.sync_device_counters(list(mac_to_id.keys()))
         logger.info(f"Bridge counter'lar senkronize edildi: {len(mac_to_id)} cihaz")
 
-    # Ilk okuma (baseline)
-    initial_counters = await nft.read_device_counters()
-    global _previous_counters
-    _previous_counters = initial_counters
-    logger.info(f"Bandwidth monitor AKTIF - {POLL_INTERVAL}s aralıkla bridge counter okuma")
+    # Baseline okuma — onceki servis calismasindan kalan bayat counter degerlerini sifirlar.
+    # nft reset semantigi: bu cagri counter'lari sifirlar, donus degeri atilir.
+    await nft.read_device_counters()
+    logger.info(f"Bandwidth monitor AKTIF - {POLL_INTERVAL}s aralikla bridge counter okuma (nft reset)")
 
     last_sync_time = time.monotonic()
     mac_refresh_counter = 0

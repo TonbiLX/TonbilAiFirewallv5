@@ -16,7 +16,9 @@ TABLE_NAME = "inet tonbilai"
 BLOCKED_MACS_SET = "blocked_macs"
 BLOCKED_IPS_SET = "blocked_ips"
 BRIDGE_TABLE = "bridge accounting"
-BRIDGE_CHAIN = "per_device"
+BRIDGE_CHAIN = "per_device"          # Legacy — cleanup referansi, yeni kodda kullanilmaz
+BRIDGE_CHAIN_UPLOAD = "upload"       # Input hook, iifname eth1, ether saddr
+BRIDGE_CHAIN_DOWNLOAD = "download"   # Output hook, oifname eth1, ether daddr
 BRIDGE_MASQ_TABLE = "bridge masquerade_fix"
 BRIDGE_MASQ_CHAIN = "mac_rewrite"
 
@@ -560,31 +562,77 @@ async def persist_nftables():
 # ============================================================================
 # Bridge Per-Device Bandwidth Counter Fonksiyonlari
 # nftables bridge tablosu ile MAC bazli gercek zamanli byte/paket sayacı
+#
+# Mimari: Split upload/download chain (input/output hook)
+#   - upload chain:   type filter hook input priority -2  | iifname eth1, ether saddr
+#   - download chain: type filter hook output priority -2 | oifname eth1, ether daddr
+#
+# Bridge isolation (Phase 1) sonrasi forward hook trafik almaz;
+# bu nedenle accounting input/output hook'larina tasindi.
 # ============================================================================
 
 async def ensure_bridge_accounting_chain():
-    """Bridge per_device accounting zincirini oluştur (yoksa).
+    """Bridge accounting tablosi ve upload/download zincirlerini olustur (yoksa).
 
     Yapi:
         table bridge accounting {
-            chain per_device {
-                type filter hook forward priority -2; policy accept;
+            chain upload {
+                type filter hook input priority -2; policy accept;
+                # iifname eth1: sadece LAN'dan gelen frameler sayilir
+            }
+            chain download {
+                type filter hook output priority -2; policy accept;
+                # oifname eth1: sadece LAN'a giden frameler sayilir
             }
         }
+
+    Idempotency:
+        upload ve download chain'leri zaten mevcutsa erken donus.
+
+    Startup temizligi:
+        Eski per_device chain varsa otomatik temizlenir.
+
+    Hata:
+        Chain olusturma basarisizsa RuntimeError firlatilir (servis baslatilmaz).
     """
     ruleset = await run_nft(["list", "ruleset"], check=False)
-    if "table bridge accounting" in ruleset:
-        logger.debug("Bridge accounting tablosu zaten mevcut")
+
+    # Idempotency: her iki yeni chain de varsa donus yap
+    if f"chain {BRIDGE_CHAIN_UPLOAD}" in ruleset and f"chain {BRIDGE_CHAIN_DOWNLOAD}" in ruleset:
+        logger.debug("Bridge accounting upload/download chain'leri zaten mevcut")
         return
 
-    logger.info("Bridge accounting tablosu oluşturuluyor...")
-    nft_commands = """
-table bridge accounting {
-    chain per_device {
-        type filter hook forward priority -2; policy accept;
-    }
-}
-"""
+    # Eski per_device chain temizligi
+    if "table bridge accounting" in ruleset and f"chain {BRIDGE_CHAIN}" in ruleset:
+        logger.info("Eski per_device chain temizlendi, upload/download chain'lere geciliyor")
+        # Once kurallari temizle, sonra chain'i sil
+        await run_nft(["flush", "chain", "bridge", "accounting", BRIDGE_CHAIN], check=False)
+        await run_nft(["delete", "chain", "bridge", "accounting", BRIDGE_CHAIN], check=False)
+
+    logger.info("Bridge accounting upload/download chain'leri olusturuluyor...")
+
+    # Tablo yoksa create, varsa sadece chain'leri ekle (atomik stdin)
+    if "table bridge accounting" not in ruleset:
+        nft_commands = (
+            f"table bridge accounting {{\n"
+            f"    chain {BRIDGE_CHAIN_UPLOAD} {{\n"
+            f"        type filter hook input priority -2; policy accept;\n"
+            f"    }}\n"
+            f"    chain {BRIDGE_CHAIN_DOWNLOAD} {{\n"
+            f"        type filter hook output priority -2; policy accept;\n"
+            f"    }}\n"
+            f"}}\n"
+        )
+    else:
+        # Tablo var ama chain'ler yok (veya sadece biri var) — atomik ekle
+        nft_commands = (
+            f"table bridge accounting\n"
+            f"add chain bridge accounting {BRIDGE_CHAIN_UPLOAD} "
+            f"{{ type filter hook input priority -2; policy accept; }}\n"
+            f"add chain bridge accounting {BRIDGE_CHAIN_DOWNLOAD} "
+            f"{{ type filter hook output priority -2; policy accept; }}\n"
+        )
+
     proc = await asyncio.create_subprocess_exec(
         "sudo", NFT_BIN, "-f", "-",
         stdin=asyncio.subprocess.PIPE,
@@ -594,118 +642,185 @@ table bridge accounting {
     stdout, stderr = await proc.communicate(input=nft_commands.encode())
     if proc.returncode != 0:
         err = stderr.decode().strip()
-        logger.error(f"Bridge accounting tablo oluşturma hatasi: {err}")
+        logger.error(f"Bridge accounting chain olusturma hatasi: {err}")
         raise RuntimeError(f"bridge accounting create error: {err}")
 
-    logger.info("Bridge accounting tablosu oluşturuldu")
+    logger.info("Bridge accounting upload/download chain'leri olusturuldu")
 
 
 async def add_device_counter(mac: str):
-    """Cihaz için upload/download bridge counter kuralı ekle.
+    """Cihaz icin bridge counter kurallari ekle (upload + download chain).
 
-    Her MAC için 2 kural:
-    - ether saddr MAC counter comment "bw_{mac}_up"   (upload)
-    - ether daddr MAC counter comment "bw_{mac}_down"  (download)
+    Upload chain kurali  (ACCT-02):
+        iifname "eth1" ether saddr {mac} counter comment "bw_{mac}_up"
+
+    Download chain kurali (ACCT-03):
+        oifname "eth1" ether daddr {mac} counter comment "bw_{mac}_down"
+
+    Idempotency: comment zaten varsa ekleme yapilmaz.
+    Hata: upload basarili ama download basarisizsa exception firlatilir.
     """
     mac_lower = mac.lower()
     comment_up = f"bw_{mac_lower}_up"
     comment_down = f"bw_{mac_lower}_down"
 
-    # Zaten var mi kontrol et
-    out = await run_nft(["-a", "list", "chain", "bridge", "accounting", BRIDGE_CHAIN], check=False)
-    if comment_up in out:
+    # Idempotency: upload chain'de comment var mi kontrol et
+    out_up = await run_nft(["-a", "list", "chain", "bridge", "accounting", BRIDGE_CHAIN_UPLOAD], check=False)
+    if comment_up in out_up:
         logger.debug(f"Counter zaten mevcut: {mac_lower}")
         return
 
-    # Upload counter
+    # Upload chain'e kural ekle (ACCT-02)
     await run_nft([
-        "add", "rule", "bridge", "accounting", BRIDGE_CHAIN,
+        "add", "rule", "bridge", "accounting", BRIDGE_CHAIN_UPLOAD,
+        "iifname", "eth1",
         "ether", "saddr", mac_lower, "counter",
         "comment", f'"{comment_up}"',
-    ], check=False)
+    ])
 
-    # Download counter
-    await run_nft([
-        "add", "rule", "bridge", "accounting", BRIDGE_CHAIN,
-        "ether", "daddr", mac_lower, "counter",
-        "comment", f'"{comment_down}"',
-    ], check=False)
+    # Download chain'e kural ekle (ACCT-03)
+    # Upload basarili oldu; download basarisiz olursa exception firlatilir
+    try:
+        await run_nft([
+            "add", "rule", "bridge", "accounting", BRIDGE_CHAIN_DOWNLOAD,
+            "oifname", "eth1",
+            "ether", "daddr", mac_lower, "counter",
+            "comment", f'"{comment_down}"',
+        ])
+    except Exception as e:
+        raise RuntimeError(
+            f"add_device_counter: upload kurali eklendi ama download basarisiz "
+            f"(mac={mac_lower}): {e}"
+        )
 
     logger.debug(f"Bridge counter eklendi: {mac_lower}")
 
 
 async def remove_device_counter(mac: str):
-    """Cihaz için bridge counter kurallarini sil."""
-    mac_lower = mac.lower()
-    patterns = [f"bw_{mac_lower}_up", f"bw_{mac_lower}_down"]
+    """Cihaz icin bridge counter kurallarini sil (upload + download chain).
 
-    out = await run_nft(["-a", "list", "chain", "bridge", "accounting", BRIDGE_CHAIN], check=False)
-    for line in out.splitlines():
-        for pattern in patterns:
-            if pattern in line:
-                match = re.search(r"# handle (\d+)", line)
-                if match:
-                    handle = match.group(1)
-                    await run_nft([
-                        "delete", "rule", "bridge", "accounting", BRIDGE_CHAIN,
-                        "handle", handle,
-                    ], check=False)
+    Upload chain: bw_{mac}_up comment'li kurali handle ile sil.
+    Download chain: bw_{mac}_down comment'li kurali handle ile sil.
+
+    MAC chain'de bulunamazsa uyari loglanir, exception firlatilmaz.
+    """
+    mac_lower = mac.lower()
+
+    # Upload chain'den sil
+    out_up = await run_nft(["-a", "list", "chain", "bridge", "accounting", BRIDGE_CHAIN_UPLOAD], check=False)
+    comment_up = f"bw_{mac_lower}_up"
+    found_up = False
+    for line in out_up.splitlines():
+        if comment_up in line:
+            handle_match = re.search(r"# handle (\d+)", line)
+            if handle_match:
+                handle = handle_match.group(1)
+                await run_nft([
+                    "delete", "rule", "bridge", "accounting", BRIDGE_CHAIN_UPLOAD,
+                    "handle", handle,
+                ], check=False)
+                found_up = True
+    if not found_up:
+        logger.warning(f"remove_device_counter: upload chain'de MAC bulunamadi: {mac_lower}")
+
+    # Download chain'den sil
+    out_down = await run_nft(["-a", "list", "chain", "bridge", "accounting", BRIDGE_CHAIN_DOWNLOAD], check=False)
+    comment_down = f"bw_{mac_lower}_down"
+    found_down = False
+    for line in out_down.splitlines():
+        if comment_down in line:
+            handle_match = re.search(r"# handle (\d+)", line)
+            if handle_match:
+                handle = handle_match.group(1)
+                await run_nft([
+                    "delete", "rule", "bridge", "accounting", BRIDGE_CHAIN_DOWNLOAD,
+                    "handle", handle,
+                ], check=False)
+                found_down = True
+    if not found_down:
+        logger.warning(f"remove_device_counter: download chain'de MAC bulunamadi: {mac_lower}")
 
     logger.debug(f"Bridge counter silindi: {mac_lower}")
 
 
 async def read_device_counters() -> Dict[str, Dict[str, int]]:
-    """Tum per-device counter degerlerini oku.
+    """Tum per-device counter degerlerini oku-ve-sifirla (nft reset).
+
+    nft reset semantigi: counter degerlerini okur VE atomik olarak sifirlar.
+    Her cagri bir DELTA dondurur (son cagri sonrasinda birikmis trafik).
 
     Returns:
         {
             "aa:bb:cc:dd:ee:ff": {
-                "upload_bytes": 12345, "upload_packets": 100,
-                "download_bytes": 67890, "download_packets": 200,
+                "upload_bytes": 1234, "upload_packets": 10,
+                "download_bytes": 5678, "download_packets": 20,
             },
             ...
         }
+
+    Hata: nftables okuma hatasinsa bos dict `{}` donulur ve hata loglanir.
     """
     result: Dict[str, Dict[str, int]] = {}
 
-    out = await run_nft(["-a", "list", "chain", "bridge", "accounting", BRIDGE_CHAIN], check=False)
-    if not out:
-        return result
+    def _parse_chain_output(out: str, direction: str) -> Dict[str, Dict[str, int]]:
+        """Chain ciktisini parse et, {mac: {bytes, packets}} don."""
+        parsed: Dict[str, Dict[str, int]] = {}
+        for line in out.splitlines():
+            line = line.strip()
+            if "counter" not in line or "comment" not in line:
+                continue
 
-    # Her satiri parse et: "... counter packets X bytes Y ... comment "bw_MAC_dir""
-    for line in out.splitlines():
-        line = line.strip()
-        if "counter" not in line or "comment" not in line:
-            continue
+            comment_match = re.search(
+                rf'comment\s+"bw_([0-9a-f:]+)_{direction}"', line
+            )
+            if not comment_match:
+                continue
 
-        # Comment'ten MAC ve yon cikar
-        comment_match = re.search(r'comment\s+"bw_([0-9a-f:]+)_(up|down)"', line)
-        if not comment_match:
-            continue
+            mac = comment_match.group(1)
 
-        mac = comment_match.group(1)
-        direction = comment_match.group(2)
+            counter_match = re.search(r'counter\s+packets\s+(\d+)\s+bytes\s+(\d+)', line)
+            if not counter_match:
+                continue
 
-        # Counter degerlerini cikar
-        counter_match = re.search(r'counter\s+packets\s+(\d+)\s+bytes\s+(\d+)', line)
-        if not counter_match:
-            continue
+            packets = int(counter_match.group(1))
+            bytes_val = int(counter_match.group(2))
+            parsed[mac] = {"bytes": bytes_val, "packets": packets}
 
-        packets = int(counter_match.group(1))
-        bytes_val = int(counter_match.group(2))
+        return parsed
 
-        if mac not in result:
-            result[mac] = {
-                "upload_bytes": 0, "upload_packets": 0,
-                "download_bytes": 0, "download_packets": 0,
-            }
+    try:
+        # nft reset: oku VE atomik sifirla — her cagri delta dondurur
+        out_up = await run_nft(
+            ["-a", "reset", "chain", "bridge", "accounting", BRIDGE_CHAIN_UPLOAD],
+            check=True,
+        )
+    except Exception as e:
+        logger.error(f"read_device_counters: upload chain okuma hatasi: {e}")
+        return {}
 
-        if direction == "up":
-            result[mac]["upload_bytes"] = bytes_val
-            result[mac]["upload_packets"] = packets
-        else:
-            result[mac]["download_bytes"] = bytes_val
-            result[mac]["download_packets"] = packets
+    try:
+        out_down = await run_nft(
+            ["-a", "reset", "chain", "bridge", "accounting", BRIDGE_CHAIN_DOWNLOAD],
+            check=True,
+        )
+    except Exception as e:
+        logger.error(f"read_device_counters: download chain okuma hatasi: {e}")
+        return {}
+
+    up_data = _parse_chain_output(out_up, "up")
+    down_data = _parse_chain_output(out_down, "down")
+
+    # Upload ve download verilerini birlestirir
+    all_macs = set(up_data.keys()) | set(down_data.keys())
+    for mac in all_macs:
+        up = up_data.get(mac, {"bytes": 0, "packets": 0})
+        down = down_data.get(mac, {"bytes": 0, "packets": 0})
+        result[mac] = {
+            "upload_bytes": up["bytes"],
+            "upload_packets": up["packets"],
+            "download_bytes": down["bytes"],
+            "download_packets": down["packets"],
+        }
 
     return result
 
@@ -713,19 +828,23 @@ async def read_device_counters() -> Dict[str, Dict[str, int]]:
 async def sync_device_counters(macs: List[str]):
     """Bilinen cihaz MAC listesi ile bridge counter kurallarini senkronize et.
 
-    Yeni MAC'ler için counter ekle, kaldirilmis olanlari sil.
+    Yeni MAC'ler icin counter ekle, kaldirilmis olanlari sil.
+    Upload chain uzerinden mevcut MAC'leri tespit eder (bw_{mac}_up comment).
     """
     await ensure_bridge_accounting_chain()
 
-    # Mevcut counter MAC'lerini oku
-    out = await run_nft(["-a", "list", "chain", "bridge", "accounting", BRIDGE_CHAIN], check=False)
+    # Upload chain'deki mevcut counter MAC'lerini oku
+    out = await run_nft(
+        ["-a", "list", "chain", "bridge", "accounting", BRIDGE_CHAIN_UPLOAD],
+        check=False,
+    )
     existing_macs = set()
     for match in re.finditer(r'comment\s+"bw_([0-9a-f:]+)_up"', out):
         existing_macs.add(match.group(1))
 
     target_macs = {m.lower() for m in macs}
 
-    # Yeni MAC'ler için counter ekle
+    # Yeni MAC'ler icin counter ekle
     for mac in target_macs - existing_macs:
         await add_device_counter(mac)
 
