@@ -19,9 +19,11 @@ NFT_BIN = "/usr/sbin/nft"
 ROOT_HANDLE = "1:"
 DEFAULT_CLASSID = "9999"
 
-# nftables bridge tablosu ve tc mark zinciri
+# nftables bridge tablosu ve tc mark zincirleri
 BRIDGE_TABLE = "accounting"
-TC_MARK_CHAIN = "tc_mark"
+TC_MARK_CHAIN = "tc_mark"           # Legacy referans — sadece temizlik icin
+TC_MARK_CHAIN_UP = "tc_mark_up"     # Input hook, iifname eth1, ether saddr
+TC_MARK_CHAIN_DOWN = "tc_mark_down" # Output hook, oifname eth1, ether daddr
 
 # Cache: slave interface listesi (bir kez tespit, sonra cache)
 _slave_interfaces_cache: Optional[List[str]] = None
@@ -102,27 +104,54 @@ def mac_to_mark(mac: str) -> int:
 
 
 async def _ensure_tc_mark_chain():
-    """Bridge tablosunda tc_mark zincirini oluştur (yoksa).
+    """Bridge tablosunda tc_mark_up ve tc_mark_down zincirlerini oluştur (yoksa).
 
-    Bu zincir 'bridge accounting' tablosuna eklenir.
-    per_device zinciri (priority -2) counter için, tc_mark (priority -1) shaping için.
+    Zincirler 'bridge accounting' tablosuna eklenir (Phase 2 ile olusturulan tablo).
+    - tc_mark_up:   input hook (priority -1)  — LAN cihazdan gelen trafik isaretleme
+    - tc_mark_down: output hook (priority -1) — LAN cihaza giden trafik isaretleme
+
+    Accounting zincirleri (priority -2) TC mark zincirlerinden once calisir:
+      once say (prio -2), sonra isaretleme (prio -1).
+
+    Eski tc_mark (forward hook) zinciri bulunursa temizlenir.
+    Idempotent: her iki zincir de mevcutsa erken donus yapar.
     """
-    out = await run_nft(
-        ["-a", "list", "chain", "bridge", BRIDGE_TABLE, TC_MARK_CHAIN],
-        check=False,
-    )
-    if TC_MARK_CHAIN in out and "type filter" in out:
-        logger.debug("Bridge tc_mark zinciri zaten mevcut")
+    # Idempotency: her iki yeni zincir zaten mevcutsa donus yap
+    ruleset = await run_nft(["list", "ruleset"], check=False)
+    if (f"chain {TC_MARK_CHAIN_UP}" in ruleset and
+            f"chain {TC_MARK_CHAIN_DOWN}" in ruleset):
+        logger.debug("tc_mark_up/tc_mark_down zincirleri zaten mevcut")
         return
 
-    # Tablo + zinciri oluştur (nft -f additive: tablo varsa sadece zincir eklenir)
-    nft_commands = f"""
-table bridge {BRIDGE_TABLE} {{
-    chain {TC_MARK_CHAIN} {{
-        type filter hook forward priority -1; policy accept;
-    }}
-}}
-"""
+    # Legacy temizlik: eski tc_mark forward-hook zinciri varsa sil
+    if "table bridge accounting" in ruleset and f"chain {TC_MARK_CHAIN}" in ruleset:
+        logger.info("Eski tc_mark forward chain temizleniyor...")
+        await run_nft(["flush", "chain", "bridge", BRIDGE_TABLE, TC_MARK_CHAIN], check=False)
+        await run_nft(["delete", "chain", "bridge", BRIDGE_TABLE, TC_MARK_CHAIN], check=False)
+        logger.info("Eski tc_mark forward chain temizlendi")
+
+    # Zincir olusturma: atomik nft -f - stdin ile
+    if "table bridge accounting" not in ruleset:
+        # Taze kurulum: tablo + zincirler birlikte olustur
+        nft_commands = (
+            f"table bridge {BRIDGE_TABLE} {{\n"
+            f"    chain {TC_MARK_CHAIN_UP} {{\n"
+            f"        type filter hook input priority -1; policy accept;\n"
+            f"    }}\n"
+            f"    chain {TC_MARK_CHAIN_DOWN} {{\n"
+            f"        type filter hook output priority -1; policy accept;\n"
+            f"    }}\n"
+            f"}}\n"
+        )
+    else:
+        # Normal durum: Phase 2 accounting tablosu zaten mevcut, sadece zincir ekle
+        nft_commands = (
+            f"add chain bridge {BRIDGE_TABLE} {TC_MARK_CHAIN_UP} "
+            f"{{ type filter hook input priority -1; policy accept; }}\n"
+            f"add chain bridge {BRIDGE_TABLE} {TC_MARK_CHAIN_DOWN} "
+            f"{{ type filter hook output priority -1; policy accept; }}\n"
+        )
+
     proc = await asyncio.create_subprocess_exec(
         "sudo", NFT_BIN, "-f", "-",
         stdin=asyncio.subprocess.PIPE,
@@ -132,10 +161,10 @@ table bridge {BRIDGE_TABLE} {{
     _, stderr = await proc.communicate(input=nft_commands.encode())
     if proc.returncode != 0:
         err = stderr.decode().strip()
-        logger.error(f"tc_mark chain oluşturma hatasi: {err}")
+        logger.error(f"tc_mark_up/tc_mark_down chain olusturma hatasi: {err}")
         raise RuntimeError(f"tc_mark chain create error: {err}")
 
-    logger.info("Bridge tc_mark zinciri oluşturuldu (priority -1)")
+    logger.info("Bridge tc_mark_up/tc_mark_down zincirleri oluşturuldu (priority -1)")
 
 
 async def _cleanup_old_br0_rules():
