@@ -59,10 +59,10 @@ Plans:
   2. `add_device_limit(mac, rate, ceil)` adds mark rules to both tc_mark_up and tc_mark_down chains
   3. `remove_device_limit(mac)` removes mark rules from both chains without affecting other devices
   4. A device with a 5 Mbps limit cannot sustain above 5 Mbps download after isolation is active (live bandwidth test confirms HTB qdisc enforces the mark)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 03-01: Rewrite TC mark chain functions in linux_tc.py (tc_mark_up/tc_mark_down on input/output hooks)
+- [ ] 03-01-PLAN.md — Rewrite _ensure_tc_mark_chain(), add_device_limit(), and _remove_nft_mark_rule() in linux_tc.py for split tc_mark_up/tc_mark_down chains on input/output hooks
 
 ### Phase 4: Startup and Persistence
 **Goal**: The router mode configuration survives backend restarts and Pi reboots — no manual intervention is needed to re-apply isolation after a restart
