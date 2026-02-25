@@ -210,13 +210,15 @@ async def setup_htb_root():
 async def add_device_limit(mac: str, rate_mbps: int, ceil_mbps: int = 0):
     """Cihaz için bant genisligi siniri ekle/güncelle.
 
-    Bridge modunda çalışır:
+    Bridge izolasyon modunda çalışır (Phase 1+):
     1. tc HTB sinifi eth0 VE eth1 üzerinde oluşturulur
-    2. nftables bridge tablosunda mark kuralı eklenir (upload + download)
+    2. nftables bridge tablosunda mark kurallari eklenir:
+       - tc_mark_up   (input hook):  iifname eth1 + ether saddr + meta mark set
+       - tc_mark_down (output hook): oifname eth1 + ether daddr + meta mark set
     3. tc fw filtresi mark'a göre sinifa yonlendirir
 
-    Upload:  cihaz -> eth0(in) -> bridge forward -> eth1(out) - tc eth1 sinirlama
-    Download: internet -> eth1(in) -> bridge forward -> eth0(out) - tc eth0 sinirlama
+    Upload:  cihaz -> bridge input hook (eth1 ingress) -> tc_mark_up isareti -> tc eth1 sinirlama
+    Download: Pi -> bridge output hook (eth1 egress) -> tc_mark_down isareti -> tc eth1 sinirlama
 
     Args:
         mac: Cihaz MAC adresi
@@ -280,22 +282,28 @@ async def add_device_limit(mac: str, rate_mbps: int, ceil_mbps: int = 0):
     # 3. Bridge nftables tablosunda mark kurallari
     await _ensure_tc_mark_chain()
 
-    # Eski mark kurallarini temizle (bridge + inet)
+    # Eski mark kurallarini temizle (bridge tc_mark_up/down + inet legacy)
     await _remove_nft_mark_rule(mac)
 
     mac_lower = mac.lower()
 
-    # Upload: cihazdan gelen trafik (ether saddr)
+    # Upload: cihazdan gelen trafik — tc_mark_up chain (TCMK-02)
+    # iifname eth1: sadece LAN arabiriminden gelen trafik
+    # ether saddr: kaynak MAC'e gore isaretleme
     await run_nft([
-        "add", "rule", "bridge", BRIDGE_TABLE, TC_MARK_CHAIN,
+        "add", "rule", "bridge", BRIDGE_TABLE, TC_MARK_CHAIN_UP,
+        "iifname", "eth1",
         "ether", "saddr", mac_lower,
         "meta", "mark", "set", str(mark),
         "comment", f'"tc_mark_{mac_lower}_up"',
     ])
 
-    # Download: cihaza giden trafik (ether daddr)
+    # Download: cihaza giden trafik — tc_mark_down chain (TCMK-03)
+    # oifname eth1: sadece LAN arabiriminden cikan trafik
+    # ether daddr: hedef MAC'e gore isaretleme
     await run_nft([
-        "add", "rule", "bridge", BRIDGE_TABLE, TC_MARK_CHAIN,
+        "add", "rule", "bridge", BRIDGE_TABLE, TC_MARK_CHAIN_DOWN,
+        "oifname", "eth1",
         "ether", "daddr", mac_lower,
         "meta", "mark", "set", str(mark),
         "comment", f'"tc_mark_{mac_lower}_down"',
@@ -339,24 +347,25 @@ async def _remove_nft_mark_rule(mac: str):
     """MAC için tum nftables tc mark kurallarini sil (bridge + inet eski)."""
     mac_lower = mac.lower()
 
-    # 1. Bridge tablosundaki mark kurallarini sil (yeni format: _up, _down)
-    patterns = [f"tc_mark_{mac_lower}_up", f"tc_mark_{mac_lower}_down"]
-
-    out = await run_nft(
-        ["-a", "list", "chain", "bridge", BRIDGE_TABLE, TC_MARK_CHAIN],
-        check=False,
-    )
-    if out:
-        for line in out.splitlines():
-            for pattern in patterns:
-                if pattern in line:
+    # 1. Bridge tablosundaki mark kurallarini sil — tc_mark_up ve tc_mark_down chain'ler
+    for chain, comment_key in [
+        (TC_MARK_CHAIN_UP, f"tc_mark_{mac_lower}_up"),
+        (TC_MARK_CHAIN_DOWN, f"tc_mark_{mac_lower}_down"),
+    ]:
+        out = await run_nft(
+            ["-a", "list", "chain", "bridge", BRIDGE_TABLE, chain],
+            check=False,
+        )
+        if out:
+            for line in out.splitlines():
+                if comment_key in line:
                     match = re.search(r"# handle (\d+)", line)
                     if match:
                         handle = match.group(1)
                         await run_nft([
-                            "delete", "rule", "bridge", BRIDGE_TABLE, TC_MARK_CHAIN,
+                            "delete", "rule", "bridge", BRIDGE_TABLE, chain,
                             "handle", handle,
-                        ])
+                        ], check=False)
 
     # 2. Eski inet tablosundaki mark kurallarini da temizle (gecis dönemi)
     old_pattern = f"tc_mark_{mac_lower}"
