@@ -1,0 +1,41 @@
+/* DDoS Attack Map Animasyonlari */
+
+/* Saldırgan noktasi pulse */
+.attack-dot {
+  animation: attack-pulse 2s ease-in-out infinite;
+}
+
+@keyframes attack-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Saldırgan halka genişleme */
+.attack-ring {
+  animation: ring-expand 2s ease-out infinite;
+}
+
+@keyframes ring-expand {
+  0% { r: 4; opacity: 0.6; }
+  100% { r: 12; opacity: 0; }
+}
+
+/* Hedef pulse */
+.target-pulse {
+  animation: target-glow 1.5s ease-in-out infinite;
+}
+
+@keyframes target-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Hedef halka */
+.target-ring {
+  animation: target-ring-expand 2s ease-out infinite;
+}
+
+@keyframes target-ring-expand {
+  0% { r: 6; opacity: 0.6; }
+  100% { r: 20; opacity: 0; }
+}

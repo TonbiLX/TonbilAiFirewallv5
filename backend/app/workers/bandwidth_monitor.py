@@ -1,0 +1,320 @@
+# --- Ajan: ANALIST (THE ANALYST) ---
+# Per-device MAC bazli nftables bridge counter ile gercek zamanli bandwidth izleme.
+# 10 saniyede bir counter'lari okur, delta hesaplar, Redis'e yazar.
+# Saatlik agrega verileri DB'ye (DeviceTrafficSnapshot) kaydeder.
+#
+# conntrack (traffic_monitor.py) bağlantı bazli detay saglarken,
+# bu worker MAC bazli anlik hiz (bps) ve toplam byte sayacı saglar.
+
+import asyncio
+import json
+import logging
+import time
+from collections import defaultdict
+from datetime import datetime
+
+from app.db.redis_client import get_redis
+from app.db.session import async_session_factory
+from app.hal import linux_nftables as nft
+from app.services.timezone_service import now_local
+
+logger = logging.getLogger("tonbilai.bandwidth_monitor")
+
+# Polling aralığı (saniye)
+POLL_INTERVAL = 10
+
+# Saatlik snapshot aralığı (saniye)
+HOURLY_SNAPSHOT_INTERVAL = 3600
+
+# Redis key'leri
+REDIS_PREFIX_DEVICE = "bw:device:"      # HASH: upload_bps, download_bps, upload_total, download_total
+REDIS_PREFIX_TOTAL = "bw:total"          # HASH: upload_bps, download_bps
+REDIS_PREFIX_HISTORY = "bw:history:"     # LIST: son 300 JSON kayit
+REDIS_HISTORY_TOTAL = "bw:history:total"
+REDIS_KEY_TTL = 120  # 2 dakika TTL
+HISTORY_MAX_LEN = 300  # ~50 dk (10s aralıkla)
+
+# Onceki counter degerleri (delta hesaplama)
+_previous_counters: dict[str, dict[str, int]] = {}
+_last_snapshot_hour: int = -1
+
+
+async def _get_known_device_macs(redis_client) -> dict[str, int]:
+    """Bilinen cihaz MAC -> device_id eslesmesini DB'den al.
+    Sentetik MAC'leri (AA:00: prefix, DD:0T: prefix) ve
+    yerel ag disindaki cihazlari filtreler.
+    """
+    from app.models.device import Device
+    from sqlalchemy import select
+
+    # Sentetik MAC onekleri (gercek Ethernet MAC degil)
+    SYNTHETIC_PREFIXES = ("aa:00:", "dd:0t:")
+
+    mac_to_id: dict[str, int] = {}
+    try:
+        # Gateway IP'sini al — modem bandwidth izlemeden haric tutulacak
+        from app.workers.device_discovery import _get_gateway_ip
+        gateway_ip = _get_gateway_ip()
+
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(Device.id, Device.mac_address, Device.ip_address).where(
+                    Device.mac_address.isnot(None)
+                )
+            )
+            for row in result.all():
+                device_id, mac, ip = row
+                if not mac or ":" not in mac:
+                    continue
+                mac_lower = mac.lower()
+                # Sentetik MAC'leri atla
+                if any(mac_lower.startswith(p) for p in SYNTHETIC_PREFIXES):
+                    continue
+                # Sadece yerel ag cihazlari (192.168.x.x)
+                if ip and not ip.startswith("192.168."):
+                    continue
+                # Gateway (modem) cihazini bandwidth izlemeden haric tut
+                if ip == gateway_ip:
+                    continue
+                mac_to_id[mac_lower] = device_id
+    except Exception as e:
+        logger.error(f"Cihaz MAC listesi alinirken hata: {e}")
+
+    return mac_to_id
+
+
+async def _calculate_and_store_bandwidth(
+    counters: dict[str, dict[str, int]],
+    mac_to_id: dict[str, int],
+    redis_client,
+    elapsed_seconds: float,
+):
+    """Counter deltalarini hesapla, Redis'e yaz."""
+    global _previous_counters
+
+    now_ts = int(time.time())
+    total_upload_bps = 0
+    total_download_bps = 0
+
+    pipe = redis_client.pipeline(transaction=False)
+
+    for mac, current in counters.items():
+        prev = _previous_counters.get(mac)
+        if prev is None:
+            # Ilk okuma - sadece baseline al
+            continue
+
+        # Delta hesapla
+        delta_up_bytes = max(0, current["upload_bytes"] - prev["upload_bytes"])
+        delta_down_bytes = max(0, current["download_bytes"] - prev["download_bytes"])
+        delta_up_pkts = max(0, current["upload_packets"] - prev["upload_packets"])
+        delta_down_pkts = max(0, current["download_packets"] - prev["download_packets"])
+
+        # bps hesapla
+        if elapsed_seconds > 0:
+            upload_bps = int(delta_up_bytes * 8 / elapsed_seconds)
+            download_bps = int(delta_down_bytes * 8 / elapsed_seconds)
+        else:
+            upload_bps = 0
+            download_bps = 0
+
+        total_upload_bps += upload_bps
+        total_download_bps += download_bps
+
+        device_id = mac_to_id.get(mac)
+        if device_id is None:
+            continue
+
+        # Per-device Redis HASH
+        device_key = f"{REDIS_PREFIX_DEVICE}{device_id}"
+        pipe.hset(device_key, mapping={
+            "upload_bps": upload_bps,
+            "download_bps": download_bps,
+            "upload_total": current["upload_bytes"],
+            "download_total": current["download_bytes"],
+            "upload_packets": current["upload_packets"],
+            "download_packets": current["download_packets"],
+            "mac": mac,
+            "ts": now_ts,
+        })
+        pipe.expire(device_key, REDIS_KEY_TTL)
+
+        # Per-device history
+        history_key = f"{REDIS_PREFIX_HISTORY}{device_id}"
+        history_entry = json.dumps({
+            "ts": now_ts,
+            "up": upload_bps,
+            "down": download_bps,
+        })
+        pipe.lpush(history_key, history_entry)
+        pipe.ltrim(history_key, 0, HISTORY_MAX_LEN - 1)
+        pipe.expire(history_key, 7200)  # 2 saat TTL
+
+    # Toplam bandwidth
+    pipe.hset(REDIS_PREFIX_TOTAL, mapping={
+        "upload_bps": total_upload_bps,
+        "download_bps": total_download_bps,
+        "ts": now_ts,
+    })
+    pipe.expire(REDIS_PREFIX_TOTAL, REDIS_KEY_TTL)
+
+    # Toplam history
+    total_entry = json.dumps({
+        "ts": now_ts,
+        "up": total_upload_bps,
+        "down": total_download_bps,
+    })
+    pipe.lpush(REDIS_HISTORY_TOTAL, total_entry)
+    pipe.ltrim(REDIS_HISTORY_TOTAL, 0, HISTORY_MAX_LEN - 1)
+    pipe.expire(REDIS_HISTORY_TOTAL, 7200)
+
+    try:
+        await pipe.execute()
+    except Exception as e:
+        logger.error(f"Redis bandwidth yazma hatasi: {e}")
+
+    # Onceki counter'lari güncelle
+    _previous_counters = counters.copy()
+
+    return total_upload_bps, total_download_bps
+
+
+async def _write_hourly_snapshot(
+    counters: dict[str, dict[str, int]],
+    mac_to_id: dict[str, int],
+    redis_client,
+):
+    """Saatlik agrega snapshot'i DB'ye yaz."""
+    global _last_snapshot_hour
+
+    current_hour = now_local().replace(minute=0, second=0, microsecond=0)
+    hour_key = int(current_hour.timestamp())
+
+    if hour_key == _last_snapshot_hour:
+        return
+
+    _last_snapshot_hour = hour_key
+
+    from app.models.device_traffic_snapshot import DeviceTrafficSnapshot
+
+    try:
+        async with async_session_factory() as session:
+            for mac, data in counters.items():
+                device_id = mac_to_id.get(mac)
+                if device_id is None:
+                    continue
+
+                # Peak bps degerlerini Redis'ten al
+                device_key = f"{REDIS_PREFIX_DEVICE}{device_id}"
+                bw_data = await redis_client.hgetall(device_key)
+
+                snapshot = DeviceTrafficSnapshot(
+                    device_id=device_id,
+                    timestamp=current_hour,
+                    period="hourly",
+                    upload_bytes=data["upload_bytes"],
+                    download_bytes=data["download_bytes"],
+                    upload_packets=data["upload_packets"],
+                    download_packets=data["download_packets"],
+                    peak_upload_bps=int(bw_data.get("upload_bps", 0)),
+                    peak_download_bps=int(bw_data.get("download_bps", 0)),
+                )
+                session.add(snapshot)
+
+            await session.commit()
+            logger.info(f"Saatlik snapshot yazildi: {len(counters)} cihaz, saat {current_hour}")
+    except Exception as e:
+        logger.error(f"Saatlik snapshot yazma hatasi: {e}")
+
+
+async def start_bandwidth_monitor():
+    """Ana bandwidth izleme dongusu."""
+    logger.info("Bandwidth izleme iscisi başlatiliyor (nftables bridge counter)...")
+
+    await asyncio.sleep(15)  # Diger servislerin hazir olmasini bekle
+
+    redis_client = None
+    try:
+        redis_client = await get_redis()
+        await redis_client.ping()
+        logger.info("Bandwidth monitor: Redis bağlantısi başarılı")
+    except Exception as e:
+        logger.error(f"Bandwidth monitor: Redis bağlantısi başarısız: {e}")
+        for attempt in range(5):
+            await asyncio.sleep(5)
+            try:
+                redis_client = await get_redis()
+                await redis_client.ping()
+                break
+            except Exception:
+                continue
+        else:
+            logger.error("Bandwidth monitor: Redis'e baglanamadi, isci durduruluyor.")
+            return
+
+    # Bridge accounting chain'i oluştur
+    try:
+        await nft.ensure_bridge_accounting_chain()
+        logger.info("Bridge accounting chain hazir")
+    except Exception as e:
+        logger.error(f"Bridge accounting chain oluşturulamadi: {e}")
+        return
+
+    # Bilinen cihaz MAC'lerini al ve counter'lari senkronize et
+    mac_to_id = await _get_known_device_macs(redis_client)
+    if mac_to_id:
+        await nft.sync_device_counters(list(mac_to_id.keys()))
+        logger.info(f"Bridge counter'lar senkronize edildi: {len(mac_to_id)} cihaz")
+
+    # Ilk okuma (baseline)
+    initial_counters = await nft.read_device_counters()
+    global _previous_counters
+    _previous_counters = initial_counters
+    logger.info(f"Bandwidth monitor AKTIF - {POLL_INTERVAL}s aralıkla bridge counter okuma")
+
+    last_sync_time = time.monotonic()
+    mac_refresh_counter = 0
+
+    while True:
+        try:
+            loop_start = time.monotonic()
+
+            # Her 6 dongu (60s) bir MAC listesini yenile
+            mac_refresh_counter += 1
+            if mac_refresh_counter >= 6:
+                mac_refresh_counter = 0
+                new_mac_to_id = await _get_known_device_macs(redis_client)
+                if new_mac_to_id != mac_to_id:
+                    mac_to_id = new_mac_to_id
+                    await nft.sync_device_counters(list(mac_to_id.keys()))
+
+            # Counter'lari oku
+            counters = await nft.read_device_counters()
+            if not counters:
+                await asyncio.sleep(POLL_INTERVAL)
+                continue
+
+            # Gecen sure
+            elapsed = loop_start - last_sync_time
+            last_sync_time = loop_start
+
+            # Delta hesapla ve Redis'e yaz
+            up_bps, down_bps = await _calculate_and_store_bandwidth(
+                counters, mac_to_id, redis_client, elapsed
+            )
+
+            if up_bps > 0 or down_bps > 0:
+                logger.debug(
+                    f"Bandwidth: upload {up_bps:,} bps, download {down_bps:,} bps"
+                )
+
+            # Saatlik snapshot
+            await _write_hourly_snapshot(counters, mac_to_id, redis_client)
+
+        except asyncio.CancelledError:
+            logger.info("Bandwidth monitor durduruluyor.")
+            raise
+        except Exception as e:
+            logger.error(f"Bandwidth monitor dongu hatasi: {e}", exc_info=True)
+
+        await asyncio.sleep(POLL_INTERVAL)

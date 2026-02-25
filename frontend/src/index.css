@@ -1,0 +1,113 @@
+@import "./ddos-map-animations.css";
+/* --- Ajan: INSAATCI (THE CONSTRUCTOR) --- */
+/* Glassmorphism temel stiller ve neon CSS degiskenleri */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --neon-cyan: #00F0FF;
+    --neon-magenta: #FF00E5;
+    --neon-green: #39FF14;
+    --neon-amber: #FFB800;
+    --neon-red: #FF003C;
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.12);
+  }
+
+  body {
+    @apply bg-surface-900 text-white font-sans antialiased;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(0, 240, 255, 0.03) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(255, 0, 229, 0.03) 0%, transparent 50%);
+    min-height: 100vh;
+  }
+
+  /* Scrollbar stilleri */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #0A0A0F; }
+  ::-webkit-scrollbar-thumb { background: rgba(0, 240, 255, 0.3); border-radius: 3px; }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-glass backdrop-blur-glass border border-glass-border rounded-2xl shadow-glass;
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300;
+  }
+  .glass-card-hover:hover {
+    @apply bg-glass-light shadow-neon;
+    border-color: rgba(0, 240, 255, 0.3);
+  }
+
+  .neon-text {
+    text-shadow: 0 0 10px var(--neon-cyan), 0 0 40px rgba(0, 240, 255, 0.2);
+  }
+
+  .neon-text-magenta {
+    text-shadow: 0 0 10px var(--neon-magenta), 0 0 40px rgba(255, 0, 229, 0.2);
+  }
+
+  .neon-text-green {
+    text-shadow: 0 0 10px var(--neon-green), 0 0 40px rgba(57, 255, 20, 0.2);
+  }
+
+  .neon-border {
+    @apply border border-neon-cyan/30;
+    box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.05), 0 0 15px rgba(0, 240, 255, 0.1);
+  }
+}
+
+/* === react-grid-layout Cyberpunk Theme Overrides === */
+
+.react-grid-placeholder {
+  background: rgba(0, 240, 255, 0.08) !important;
+  border: 1px dashed rgba(0, 240, 255, 0.4) !important;
+  border-radius: 1rem !important;
+  opacity: 1 !important;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.15) !important;
+  transition: all 200ms ease !important;
+}
+
+.react-grid-item {
+  transition: all 200ms ease !important;
+}
+
+.react-grid-item.react-draggable-dragging {
+  transition: none !important;
+  z-index: 100 !important;
+  box-shadow: 0 0 30px rgba(0, 240, 255, 0.3) !important;
+  opacity: 0.9 !important;
+}
+
+.react-resizable-handle {
+  background-image: none !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.react-resizable-handle::after {
+  content: "" !important;
+  position: absolute !important;
+  right: 4px !important;
+  bottom: 4px !important;
+  width: 8px !important;
+  height: 8px !important;
+  border-right: 2px solid rgba(0, 240, 255, 0.4) !important;
+  border-bottom: 2px solid rgba(0, 240, 255, 0.4) !important;
+  transition: border-color 200ms ease !important;
+}
+
+.react-resizable-handle:hover::after {
+  border-color: rgba(0, 240, 255, 0.8) !important;
+}
+
+.react-grid-item > div {
+  height: 100%;
+}

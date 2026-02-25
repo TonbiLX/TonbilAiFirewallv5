@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Erişim Engellendi | TonbilAiOS</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:linear-gradient(135deg,#0a0014 0%,#1a0030 30%,#0d0020 60%,#050010 100%);
+  color:#e0e0e0;
+  overflow:hidden;
+}
+/* Animated grid background */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(0,240,255,0.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,240,255,0.03) 1px,transparent 1px);
+  background-size:60px 60px;
+  animation:gridMove 20s linear infinite;
+  z-index:0;
+}
+@keyframes gridMove{0%{transform:translate(0,0)}100%{transform:translate(60px,60px)}}
+
+.container{
+  position:relative;z-index:1;
+  max-width:520px;width:90%;
+  padding:2.5rem;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:24px;
+  backdrop-filter:blur(20px);
+  box-shadow:
+    0 0 40px rgba(255,0,60,0.08),
+    0 25px 50px rgba(0,0,0,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+/* Top accent line */
+.container::before{
+  content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:60%;height:2px;
+  background:linear-gradient(90deg,transparent,#FF003C,transparent);
+  border-radius:2px;
+}
+
+.logo{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  margin-bottom:1.5rem;opacity:0.7;
+}
+.logo svg{filter:drop-shadow(0 0 8px rgba(0,240,255,0.4))}
+.logo-text{
+  font-size:1.1rem;font-weight:700;letter-spacing:2px;
+  background:linear-gradient(135deg,#00F0FF,#00c4d4);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+
+.shield-icon{
+  display:flex;justify-content:center;margin-bottom:1.5rem;
+}
+.shield-icon svg{
+  filter:drop-shadow(0 0 20px rgba(255,0,60,0.5));
+  animation:shieldPulse 3s ease-in-out infinite;
+}
+@keyframes shieldPulse{
+  0%,100%{filter:drop-shadow(0 0 20px rgba(255,0,60,0.5))}
+  50%{filter:drop-shadow(0 0 35px rgba(255,0,60,0.8))}
+}
+
+h1{
+  text-align:center;font-size:1.4rem;font-weight:700;
+  margin-bottom:0.5rem;
+  color:#FF003C;
+  text-shadow:0 0 20px rgba(255,0,60,0.3);
+}
+.subtitle{
+  text-align:center;font-size:0.85rem;color:#888;margin-bottom:2rem;
+}
+
+.info-card{
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.06);
+  border-radius:16px;
+  padding:1.2rem;
+  margin-bottom:1.2rem;
+}
+.info-row{
+  display:flex;justify-content:space-between;align-items:flex-start;
+  padding:0.6rem 0;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+}
+.info-row:last-child{border-bottom:none}
+.info-label{font-size:0.75rem;color:#666;text-transform:uppercase;letter-spacing:1px}
+.info-value{
+  font-size:0.85rem;color:#ccc;text-align:right;max-width:60%;
+  word-break:break-all;
+}
+.info-value.domain{
+  color:#FF003C;font-weight:600;font-family:'Courier New',monospace;
+  text-shadow:0 0 8px rgba(255,0,60,0.2);
+}
+.info-value.reason{color:#FFB800}
+
+.badge{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(255,0,60,0.1);
+  border:1px solid rgba(255,0,60,0.2);
+  border-radius:8px;padding:4px 10px;
+  font-size:0.7rem;font-weight:600;color:#FF003C;
+  text-transform:uppercase;letter-spacing:1px;
+}
+.badge .dot{
+  width:6px;height:6px;border-radius:50%;
+  background:#FF003C;
+  animation:blink 1.5s ease-in-out infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+
+.actions{
+  display:flex;gap:0.8rem;margin-top:1.5rem;
+}
+.btn{
+  flex:1;padding:0.75rem 1rem;
+  border-radius:12px;border:1px solid;
+  font-size:0.85rem;font-weight:600;
+  cursor:pointer;transition:all 0.3s;
+  text-align:center;text-decoration:none;
+}
+.btn-back{
+  background:rgba(0,240,255,0.08);
+  border-color:rgba(0,240,255,0.2);
+  color:#00F0FF;
+}
+.btn-back:hover{
+  background:rgba(0,240,255,0.15);
+  box-shadow:0 0 20px rgba(0,240,255,0.2);
+}
+.btn-home{
+  background:rgba(255,255,255,0.04);
+  border-color:rgba(255,255,255,0.1);
+  color:#999;
+}
+.btn-home:hover{
+  background:rgba(255,255,255,0.08);
+  color:#ccc;
+}
+
+.footer{
+  text-align:center;margin-top:1.5rem;
+  font-size:0.65rem;color:#444;letter-spacing:1px;
+}
+
+/* Loading state */
+.loading .info-value.reason{
+  background:linear-gradient(90deg,#333,#444,#333);
+  background-size:200% 100%;
+  animation:shimmer 1.5s infinite;
+  border-radius:4px;
+  color:transparent;
+  min-width:120px;
+  height:1em;
+}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
+</head>
+<body>
+<div class="container" id="card">
+  <!-- Logo -->
+  <div class="logo">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00F0FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <path d="M12 8v4M12 16h.01" stroke-width="2.5"/>
+    </svg>
+    <span class="logo-text">TonbilAiOS</span>
+  </div>
+
+  <!-- Shield Icon -->
+  <div class="shield-icon">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#FF003C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="rgba(255,0,60,0.08)"/>
+      <line x1="4.5" y1="4.5" x2="19.5" y2="19.5" stroke-width="2"/>
+    </svg>
+  </div>
+
+  <!-- Title -->
+  <h1>Erişim Engellendi</h1>
+  <p class="subtitle">Bu web sitesine erişim güvenlik duvarı tarafından engellendi</p>
+
+  <!-- Info Card -->
+  <div class="info-card">
+    <div class="info-row">
+      <span class="info-label">Engellenen Site</span>
+      <span class="info-value domain" id="blocked-domain">yükleniyor...</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Sebep</span>
+      <span class="info-value reason" id="block-reason">Engelleme listesi</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Durum</span>
+      <span class="badge"><span class="dot"></span> Engellendi</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Zaman</span>
+      <span class="info-value" id="block-time"></span>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button class="btn btn-back" onclick="history.back()">Geri Dön</button>
+    <a class="btn btn-home" href="http://wall.tonbilx.com">Yönetim Paneli</a>
+  </div>
+
+  <div class="footer">TONBILAI FIREWALL &mdash; YAPAY ZEKA DESTEKLI GUVENLIK DUVARI</div>
+</div>
+
+<script>
+(function(){
+  // Domain: URL parametresinden veya hostname'den al
+  var params = new URLSearchParams(window.location.search);
+  var domain = params.get('domain') || window.location.hostname;
+  document.getElementById('blocked-domain').textContent = domain;
+  document.getElementById('block-time').textContent =
+    new Date().toLocaleString('tr-TR',{hour:'2-digit',minute:'2-digit',second:'2-digit',day:'2-digit',month:'2-digit',year:'numeric'});
+
+  // Block sebebini API'den al
+  var card = document.getElementById('card');
+  card.classList.add('loading');
+  fetch('/api/v1/dns/blockpage?domain=' + encodeURIComponent(domain))
+    .then(function(r){return r.json()})
+    .then(function(data){
+      card.classList.remove('loading');
+      if(data.reason_tr){
+        document.getElementById('block-reason').textContent = data.reason_tr;
+      }
+      // Cihaz engeli ise baslik ve alt basligi guncelle
+      if(data.reason === 'device_blocked'){
+        document.querySelector('h1').textContent = 'Cihaz Engellendi';
+        document.querySelector('.subtitle').textContent =
+          'Bu cihazın internet erişimi yönetici tarafından engellendi';
+      }
+    })
+    .catch(function(){
+      card.classList.remove('loading');
+    });
+})();
+</script>
+</body>
+</html>
