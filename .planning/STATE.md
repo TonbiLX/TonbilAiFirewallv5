@@ -5,33 +5,34 @@
 See: .planning/PROJECT.md (updated 2026-02-25)
 
 **Core value:** Modem sadece Pi'yi gorsun, tum LAN cihazlari modemden gizlensin — trafik Pi'nin IP stack'i uzerinden route edilsin.
-**Current focus:** Phase 1 — Bridge Isolation Core
+**Current focus:** Phase 2 — Accounting Chain Migration
 
 ## Current Position
 
-Phase: 1 of 5 (Bridge Isolation Core)
+Phase: 2 of 5 (Accounting Chain Migration)
 Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-02-25 - Completed plan 01-01: Bridge Isolation Core (ensure_bridge_isolation + remove_bridge_isolation)
+Last activity: 2026-02-25 - Completed plan 02-01: Accounting Chain Migration (split upload/download chains, nft reset semantics)
 
-Progress: [██░░░░░░░░] 20%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 15 min
-- Total execution time: 0.25 hours
+- Total plans completed: 2
+- Average duration: 9.5 min
+- Total execution time: 0.32 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-bridge-isolation-core | 1 | 15 min | 15 min |
+| 02-accounting-chain-migration | 1 | 4 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 15 min
-- Trend: -
+- Last 5 plans: 15 min, 4 min
+- Trend: faster
 
 *Updated after each plan completion*
 
@@ -52,6 +53,10 @@ Recent decisions affecting current work:
 - [01-01]: Both L2 drop rules applied atomically in single nft -f - stdin transaction (asymmetric isolation prevention)
 - [01-01]: remove_bridge_isolation() re-queries handles at call time — handles change after nftables.service reloads on boot
 - [01-01]: ensure_bridge_masquerade() DEPRECATED but not removed — Phase 4 handles main.py lifespan swap
+- [02-01]: nft reset semantics — each read_device_counters() call resets counters atomically; returned values are delta
+- [02-01]: Split accounting chains: upload (input hook, iifname eth1) + download (output hook, oifname eth1)
+- [02-01]: _cumulative_totals dict tracks running totals in bandwidth_monitor (nft reset zeroes nft counters each cycle)
+- [02-01]: ensure_bridge_accounting_chain() auto-cleans old per_device chain on startup
 
 ### Research Flags (from SUMMARY.md)
 
@@ -86,5 +91,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 01-01-PLAN.md (Bridge Isolation Core — ensure_bridge_isolation + remove_bridge_isolation)
+Stopped at: Completed 02-01-PLAN.md (Accounting Chain Migration — split upload/download chains, nft reset semantics)
 Resume file: None

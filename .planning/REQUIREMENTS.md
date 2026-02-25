@@ -9,29 +9,29 @@ Requirements for bridge isolation transition. Each maps to roadmap phases.
 
 ### Bridge Isolation Core
 
-- [ ] **ISOL-01**: Pi, bridge forward chain'inde eth0↔eth1 arasi L2 iletimi drop kurallari ile engelleyebilmeli
-- [ ] **ISOL-02**: Pi, inet nat postrouting'de LAN subnet icin MASQUERADE kurali uygulayabilmeli
-- [ ] **ISOL-03**: ip_forward=1 sysctl ayari aktif ve kalici olmali
-- [ ] **ISOL-04**: br_netfilter modulu yuklu ve bridge-nf-call-iptables=1 aktif olmali
-- [ ] **ISOL-05**: ICMP redirect (send_redirects) tum interface'lerde devre disi olmali
-- [ ] **ISOL-06**: Eski bridge masquerade_fix tablosu kaldirilmali (MAC rewrite artik gereksiz)
-- [ ] **ISOL-07**: Izolasyon kurallari atomik olarak uygulanmali (nft -f ile tek transaction)
+- [x] **ISOL-01**: Pi, bridge forward chain'inde eth0↔eth1 arasi L2 iletimi drop kurallari ile engelleyebilmeli
+- [x] **ISOL-02**: Pi, inet nat postrouting'de LAN subnet icin MASQUERADE kurali uygulayabilmeli
+- [x] **ISOL-03**: ip_forward=1 sysctl ayari aktif ve kalici olmali
+- [x] **ISOL-04**: br_netfilter modulu yuklu ve bridge-nf-call-iptables=1 aktif olmali
+- [x] **ISOL-05**: ICMP redirect (send_redirects) tum interface'lerde devre disi olmali
+- [x] **ISOL-06**: Eski bridge masquerade_fix tablosu kaldirilmali (MAC rewrite artik gereksiz)
+- [x] **ISOL-07**: Izolasyon kurallari atomik olarak uygulanmali (nft -f ile tek transaction)
 
 ### Rollback
 
-- [ ] **ROLL-01**: remove_bridge_isolation() fonksiyonu ile seffaf kopru moduna donulebilmeli
-- [ ] **ROLL-02**: Rollback sirasinda izolasyon kurallari handle ile silinmeli
-- [ ] **ROLL-03**: Rollback sirasinda ICMP redirect'ler geri acilmali
+- [x] **ROLL-01**: remove_bridge_isolation() fonksiyonu ile seffaf kopru moduna donulebilmeli
+- [x] **ROLL-02**: Rollback sirasinda izolasyon kurallari handle ile silinmeli
+- [x] **ROLL-03**: Rollback sirasinda ICMP redirect'ler geri acilmali
 
 ### Accounting Migration
 
-- [ ] **ACCT-01**: Bridge accounting per_device chain'i (forward hook) upload/download chain'lerine (input/output hook) tasinmali
-- [ ] **ACCT-02**: Upload chain: iifname eth1, ether saddr MAC ile counter kurallar icermeli
-- [ ] **ACCT-03**: Download chain: oifname eth1, ether daddr MAC ile counter kurallar icermeli
-- [ ] **ACCT-04**: add_device_counter(mac) yeni chain'lere kural eklemeli
-- [ ] **ACCT-05**: remove_device_counter(mac) her iki chain'den kural silmeli
-- [ ] **ACCT-06**: read_device_counters() her iki chain'i okuyup birlestirmeli
-- [ ] **ACCT-07**: sync_device_counters(macs) yeni chain isimlerini kullanmali
+- [x] **ACCT-01**: Bridge accounting per_device chain'i (forward hook) upload/download chain'lerine (input/output hook) tasinmali
+- [x] **ACCT-02**: Upload chain: iifname eth1, ether saddr MAC ile counter kurallar icermeli
+- [x] **ACCT-03**: Download chain: oifname eth1, ether daddr MAC ile counter kurallar icermeli
+- [x] **ACCT-04**: add_device_counter(mac) yeni chain'lere kural eklemeli
+- [x] **ACCT-05**: remove_device_counter(mac) her iki chain'den kural silmeli
+- [x] **ACCT-06**: read_device_counters() her iki chain'i okuyup birlestirmeli
+- [x] **ACCT-07**: sync_device_counters(macs) yeni chain isimlerini kullanmali
 
 ### TC Mark Migration
 
@@ -90,23 +90,23 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ISOL-01 | Phase 1 — Bridge Isolation Core | Pending |
-| ISOL-02 | Phase 1 — Bridge Isolation Core | Pending |
-| ISOL-03 | Phase 1 — Bridge Isolation Core | Pending |
-| ISOL-04 | Phase 1 — Bridge Isolation Core | Pending |
-| ISOL-05 | Phase 1 — Bridge Isolation Core | Pending |
-| ISOL-06 | Phase 1 — Bridge Isolation Core | Pending |
-| ISOL-07 | Phase 1 — Bridge Isolation Core | Pending |
-| ROLL-01 | Phase 1 — Bridge Isolation Core | Pending |
-| ROLL-02 | Phase 1 — Bridge Isolation Core | Pending |
-| ROLL-03 | Phase 1 — Bridge Isolation Core | Pending |
-| ACCT-01 | Phase 2 — Accounting Chain Migration | Pending |
-| ACCT-02 | Phase 2 — Accounting Chain Migration | Pending |
-| ACCT-03 | Phase 2 — Accounting Chain Migration | Pending |
-| ACCT-04 | Phase 2 — Accounting Chain Migration | Pending |
-| ACCT-05 | Phase 2 — Accounting Chain Migration | Pending |
-| ACCT-06 | Phase 2 — Accounting Chain Migration | Pending |
-| ACCT-07 | Phase 2 — Accounting Chain Migration | Pending |
+| ISOL-01 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
+| ISOL-02 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
+| ISOL-03 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
+| ISOL-04 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
+| ISOL-05 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
+| ISOL-06 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
+| ISOL-07 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
+| ROLL-01 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
+| ROLL-02 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
+| ROLL-03 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
+| ACCT-01 | Phase 2 — Accounting Chain Migration | Complete |
+| ACCT-02 | Phase 2 — Accounting Chain Migration | Complete |
+| ACCT-03 | Phase 2 — Accounting Chain Migration | Complete |
+| ACCT-04 | Phase 2 — Accounting Chain Migration | Complete |
+| ACCT-05 | Phase 2 — Accounting Chain Migration | Complete |
+| ACCT-06 | Phase 2 — Accounting Chain Migration | Complete |
+| ACCT-07 | Phase 2 — Accounting Chain Migration | Complete |
 | TCMK-01 | Phase 3 — TC Mark Chain Migration | Pending |
 | TCMK-02 | Phase 3 — TC Mark Chain Migration | Pending |
 | TCMK-03 | Phase 3 — TC Mark Chain Migration | Pending |
@@ -133,4 +133,4 @@ Deferred to future release. Tracked but not in current roadmap.
 
 ---
 *Requirements defined: 2026-02-25*
-*Last updated: 2026-02-25 after roadmap creation*
+*Last updated: 2026-02-25 after plan 01-01 completion (ISOL-01..07, ROLL-01..03 marked complete)*

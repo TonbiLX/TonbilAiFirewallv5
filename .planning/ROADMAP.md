@@ -13,7 +13,7 @@ TonbilAiOS is being migrated from transparent bridge mode (modem sees all LAN de
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Bridge Isolation Core** - HAL functions for L2 isolation, NAT MASQUERADE, masquerade_fix removal, and software rollback
-- [ ] **Phase 2: Accounting Chain Migration** - Rewrite bridge accounting from forward hook to input/output hooks
+- [x] **Phase 2: Accounting Chain Migration** - Rewrite bridge accounting from forward hook to input/output hooks
 - [ ] **Phase 3: TC Mark Chain Migration** - Rewrite TC mark chains from forward hook to input/output hooks
 - [ ] **Phase 4: Startup and Persistence** - Lifespan swap, sysctl persistence, module persistence, nftables persistence
 - [ ] **Phase 5: DHCP Gateway and Validation** - Gateway change from .1 to .2 and 7-step transition validation
@@ -45,10 +45,10 @@ Plans:
   3. `remove_device_counter(mac)` removes counter rules from both chains without affecting other devices
   4. `read_device_counters()` returns merged upload and download byte totals per MAC from both chains
   5. Counter byte values increase when a device sends and receives traffic after isolation is active
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 02-01: Rewrite accounting chain functions in linux_nftables.py (upload/download on input/output hooks)
+- [x] 02-01-PLAN.md — Rewrite accounting chain functions in linux_nftables.py + update bandwidth_monitor.py for nft-reset semantics
 
 ### Phase 3: TC Mark Chain Migration
 **Goal**: Per-device bandwidth limits remain enforced after isolation because TC mark chains operate on the input/output hooks where LAN traffic now flows
@@ -104,7 +104,7 @@ Phases execute in strict numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Bridge Isolation Core | 1/1 | Complete | 2026-02-25 |
-| 2. Accounting Chain Migration | 0/1 | Not started | - |
+| 2. Accounting Chain Migration | 1/1 | Complete | 2026-02-25 |
 | 3. TC Mark Chain Migration | 0/1 | Not started | - |
 | 4. Startup and Persistence | 0/1 | Not started | - |
 | 5. DHCP Gateway and Validation | 0/2 | Not started | - |
