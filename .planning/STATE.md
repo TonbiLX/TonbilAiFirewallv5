@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-25)
 
 **Core value:** Modem sadece Pi'yi gorsun, tum LAN cihazlari modemden gizlensin — trafik Pi'nin IP stack'i uzerinden route edilsin.
-**Current focus:** Phase 2 — Accounting Chain Migration
+**Current focus:** Phase 3 — TC Mark Chain Migration
 
 ## Current Position
 
-Phase: 2 of 5 (Accounting Chain Migration)
+Phase: 3 of 5 (TC Mark Chain Migration)
 Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-02-25 - Completed plan 02-01: Accounting Chain Migration (split upload/download chains, nft reset semantics)
+Last activity: 2026-02-25 - Completed plan 03-01: TC Mark Chain Migration (split tc_mark_up/tc_mark_down on input/output hooks)
 
-Progress: [████░░░░░░] 40%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
@@ -29,9 +29,10 @@ Progress: [████░░░░░░] 40%
 |-------|-------|-------|----------|
 | 01-bridge-isolation-core | 1 | 15 min | 15 min |
 | 02-accounting-chain-migration | 1 | 4 min | 4 min |
+| 03-tc-mark-chain-migration | 1 | 3 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 15 min, 4 min
+- Last 5 plans: 15 min, 4 min, 3 min
 - Trend: faster
 
 *Updated after each plan completion*
@@ -57,6 +58,9 @@ Recent decisions affecting current work:
 - [02-01]: Split accounting chains: upload (input hook, iifname eth1) + download (output hook, oifname eth1)
 - [02-01]: _cumulative_totals dict tracks running totals in bandwidth_monitor (nft reset zeroes nft counters each cycle)
 - [02-01]: ensure_bridge_accounting_chain() auto-cleans old per_device chain on startup
+- [03-01]: TC_MARK_CHAIN kept as legacy reference constant for cleanup detection only (mirrors Phase 2 BRIDGE_CHAIN = 'per_device' precedent)
+- [03-01]: tc_mark_up/tc_mark_down at priority -1, accounting chains at priority -2 — accounting fires first (count then mark)
+- [03-01]: remove_device_limit() inherits new split-chain behavior via delegation to _remove_nft_mark_rule() — no body changes needed
 
 ### Research Flags (from SUMMARY.md)
 
@@ -91,5 +95,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 02-01-PLAN.md (Accounting Chain Migration — split upload/download chains, nft reset semantics)
+Stopped at: Completed 03-01-PLAN.md (TC Mark Chain Migration — split tc_mark_up/tc_mark_down on input/output hooks)
 Resume file: None

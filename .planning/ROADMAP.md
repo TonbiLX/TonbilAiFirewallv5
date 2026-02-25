@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Bridge Isolation Core** - HAL functions for L2 isolation, NAT MASQUERADE, masquerade_fix removal, and software rollback
 - [x] **Phase 2: Accounting Chain Migration** - Rewrite bridge accounting from forward hook to input/output hooks
-- [ ] **Phase 3: TC Mark Chain Migration** - Rewrite TC mark chains from forward hook to input/output hooks
+- [x] **Phase 3: TC Mark Chain Migration** - Rewrite TC mark chains from forward hook to input/output hooks
 - [ ] **Phase 4: Startup and Persistence** - Lifespan swap, sysctl persistence, module persistence, nftables persistence
 - [ ] **Phase 5: DHCP Gateway and Validation** - Gateway change from .1 to .2 and 7-step transition validation
 
@@ -62,7 +62,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 03-01-PLAN.md — Rewrite _ensure_tc_mark_chain(), add_device_limit(), and _remove_nft_mark_rule() in linux_tc.py for split tc_mark_up/tc_mark_down chains on input/output hooks
+- [x] 03-01-PLAN.md — Rewrite _ensure_tc_mark_chain(), add_device_limit(), and _remove_nft_mark_rule() in linux_tc.py for split tc_mark_up/tc_mark_down chains on input/output hooks
 
 ### Phase 4: Startup and Persistence
 **Goal**: The router mode configuration survives backend restarts and Pi reboots — no manual intervention is needed to re-apply isolation after a restart
@@ -105,6 +105,6 @@ Phases execute in strict numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Bridge Isolation Core | 1/1 | Complete | 2026-02-25 |
 | 2. Accounting Chain Migration | 1/1 | Complete | 2026-02-25 |
-| 3. TC Mark Chain Migration | 0/1 | Not started | - |
+| 3. TC Mark Chain Migration | 1/1 | Complete | 2026-02-25 |
 | 4. Startup and Persistence | 0/1 | Not started | - |
 | 5. DHCP Gateway and Validation | 0/2 | Not started | - |

@@ -35,11 +35,11 @@ Requirements for bridge isolation transition. Each maps to roadmap phases.
 
 ### TC Mark Migration
 
-- [ ] **TCMK-01**: TC mark chain (forward hook) tc_mark_up/tc_mark_down chain'lerine (input/output hook) tasinmali
-- [ ] **TCMK-02**: tc_mark_up: iifname eth1, ether saddr MAC ile meta mark set kurallar icermeli
-- [ ] **TCMK-03**: tc_mark_down: oifname eth1, ether daddr MAC ile meta mark set kurallar icermeli
-- [ ] **TCMK-04**: add_device_limit(mac, rate, ceil) yeni chain'lere mark kurali eklemeli
-- [ ] **TCMK-05**: remove_device_limit(mac) her iki chain'den mark kurallarini silmeli
+- [x] **TCMK-01**: TC mark chain (forward hook) tc_mark_up/tc_mark_down chain'lerine (input/output hook) tasinmali
+- [x] **TCMK-02**: tc_mark_up: iifname eth1, ether saddr MAC ile meta mark set kurallar icermeli
+- [x] **TCMK-03**: tc_mark_down: oifname eth1, ether daddr MAC ile meta mark set kurallar icermeli
+- [x] **TCMK-04**: add_device_limit(mac, rate, ceil) yeni chain'lere mark kurali eklemeli
+- [x] **TCMK-05**: remove_device_limit(mac) her iki chain'den mark kurallarini silmeli
 
 ### Startup & Persistence
 
