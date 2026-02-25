@@ -12,7 +12,7 @@ TonbilAiOS is being migrated from transparent bridge mode (modem sees all LAN de
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Bridge Isolation Core** - HAL functions for L2 isolation, NAT MASQUERADE, masquerade_fix removal, and software rollback
+- [x] **Phase 1: Bridge Isolation Core** - HAL functions for L2 isolation, NAT MASQUERADE, masquerade_fix removal, and software rollback
 - [ ] **Phase 2: Accounting Chain Migration** - Rewrite bridge accounting from forward hook to input/output hooks
 - [ ] **Phase 3: TC Mark Chain Migration** - Rewrite TC mark chains from forward hook to input/output hooks
 - [ ] **Phase 4: Startup and Persistence** - Lifespan swap, sysctl persistence, module persistence, nftables persistence
@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md — Add ensure_bridge_isolation() and remove_bridge_isolation() to linux_nftables.py
+- [x] 01-01-PLAN.md — Add ensure_bridge_isolation() and remove_bridge_isolation() to linux_nftables.py
 
 ### Phase 2: Accounting Chain Migration
 **Goal**: Bridge bandwidth counters correctly accumulate on the input/output hooks so device traffic accounting works after L2 forwarding is disabled
@@ -103,7 +103,7 @@ Phases execute in strict numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Bridge Isolation Core | 0/1 | Not started | - |
+| 1. Bridge Isolation Core | 1/1 | Complete | 2026-02-25 |
 | 2. Accounting Chain Migration | 0/1 | Not started | - |
 | 3. TC Mark Chain Migration | 0/1 | Not started | - |
 | 4. Startup and Persistence | 0/1 | Not started | - |

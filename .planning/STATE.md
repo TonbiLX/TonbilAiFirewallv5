@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-02-25)
 ## Current Position
 
 Phase: 1 of 5 (Bridge Isolation Core)
-Plan: 0 of 1 in current phase
-Status: Ready to plan
-Last activity: 2026-02-25 - Phase 1 context gathered, ready to replan
+Plan: 1 of 1 in current phase
+Status: Phase complete
+Last activity: 2026-02-25 - Completed plan 01-01: Bridge Isolation Core (ensure_bridge_isolation + remove_bridge_isolation)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 15 min
+- Total execution time: 0.25 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-bridge-isolation-core | 1 | 15 min | 15 min |
 
 **Recent Trend:**
-- Last 5 plans: none yet
+- Last 5 plans: 15 min
 - Trend: -
 
 *Updated after each plan completion*
@@ -48,6 +48,10 @@ Recent decisions affecting current work:
 - Eski masquerade_fix kaldirilir: Router modunda MAC rewrite gereksiz
 - Rollback dahil: Pre-staged before any live step is applied
 - [Phase quick-1]: Used Python shutil.copytree instead of robocopy due to bash/Windows path-with-spaces incompatibility
+- [01-01]: MASQUERADE verified BEFORE drop rules — abort (return) if MASQUERADE fails to prevent SSH lockout
+- [01-01]: Both L2 drop rules applied atomically in single nft -f - stdin transaction (asymmetric isolation prevention)
+- [01-01]: remove_bridge_isolation() re-queries handles at call time — handles change after nftables.service reloads on boot
+- [01-01]: ensure_bridge_masquerade() DEPRECATED but not removed — Phase 4 handles main.py lifespan swap
 
 ### Research Flags (from SUMMARY.md)
 
@@ -77,9 +81,10 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 1 | Yapiyi tamamen yeni bir klasore yaz. ismi: TonbilAiFirevallv5 olsun. | 2026-02-25 | 5151374 | [1-yapiyi-tamamen-yeni-bir-klasore-yaz-ismi](./quick/1-yapiyi-tamamen-yeni-bir-klasore-yaz-ismi/) |
 | 2 | TonbilAiFirevallv5 klasorunde CLAUDE.md guncelle. | 2026-02-25 | 71853f7 | [2-tonbilaifirevallv5-klasorunde-claude-md-](./quick/2-tonbilaifirevallv5-klasorunde-claude-md-/) |
+| 3 | V41 .planning klasorunu V5 klasorune kopyala | 2026-02-25 | 93ba6c9 | [3-v41-planning-klasorunu-v5-klasorune-kopy](./quick/3-v41-planning-klasorunu-v5-klasorune-kopy/) |
 
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-bridge-isolation-core/01-CONTEXT.md
+Stopped at: Completed 01-01-PLAN.md (Bridge Isolation Core — ensure_bridge_isolation + remove_bridge_isolation)
+Resume file: None
