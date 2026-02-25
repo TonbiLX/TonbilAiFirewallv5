@@ -1,4 +1,4 @@
-# TonbilAiOS - AI-Powered Router Management System
+# TonbilAiOS v5 - AI-Powered Router Management System
 
 ## Proje Genel Bakis
 
@@ -325,7 +325,7 @@ sudo systemctl restart tonbilaios-backend
 
 ```bash
 python sync_from_pi.py
-# Tum frontend + backend dosyalarini E:\Nextcloud-Yeni\TonbilAiFirewallV41 altina indirir
+# Tum frontend + backend dosyalarini E:\Nextcloud-Yeni\TonbilAiFirevallv5 altina indirir
 ```
 
 ## Onemli Dosya Konumlari
@@ -336,7 +336,7 @@ python sync_from_pi.py
 | Frontend build | /opt/tonbilaios/frontend/dist/ | Vite build ciktisi |
 | Backend | /opt/tonbilaios/backend/app/ | FastAPI uygulama |
 | systemd servis | tonbilaios-backend.service | Backend daemon |
-| Lokal kopya | E:\Nextcloud-Yeni\TonbilAiFirewallV41 | PC sync dizini |
+| Lokal kopya | E:\Nextcloud-Yeni\TonbilAiFirevallv5 | PC sync dizini |
 
 ## Profil Tabanli DNS Filtreleme
 
