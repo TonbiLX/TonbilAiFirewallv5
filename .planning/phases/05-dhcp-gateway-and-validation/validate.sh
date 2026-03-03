@@ -433,11 +433,13 @@ if [[ $FAIL -gt 0 ]]; then
     echo -e "  ${RED}${BOLD}RESULT: FAILED — $FAIL check(s) failed${NC}"
     echo ""
     echo -e "  Remediation hints:"
-    echo "  - DHCP-01/02 failure: Run 'sudo systemctl restart tonbilaios-backend' and re-check"
+    echo "  - DHCP-01 failure: PATCH /api/v1/dhcp/pools/1 with gateway:192.168.1.2 or restart backend"
+    echo "  - DHCP-02 failure: mysql -u tonbilai -p tonbilaios -e \"UPDATE dhcp_pools SET gateway='192.168.1.2' WHERE id=1;\""
     echo "  - VALD-06 failure: bridge isolation rules missing — restart backend to re-apply"
     echo "  - VALD-07 failure: verify br0 exists ('ip link show br0') and ip_forward is on"
     echo "  - VALD-03 failure: check NAT masquerade — 'nft list table inet tonbilai'"
     echo "  - VALD-04 failure: check DNS proxy — 'sudo ss -tunlp | grep :53'"
+    echo "  - VALD-05 failure: check br_netfilter is loaded — 'lsmod | grep br_netfilter'"
     echo ""
     exit 1
 else
