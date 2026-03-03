@@ -1,3 +1,9 @@
+## Dil / Language
+
+**ZORUNLU:** Kullaniciyla tum iletisim Turkce yapilmalidir. Commit mesajlari, kod yorumlari ve degisken isimleri Ingilizce kalabilir ancak kullaniciyla yapilan her konusma, aciklama, soru ve rapor Turkce olmalidir.
+
+---
+
 # TonbilAiOS v5 - AI-Powered Router Management System
 
 ## Proje Genel Bakis
