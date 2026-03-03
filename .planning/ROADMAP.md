@@ -90,11 +90,11 @@ Plans:
   5. Bridge accounting upload/download counters increment for the test device during the internet test
   6. `nft list chain bridge filter forward` shows the eth1→eth0 and eth0→eth1 drop rules
   7. A veth namespace test device using gateway 192.168.1.2 can reach the internet, confirming routing works for new clients
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: Update DHCP gateway (dnsmasq + DB) with short-lease pre-staging
-- [ ] 05-02: Execute 7-step validation checklist and document results
+- [ ] 05-01-PLAN.md — Update DHCP gateway/DNS defaults from 192.168.1.1 to 192.168.1.2 in seed data, model, and schema + deployment procedure
+- [ ] 05-02-PLAN.md — Write validation script covering DHCP-01, DHCP-02, VALD-01 through VALD-07
 
 ## Progress
 
