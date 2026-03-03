@@ -323,15 +323,15 @@ async def lifespan(app: FastAPI):
     # DDoS koruma kurallarini DB'den oku ve uygula
     await _sync_ddos_on_startup()
 
-    # Bridge masquerade: modem/router uyumlulugu — yeni cihazlarin internet erisimi
-    # ZTE gibi modemler kendi DHCP'sinden IP almamis cihazlarin trafigini iletmez.
-    # Bu kural tum LAN trafigini Pi'den geliyormus gibi gosterir.
+    # Bridge isolation: router modu — modem sadece Pi MAC'ini gorur
+    # L2 forwarding drop + NAT MASQUERADE + sysctl/modules/nftables persistence
     try:
-        from app.hal.linux_nftables import ensure_bridge_masquerade
-        await ensure_bridge_masquerade()
-        logger.info("Bridge masquerade kurallari hazir (modem uyumlulugu)")
+        from app.hal.linux_nftables import ensure_bridge_isolation, ensure_bridge_isolation_persistence
+        await ensure_bridge_isolation()
+        await ensure_bridge_isolation_persistence()
+        logger.info("Bridge isolation ve persistence kurallari hazir (router modu)")
     except Exception as e:
-        logger.error(f"Bridge masquerade kurulum hatasi: {e}")
+        logger.error(f"Bridge isolation kurulum hatasi: {e}")
 
     # Kategori/profil DNS domain setlerini blocklist cache hazir olduktan sonra olustur
     async def _build_category_profile_cache():
