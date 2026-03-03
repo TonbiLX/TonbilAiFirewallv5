@@ -55,13 +55,13 @@ Requirements for bridge isolation transition. Each maps to roadmap phases.
 
 ### Validation
 
-- [ ] **VALD-01**: Modem ARP tablosunda sadece Pi MAC'i gorunmeli (tcpdump dogrulama)
-- [ ] **VALD-02**: Mevcut cihazlarin conntrack ESTABLISHED baglantiları mevcut olmali
-- [ ] **VALD-03**: Pi internet erisimi calismali (curl testi)
-- [ ] **VALD-04**: DNS cozumlemesi calismali (dig testi)
-- [ ] **VALD-05**: Bridge accounting counter'lari artmali (upload/download chain'ler)
-- [ ] **VALD-06**: Bridge forward chain'de drop kurallari gorunmeli
-- [ ] **VALD-07**: Yapay cihaz testi: veth namespace ile gateway .2 ve internet erisimi dogrulanmali
+- [x] **VALD-01**: Modem ARP tablosunda sadece Pi MAC'i gorunmeli (tcpdump dogrulama)
+- [x] **VALD-02**: Mevcut cihazlarin conntrack ESTABLISHED baglantiları mevcut olmali
+- [x] **VALD-03**: Pi internet erisimi calismali (curl testi)
+- [x] **VALD-04**: DNS cozumlemesi calismali (dig testi)
+- [x] **VALD-05**: Bridge accounting counter'lari artmali (upload/download chain'ler)
+- [x] **VALD-06**: Bridge forward chain'de drop kurallari gorunmeli
+- [x] **VALD-07**: Yapay cihaz testi: veth namespace ile gateway .2 ve internet erisimi dogrulanmali
 
 ## v2 Requirements
 
@@ -118,13 +118,13 @@ Deferred to future release. Tracked but not in current roadmap.
 | STRT-04 | Phase 4 — Startup and Persistence | Complete (2026-03-03) |
 | DHCP-01 | Phase 5 — DHCP Gateway and Validation | Complete |
 | DHCP-02 | Phase 5 — DHCP Gateway and Validation | Complete |
-| VALD-01 | Phase 5 — DHCP Gateway and Validation | Pending |
-| VALD-02 | Phase 5 — DHCP Gateway and Validation | Pending |
-| VALD-03 | Phase 5 — DHCP Gateway and Validation | Pending |
-| VALD-04 | Phase 5 — DHCP Gateway and Validation | Pending |
-| VALD-05 | Phase 5 — DHCP Gateway and Validation | Pending |
-| VALD-06 | Phase 5 — DHCP Gateway and Validation | Pending |
-| VALD-07 | Phase 5 — DHCP Gateway and Validation | Pending |
+| VALD-01 | Phase 5 — DHCP Gateway and Validation | Complete |
+| VALD-02 | Phase 5 — DHCP Gateway and Validation | Complete |
+| VALD-03 | Phase 5 — DHCP Gateway and Validation | Complete |
+| VALD-04 | Phase 5 — DHCP Gateway and Validation | Complete |
+| VALD-05 | Phase 5 — DHCP Gateway and Validation | Complete |
+| VALD-06 | Phase 5 — DHCP Gateway and Validation | Complete |
+| VALD-07 | Phase 5 — DHCP Gateway and Validation | Complete |
 
 **Coverage:**
 - v1 requirements: 35 total

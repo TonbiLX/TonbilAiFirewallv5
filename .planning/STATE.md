@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T16:02:04.939Z"
+last_updated: "2026-03-03T16:03:00Z"
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 6
-  completed_plans: 5
+  completed_phases: 5
+  total_plans: 7
+  completed_plans: 7
 ---
 
 # Project State
@@ -23,9 +23,9 @@ See: .planning/PROJECT.md (updated 2026-02-25)
 ## Current Position
 
 Phase: 5 of 5 (DHCP Gateway and Validation)
-Plan: 1 of 1 in current phase
-Status: Phase complete
-Last activity: 2026-03-03 - Completed plan 05-01: DHCP gateway/DNS defaults updated to 192.168.1.2 in seed data, model, and schema. DEPLOY.md deployment procedure created.
+Plan: 2 of 2 in current phase
+Status: ALL PHASES COMPLETE
+Last activity: 2026-03-03 - Completed plan 05-02: validate.sh post-deployment validation script with all 9 checks (DHCP-01, DHCP-02, VALD-01 through VALD-07) including veth namespace test.
 
 Progress: [██████████] 100%
 
@@ -44,7 +44,8 @@ Progress: [██████████] 100%
 | 02-accounting-chain-migration | 1 | 4 min | 4 min |
 | 03-tc-mark-chain-migration | 1 | 3 min | 3 min |
 | 04-startup-and-persistence | 1 | 5 min | 5 min |
-| 05-dhcp-gateway-and-validation | 1 | 4 min | 4 min |
+| 05-dhcp-gateway-and-validation P01 | 1 | 4 min | 4 min |
+| 05-dhcp-gateway-and-validation P02 | 1 | 3 min | 3 min |
 
 **Recent Trend:**
 - Last 5 plans: 15 min, 4 min, 3 min, 5 min, 4 min
@@ -81,6 +82,10 @@ Recent decisions affecting current work:
 - [04-01]: Persistence called AFTER isolation — nftables.conf contains isolation rules before nftables.service is enabled
 - [Phase 05-dhcp-gateway-and-validation]: DHCP gateway defaults updated to 192.168.1.2 throughout codebase (seed, model, schema)
 - [Phase 05-dhcp-gateway-and-validation]: Short-lease pre-staging (300s) documented as mandatory step before live gateway change
+- [05-02]: VALD-07 uses trap EXIT for cleanup so namespace/veth always removed even on script error
+- [05-02]: VALD-01 SKIP (not FAIL) when no ARP packets captured — requires live LAN traffic
+- [05-02]: VALD-05 WARN (not FAIL) for zero counters — chains may exist but no traffic yet at validation time
+- [05-02]: Test IP 192.168.1.250 probed before use; falls back to .240/.245 if in use
 
 ### Research Flags (from SUMMARY.md)
 
@@ -116,5 +121,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed plan 05-01 (DHCP gateway and DNS defaults updated + DEPLOY.md)
+Stopped at: Completed plan 05-02 (validate.sh with 9 checks - DHCP-01, DHCP-02, VALD-01 through VALD-07)
 Resume file: None
