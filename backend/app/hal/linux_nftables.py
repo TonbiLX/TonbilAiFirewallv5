@@ -1347,6 +1347,78 @@ async def ensure_bridge_isolation():
     logger.info("Bridge isolation active — router mode")
 
 
+async def _write_sysctl_persistence():
+    """Write sysctl kernel parameters for bridge isolation to /etc/sysctl.d/99-bridge-isolation.conf."""
+    content = (
+        "# TonbilAiOS: Bridge isolation (router mode) kernel parameters\n"
+        "# Requires br_netfilter in /etc/modules-load.d/99-bridge-isolation.conf\n"
+        "net.ipv4.ip_forward = 1\n"
+        "net.bridge.bridge-nf-call-iptables = 1\n"
+        "net.ipv4.conf.all.send_redirects = 0\n"
+        "net.ipv4.conf.br0.send_redirects = 0\n"
+    )
+    proc = await asyncio.create_subprocess_exec(
+        "sudo", "tee", "/etc/sysctl.d/99-bridge-isolation.conf",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate(input=content.encode())
+    if proc.returncode == 0:
+        logger.info("sysctl persistence written: /etc/sysctl.d/99-bridge-isolation.conf")
+    else:
+        logger.error(f"sysctl persist failed: {stderr.decode().strip()}")
+
+
+async def _write_modules_persistence():
+    """Write br_netfilter module load entry to /etc/modules-load.d/99-bridge-isolation.conf."""
+    content = (
+        "# TonbilAiOS: br_netfilter required for net.bridge.bridge-nf-call-iptables sysctl\n"
+        "br_netfilter\n"
+    )
+    proc = await asyncio.create_subprocess_exec(
+        "sudo", "tee", "/etc/modules-load.d/99-bridge-isolation.conf",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate(input=content.encode())
+    if proc.returncode == 0:
+        logger.info("Module persistence written: /etc/modules-load.d/99-bridge-isolation.conf")
+    else:
+        logger.error(f"Module persist failed: {stderr.decode().strip()}")
+
+
+async def _enable_nftables_service():
+    """Enable nftables.service for boot persistence. Idempotent — safe to call multiple times."""
+    proc = await asyncio.create_subprocess_exec(
+        "sudo", "systemctl", "enable", "nftables.service",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode == 0:
+        logger.info("nftables.service enabled for boot persistence")
+    else:
+        logger.error(f"nftables.service enable failed: {stderr.decode().strip()}")
+
+
+async def ensure_bridge_isolation_persistence():
+    """Write boot-time persistence files for bridge isolation (router mode).
+
+    Writes three resources to ensure bridge isolation survives Pi reboots:
+      1. /etc/sysctl.d/99-bridge-isolation.conf — ip_forward, bridge-nf-call-iptables, send_redirects
+      2. /etc/modules-load.d/99-bridge-isolation.conf — br_netfilter module load
+      3. nftables.service enabled — so nftables.conf rules load on boot
+
+    Safe to call multiple times (all writes are idempotent overwrites).
+    Call after ensure_bridge_isolation() so nftables.conf already contains the isolation rules.
+    """
+    await _write_sysctl_persistence()
+    await _write_modules_persistence()
+    await _enable_nftables_service()
+
+
 async def remove_bridge_isolation():
     """Remove bridge isolation rules — return to transparent bridge mode.
 
