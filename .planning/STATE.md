@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T14:55:05.464Z"
+last_updated: "2026-03-03T16:02:04.939Z"
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-25)
 
 **Core value:** Modem sadece Pi'yi gorsun, tum LAN cihazlari modemden gizlensin — trafik Pi'nin IP stack'i uzerinden route edilsin.
-**Current focus:** Phase 4 — Startup and Persistence
+**Current focus:** Phase 5 — DHCP Gateway and Validation
 
 ## Current Position
 
-Phase: 4 of 5 (Startup and Persistence)
+Phase: 5 of 5 (DHCP Gateway and Validation)
 Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-03-03 - Completed plan 04-01: Boot persistence for bridge isolation (sysctl.d, modules-load.d, nftables.service) + main.py lifespan swap
+Last activity: 2026-03-03 - Completed plan 05-01: DHCP gateway/DNS defaults updated to 192.168.1.2 in seed data, model, and schema. DEPLOY.md deployment procedure created.
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -44,9 +44,10 @@ Progress: [████████░░] 80%
 | 02-accounting-chain-migration | 1 | 4 min | 4 min |
 | 03-tc-mark-chain-migration | 1 | 3 min | 3 min |
 | 04-startup-and-persistence | 1 | 5 min | 5 min |
+| 05-dhcp-gateway-and-validation | 1 | 4 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 15 min, 4 min, 3 min, 5 min
+- Last 5 plans: 15 min, 4 min, 3 min, 5 min, 4 min
 - Trend: stable
 
 *Updated after each plan completion*
@@ -78,6 +79,8 @@ Recent decisions affecting current work:
 - [04-01]: ensure_bridge_isolation_persistence() calls three private helpers in order: sysctl.d -> modules-load.d -> systemctl enable
 - [04-01]: ensure_bridge_masquerade() fully removed from main.py lifespan (deprecated since Phase 1, finally swapped)
 - [04-01]: Persistence called AFTER isolation — nftables.conf contains isolation rules before nftables.service is enabled
+- [Phase 05-dhcp-gateway-and-validation]: DHCP gateway defaults updated to 192.168.1.2 throughout codebase (seed, model, schema)
+- [Phase 05-dhcp-gateway-and-validation]: Short-lease pre-staging (300s) documented as mandatory step before live gateway change
 
 ### Research Flags (from SUMMARY.md)
 
@@ -113,5 +116,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed plan 04-01 (Boot persistence for bridge isolation + main.py lifespan swap)
+Stopped at: Completed plan 05-01 (DHCP gateway and DNS defaults updated + DEPLOY.md)
 Resume file: None

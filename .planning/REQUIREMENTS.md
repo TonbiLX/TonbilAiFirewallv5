@@ -50,8 +50,8 @@ Requirements for bridge isolation transition. Each maps to roadmap phases.
 
 ### DHCP Gateway
 
-- [ ] **DHCP-01**: dnsmasq konfigurasyonunda gateway .1'den .2'ye degistirilmeli
-- [ ] **DHCP-02**: dhcp_pools veritabani tablosunda gateway guncellenmeli
+- [x] **DHCP-01**: dnsmasq konfigurasyonunda gateway .1'den .2'ye degistirilmeli
+- [x] **DHCP-02**: dhcp_pools veritabani tablosunda gateway guncellenmeli
 
 ### Validation
 
@@ -116,8 +116,8 @@ Deferred to future release. Tracked but not in current roadmap.
 | STRT-02 | Phase 4 — Startup and Persistence | Complete (2026-03-03) |
 | STRT-03 | Phase 4 — Startup and Persistence | Complete (2026-03-03) |
 | STRT-04 | Phase 4 — Startup and Persistence | Complete (2026-03-03) |
-| DHCP-01 | Phase 5 — DHCP Gateway and Validation | Pending |
-| DHCP-02 | Phase 5 — DHCP Gateway and Validation | Pending |
+| DHCP-01 | Phase 5 — DHCP Gateway and Validation | Complete |
+| DHCP-02 | Phase 5 — DHCP Gateway and Validation | Complete |
 | VALD-01 | Phase 5 — DHCP Gateway and Validation | Pending |
 | VALD-02 | Phase 5 — DHCP Gateway and Validation | Pending |
 | VALD-03 | Phase 5 — DHCP Gateway and Validation | Pending |
