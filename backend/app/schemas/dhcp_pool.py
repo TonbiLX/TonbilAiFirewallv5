@@ -14,7 +14,7 @@ class DhcpPoolCreate(BaseModel):
     range_start: str
     range_end: str
     gateway: str
-    dns_servers: List[str] = ["192.168.1.1"]
+    dns_servers: List[str] = ["192.168.1.2"]
     lease_time_seconds: int = 86400
     enabled: bool = True
 
@@ -95,7 +95,7 @@ class DhcpPoolResponse(BaseModel):
     range_start: str
     range_end: str
     gateway: str
-    dns_servers: List[str] = ["192.168.1.1"]
+    dns_servers: List[str] = ["192.168.1.2"]
     lease_time_seconds: int = 86400
     enabled: bool = True
     created_at: Optional[datetime] = None
