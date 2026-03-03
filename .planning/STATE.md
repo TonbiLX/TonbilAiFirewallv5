@@ -91,9 +91,10 @@ None yet.
 | 1 | Yapiyi tamamen yeni bir klasore yaz. ismi: TonbilAiFirevallv5 olsun. | 2026-02-25 | 5151374 | [1-yapiyi-tamamen-yeni-bir-klasore-yaz-ismi](./quick/1-yapiyi-tamamen-yeni-bir-klasore-yaz-ismi/) |
 | 2 | TonbilAiFirevallv5 klasorunde CLAUDE.md guncelle. | 2026-02-25 | 71853f7 | [2-tonbilaifirevallv5-klasorunde-claude-md-](./quick/2-tonbilaifirevallv5-klasorunde-claude-md-/) |
 | 3 | V41 .planning klasorunu V5 klasorune kopyala | 2026-02-25 | 93ba6c9 | [3-v41-planning-klasorunu-v5-klasorune-kopy](./quick/3-v41-planning-klasorunu-v5-klasorune-kopy/) |
+| 4 | Turkce konusma tercihini CLAUDE.md'ye kaydet | 2026-03-03 | 22796f8 | [4-turkce-konusma-tercihini-kaydet-ve-planl](./quick/4-turkce-konusma-tercihini-kaydet-ve-planl/) |
 
 ## Session Continuity
 
-Last session: 2026-02-25
-Stopped at: Completed 03-01-PLAN.md (TC Mark Chain Migration — split tc_mark_up/tc_mark_down on input/output hooks)
+Last session: 2026-03-03
+Stopped at: Completed quick-4 (Turkce konusma tercihini CLAUDE.md'ye kaydet)
 Resume file: None
