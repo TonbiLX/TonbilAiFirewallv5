@@ -43,10 +43,10 @@ Requirements for bridge isolation transition. Each maps to roadmap phases.
 
 ### Startup & Persistence
 
-- [ ] **STRT-01**: main.py lifespan fonksiyonu ensure_bridge_masquerade() yerine ensure_bridge_isolation() cagirmali
-- [ ] **STRT-02**: sysctl ayarlari /etc/sysctl.d/99-bridge-isolation.conf'a yazilmali
-- [ ] **STRT-03**: nftables kurallari /etc/nftables.conf'a persist edilmeli
-- [ ] **STRT-04**: br_netfilter modulu /etc/modules-load.d/ ile otomatik yuklenecek sekilde ayarlanmali
+- [x] **STRT-01**: main.py lifespan fonksiyonu ensure_bridge_masquerade() yerine ensure_bridge_isolation() cagirmali
+- [x] **STRT-02**: sysctl ayarlari /etc/sysctl.d/99-bridge-isolation.conf'a yazilmali
+- [x] **STRT-03**: nftables kurallari /etc/nftables.conf'a persist edilmeli
+- [x] **STRT-04**: br_netfilter modulu /etc/modules-load.d/ ile otomatik yuklenecek sekilde ayarlanmali
 
 ### DHCP Gateway
 
@@ -107,15 +107,15 @@ Deferred to future release. Tracked but not in current roadmap.
 | ACCT-05 | Phase 2 — Accounting Chain Migration | Complete |
 | ACCT-06 | Phase 2 — Accounting Chain Migration | Complete |
 | ACCT-07 | Phase 2 — Accounting Chain Migration | Complete |
-| TCMK-01 | Phase 3 — TC Mark Chain Migration | Pending |
-| TCMK-02 | Phase 3 — TC Mark Chain Migration | Pending |
-| TCMK-03 | Phase 3 — TC Mark Chain Migration | Pending |
-| TCMK-04 | Phase 3 — TC Mark Chain Migration | Pending |
-| TCMK-05 | Phase 3 — TC Mark Chain Migration | Pending |
-| STRT-01 | Phase 4 — Startup and Persistence | Pending |
-| STRT-02 | Phase 4 — Startup and Persistence | Pending |
-| STRT-03 | Phase 4 — Startup and Persistence | Pending |
-| STRT-04 | Phase 4 — Startup and Persistence | Pending |
+| TCMK-01 | Phase 3 — TC Mark Chain Migration | Complete (2026-02-25) |
+| TCMK-02 | Phase 3 — TC Mark Chain Migration | Complete (2026-02-25) |
+| TCMK-03 | Phase 3 — TC Mark Chain Migration | Complete (2026-02-25) |
+| TCMK-04 | Phase 3 — TC Mark Chain Migration | Complete (2026-02-25) |
+| TCMK-05 | Phase 3 — TC Mark Chain Migration | Complete (2026-02-25) |
+| STRT-01 | Phase 4 — Startup and Persistence | Complete (2026-03-03) |
+| STRT-02 | Phase 4 — Startup and Persistence | Complete (2026-03-03) |
+| STRT-03 | Phase 4 — Startup and Persistence | Complete (2026-03-03) |
+| STRT-04 | Phase 4 — Startup and Persistence | Complete (2026-03-03) |
 | DHCP-01 | Phase 5 — DHCP Gateway and Validation | Pending |
 | DHCP-02 | Phase 5 — DHCP Gateway and Validation | Pending |
 | VALD-01 | Phase 5 — DHCP Gateway and Validation | Pending |
@@ -133,4 +133,4 @@ Deferred to future release. Tracked but not in current roadmap.
 
 ---
 *Requirements defined: 2026-02-25*
-*Last updated: 2026-02-25 after plan 01-01 completion (ISOL-01..07, ROLL-01..03 marked complete)*
+*Last updated: 2026-03-03 after plan 04-01 completion (STRT-01..04 marked complete, TCMK-01..05 traceability updated)*

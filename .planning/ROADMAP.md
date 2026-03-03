@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Bridge Isolation Core** - HAL functions for L2 isolation, NAT MASQUERADE, masquerade_fix removal, and software rollback
 - [x] **Phase 2: Accounting Chain Migration** - Rewrite bridge accounting from forward hook to input/output hooks
 - [x] **Phase 3: TC Mark Chain Migration** - Rewrite TC mark chains from forward hook to input/output hooks
-- [ ] **Phase 4: Startup and Persistence** - Lifespan swap, sysctl persistence, module persistence, nftables persistence
+- [x] **Phase 4: Startup and Persistence** - Lifespan swap, sysctl persistence, module persistence, nftables persistence
 - [ ] **Phase 5: DHCP Gateway and Validation** - Gateway change from .1 to .2 and 7-step transition validation
 
 ## Phase Details
@@ -76,7 +76,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 04-01-PLAN.md — Add ensure_bridge_isolation_persistence() to linux_nftables.py and swap main.py lifespan to ensure_bridge_isolation + persistence
+- [x] 04-01-PLAN.md — Add ensure_bridge_isolation_persistence() to linux_nftables.py and swap main.py lifespan to ensure_bridge_isolation + persistence
 
 ### Phase 5: DHCP Gateway and Validation
 **Goal**: All LAN devices use Pi as their default gateway and the complete transition is verified end-to-end — the modem ARP table shows only Pi's MAC
@@ -106,5 +106,5 @@ Phases execute in strict numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Bridge Isolation Core | 1/1 | Complete | 2026-02-25 |
 | 2. Accounting Chain Migration | 1/1 | Complete | 2026-02-25 |
 | 3. TC Mark Chain Migration | 1/1 | Complete | 2026-02-25 |
-| 4. Startup and Persistence | 0/1 | Not started | - |
+| 4. Startup and Persistence | 1/1 | Complete | 2026-03-03 |
 | 5. DHCP Gateway and Validation | 0/2 | Not started | - |

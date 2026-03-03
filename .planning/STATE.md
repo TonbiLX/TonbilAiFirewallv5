@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-25)
 
 **Core value:** Modem sadece Pi'yi gorsun, tum LAN cihazlari modemden gizlensin — trafik Pi'nin IP stack'i uzerinden route edilsin.
-**Current focus:** Phase 3 — TC Mark Chain Migration
+**Current focus:** Phase 4 — Startup and Persistence
 
 ## Current Position
 
-Phase: 3 of 5 (TC Mark Chain Migration)
+Phase: 4 of 5 (Startup and Persistence)
 Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-02-25 - Completed plan 03-01: TC Mark Chain Migration (split tc_mark_up/tc_mark_down on input/output hooks)
+Last activity: 2026-03-03 - Completed plan 04-01: Boot persistence for bridge isolation (sysctl.d, modules-load.d, nftables.service) + main.py lifespan swap
 
-Progress: [██████░░░░] 60%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 9.5 min
-- Total execution time: 0.32 hours
+- Total plans completed: 4
+- Average duration: 6.75 min
+- Total execution time: 0.45 hours
 
 **By Phase:**
 
@@ -30,10 +30,11 @@ Progress: [██████░░░░] 60%
 | 01-bridge-isolation-core | 1 | 15 min | 15 min |
 | 02-accounting-chain-migration | 1 | 4 min | 4 min |
 | 03-tc-mark-chain-migration | 1 | 3 min | 3 min |
+| 04-startup-and-persistence | 1 | 5 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 15 min, 4 min, 3 min
-- Trend: faster
+- Last 5 plans: 15 min, 4 min, 3 min, 5 min
+- Trend: stable
 
 *Updated after each plan completion*
 
@@ -61,6 +62,9 @@ Recent decisions affecting current work:
 - [03-01]: TC_MARK_CHAIN kept as legacy reference constant for cleanup detection only (mirrors Phase 2 BRIDGE_CHAIN = 'per_device' precedent)
 - [03-01]: tc_mark_up/tc_mark_down at priority -1, accounting chains at priority -2 — accounting fires first (count then mark)
 - [03-01]: remove_device_limit() inherits new split-chain behavior via delegation to _remove_nft_mark_rule() — no body changes needed
+- [04-01]: ensure_bridge_isolation_persistence() calls three private helpers in order: sysctl.d -> modules-load.d -> systemctl enable
+- [04-01]: ensure_bridge_masquerade() fully removed from main.py lifespan (deprecated since Phase 1, finally swapped)
+- [04-01]: Persistence called AFTER isolation — nftables.conf contains isolation rules before nftables.service is enabled
 
 ### Research Flags (from SUMMARY.md)
 
@@ -96,5 +100,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed quick-4 (Turkce konusma tercihini CLAUDE.md'ye kaydet)
+Stopped at: Completed plan 04-01 (Boot persistence for bridge isolation + main.py lifespan swap)
 Resume file: None
