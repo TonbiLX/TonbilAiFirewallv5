@@ -73,10 +73,10 @@ Plans:
   2. After `sudo reboot`, the nftables ruleset contains the bridge_isolation forward drop rules (verified via `nft list ruleset`)
   3. After reboot, `sysctl net.ipv4.ip_forward` returns 1 and `sysctl net.bridge.bridge-nf-call-iptables` returns 1
   4. `lsmod | grep br_netfilter` shows the module loaded immediately after boot without manual modprobe
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 04-01: Update main.py lifespan and write sysctl.d/modules-load.d persistence files
+- [ ] 04-01-PLAN.md — Add ensure_bridge_isolation_persistence() to linux_nftables.py and swap main.py lifespan to ensure_bridge_isolation + persistence
 
 ### Phase 5: DHCP Gateway and Validation
 **Goal**: All LAN devices use Pi as their default gateway and the complete transition is verified end-to-end — the modem ARP table shows only Pi's MAC
