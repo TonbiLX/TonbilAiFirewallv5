@@ -1,14 +1,16 @@
-<h1 align="center">TonbilAiFirewall</h1>
+<h1 align="center">TonbilAiFirewall v5</h1>
 
 <p align="center">
   <strong>Yapay Zeka Destekli Yeni Nesil Router Yonetim Sistemi</strong>
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/version-5.0-blue?style=flat-square" alt="v5.0">
   <img src="https://img.shields.io/badge/platform-Raspberry%20Pi-c51a4a?style=flat-square&logo=raspberrypi" alt="Raspberry Pi">
   <img src="https://img.shields.io/badge/frontend-React%2018-61dafb?style=flat-square&logo=react" alt="React">
   <img src="https://img.shields.io/badge/backend-FastAPI-009688?style=flat-square&logo=fastapi" alt="FastAPI">
-  <img src="https://img.shields.io/badge/ai-LLM%20Powered-8B5CF6?style=flat-square&logo=openai" alt="AI">
+  <img src="https://img.shields.io/badge/firewall-nftables-orange?style=flat-square" alt="nftables">
+  <img src="https://img.shields.io/badge/ai-LLM%20Powered-8B5CF6?style=flat-square" alt="AI">
   <img src="https://img.shields.io/badge/license-Private-red?style=flat-square" alt="License">
 </p>
 
@@ -16,44 +18,74 @@
 
 ## Nedir?
 
-**TonbilAiFirewall**, Raspberry Pi uzerinde calisan, yapay zeka destekli bir ag guvenligi ve router yonetim sistemidir. DNS filtreleme, cihaz yonetimi, VPN, DDoS koruma, trafik analizi ve AI tabanli tehdit tespiti gibi kapsamli ozellikler sunar.
+**TonbilAiFirewall v5**, Raspberry Pi uzerinde calisan, yapay zeka destekli bir ag guvenligi ve router yonetim sistemidir.
+
+v5 ile sistem **seffaf kopru (transparent bridge) modundan tam izole router moduna** gecis yapmistir. Modem artik sadece Pi'nin MAC adresini gorur — tum LAN cihazlari modemden tamamen gizlenir ve trafik Pi'nin IP stack'i uzerinden route edilir.
 
 Cyberpunk/glassmorphism temali modern web arayuzu ile tum ag operasyonlarinizi tek bir panelden yonetebilirsiniz.
 
 ---
 
-## Ozellikler
+## v5'te Yeni
+
+### Bridge Izolasyon (Router Modu)
+- **L2 Forwarding Izolasyonu** — Bridge uzerinde eth0↔eth1 arasi Layer 2 trafik tamamen engellenir
+- **NAT/MASQUERADE** — Pi kendi MAC adresi ile modemle iletisim kurar, LAN cihazlari gizlenir
+- **Reboot Dayanikli Kalicilik** — sysctl.d, modules-load.d ve nftables.service ile tum yapilandirma reboot sonrasi otomatik uygulanir
+- **Guvenli Rollback** — `remove_bridge_isolation()` ile tek komutla seffaf kopru moduna geri donus
+- **DHCP Gateway Gecisi** — Gateway .1 (modem) → .2 (Pi) degisikligi, kisa kiralama sureli gecis proseduru
+
+### Gelismis Trafik Izleme (Per-Flow)
+- **Conntrack Tabanli Baglanti Takibi** — Her TCP/UDP baglantiyi 20 saniyede bir izler
+- **Servis/Uygulama Tespiti** — 40+ port + 80+ domain eslesmesi (WhatsApp, YouTube, Instagram vb.)
+- **Buyuk Transfer Algilama** — >1MB flow'lar otomatik isaretlenir
+- **3 Sekmeli Trafik Sayfasi** — Canli akislar, buyuk transferler, gecmis kayitlari
+
+### Profil Tabanli DNS Filtreleme
+- **Icerik Kategorileri** — Blocklist dosyalari kategorilere baglanir (yetiskin, kumar, reklam vb.)
+- **Profil Sistemi** — Cihaz gruplarina ozel filtreleme politikalari + bandwidth limiti
+- **Subdomain Yuruyusu** — Alt alan adlari otomatik kontrol edilir
+- **Servis Engelleme** — YouTube, Netflix vb. profil bazli bagimsiz engelleme
+
+### Split Chain Mimarisi
+- **Ayri Upload/Download Zincirleri** — Accounting ve TC mark chain'leri input/output hook'larina ayrildi
+- **Hassas Bant Genisligi Olcumu** — nft reset ile atomik delta sayaclari
+- **Per-Device QoS** — HTB qdisc ile cihaz bazli bandwidth limitleme
+
+---
+
+## Tum Ozellikler
 
 ### Ag Yonetimi
-- **Cihaz Kesfetme ve Yonetimi** - ARP tabanli otomatik cihaz tespiti, hostname cozumleme
-- **Gercek Zamanli Bant Genisligi Izleme** - Cihaz bazli upload/download takibi
-- **DHCP Sunucu Yonetimi** - IP havuzlari, statik kiralamalar, aktif kiralama listesi
-- **IP Yonetimi** - Beyaz/kara liste, IP bazli erisim kontrolu
+- **Cihaz Kesfetme ve Yonetimi** — ARP tabanli otomatik cihaz tespiti, hostname cozumleme
+- **Gercek Zamanli Bant Genisligi Izleme** — Cihaz bazli upload/download takibi (split chain)
+- **DHCP Sunucu Yonetimi** — IP havuzlari, statik kiralamalar, aktif kiralama listesi
+- **Per-Flow Trafik Analizi** — Conntrack tabanli baglanti takibi, servis tespiti
 
 ### Guvenlik
-- **DNS Filtreleme** - 100.000+ domain engelleme listeleri, otomatik guncelleme
-- **Guvenlik Duvari (nftables)** - Kural tabanli trafik kontrolu, port engelleme
-- **DDoS Koruma** - Anomali tespiti, otomatik engelleme, canli saldiri haritasi
-- **VPN (WireGuard)** - Sunucu ve istemci yonetimi, peer yapilandirma
-- **TLS/SSL Yapilandirma** - Sifreleme ayarlari, sertifika yonetimi
-- **5651 Kanun Uyumu** - 2 yil log saklama, kriptografik log imzalama
+- **DNS Filtreleme** — 100.000+ domain engelleme listeleri, profil tabanli filtreleme
+- **Bridge Izolasyon** — L2 forwarding drop, NAT MASQUERADE, LAN cihaz gizleme
+- **Guvenlik Duvari (nftables)** — Kural tabanli trafik kontrolu, port engelleme
+- **DDoS Koruma** — Anomali tespiti, otomatik engelleme, canli saldiri haritasi
+- **VPN (WireGuard)** — Sunucu ve istemci yonetimi, peer yapilandirma
+- **5651 Kanun Uyumu** — 2 yil log saklama, kriptografik log imzalama
 
 ### Yapay Zeka
-- **AI Sohbet Asistani** - Dogal dilde ag sorulari sorma ve yanitlama
-- **Tehdit Analizi** - Trafik paternlerinden anomali tespiti
-- **AI Icgoruler** - Ag sagligi raporlari ve oneriler
-- **LLM Entegrasyonu** - Coklu LLM saglayici destegi
+- **AI Sohbet Asistani** — Dogal dilde ag sorulari sorma ve yanitlama
+- **Tehdit Analizi** — Trafik paternlerinden anomali tespiti
+- **AI Icgoruler** — Ag sagligi raporlari ve oneriler
+- **LLM Entegrasyonu** — Coklu LLM saglayici destegi
 
-### Bildirimler
-- **Telegram Entegrasyonu** - Anlik guvenlik uyarilari, cihaz bildirimleri
-- **Icerik Kategorileri** - Web icerik filtreleme (yetiskin, kumar, vb.)
-- **Profil Yonetimi** - Cihaz gruplari icin ozel guvenlik politikalari
+### Bildirimler ve Profiller
+- **Telegram Entegrasyonu** — Anlik guvenlik uyarilari, cihaz bildirimleri
+- **Icerik Kategorileri** — Blocklist + ozel domain bazli web icerik filtreleme
+- **Profil Yonetimi** — Cihaz gruplari icin filtreleme + bandwidth politikalari
 
 ### Dashboard
-- **Dinamik Widget Sistemi** - Surukle-birak ile yeniden duzenlenebilir
-- **Responsive Tasarim** - Mobil, tablet ve masaustu uyumlu
-- **Gercek Zamanli Veriler** - WebSocket ile canli guncelleme
-- **Widget Gizle/Goster** - Kisisellestirilabilir gorunum
+- **Dinamik Widget Sistemi** — 11 widget, surukle-birak ile yeniden duzenlenebilir
+- **Responsive Tasarim** — 4 breakpoint (lg/md/sm/xs), mobil uyumlu
+- **Gercek Zamanli Veriler** — WebSocket ile canli guncelleme
+- **localStorage Persist** — Layout tercihleri sayfa yenilemelerinde korunur
 
 ---
 
@@ -83,97 +115,24 @@ Cyberpunk/glassmorphism temali modern web arayuzu ile tum ag operasyonlarinizi t
 
 ---
 
-### Cihaz Yonetimi
-> Agdaki tum cihazlarin detayli goruntulenmesi, trafik analizi ve bireysel guvenlik ayarlari.
-
-<p align="center">
-  <img src="docs/screenshots/devices.png" alt="Cihaz Yonetimi" width="900">
-</p>
-
----
-
-### DNS Filtreleme
-> Engelleme listeleri yonetimi, DNS sorgu logları, domain arama ve ozel kurallar.
-
-<p align="center">
-  <img src="docs/screenshots/dns-blocking.png" alt="DNS Filtreleme" width="900">
-</p>
-
----
-
-### DDoS Saldiri Haritasi
-> Canli saldiri gorselestirmesi, dunya haritasi uzerinde saldiri kaynaklari ve animasyonlu saldiri akisi.
-
-<p align="center">
-  <img src="docs/screenshots/ddos-map.png" alt="DDoS Haritasi" width="900">
-</p>
-
----
-
-### VPN Yonetimi (WireGuard)
-> VPN sunucu yapilandirmasi, peer ekleme/cikarma, baglanti durumu izleme.
-
-<p align="center">
-  <img src="docs/screenshots/vpn.png" alt="VPN Yonetimi" width="900">
-</p>
-
----
-
-### AI Sohbet
-> Dogal dilde ag sorulari sorun, yapay zeka ile guvenlik analizi yapin.
-
-<p align="center">
-  <img src="docs/screenshots/ai-chat.png" alt="AI Sohbet" width="900">
-</p>
-
----
-
-### Guvenlik Duvari
-> nftables tabanli kural yonetimi, DDoS koruma ayarlari, port engelleme.
-
-<p align="center">
-  <img src="docs/screenshots/firewall.png" alt="Guvenlik Duvari" width="900">
-</p>
-
----
-
-### Sistem Monitoru
-> CPU, RAM, disk ve ag kullanimi gercek zamanli izleme.
-
-<p align="center">
-  <img src="docs/screenshots/system-monitor.png" alt="Sistem Monitoru" width="900">
-</p>
-
----
-
-### Giris Ekrani
-> Cyberpunk temali guvenli kimlik dogrulama.
-
-<p align="center">
-  <img src="docs/screenshots/login.png" alt="Giris Ekrani" width="900">
-</p>
-
----
-
 <details>
 <summary><strong>Diger Ekran Goruntuleri (tiklayarak acin)</strong></summary>
 
 | Sayfa | Goruntu |
 |-------|---------|
-| DHCP Yonetimi | <img src="docs/screenshots/dhcp.png" width="400"> |
-| IP Yonetimi | <img src="docs/screenshots/ip-management.png" width="400"> |
-| Dis VPN Istemci | <img src="docs/screenshots/vpn-client.png" width="400"> |
-| TLS Sifreleme | <img src="docs/screenshots/tls.png" width="400"> |
+| Cihaz Yonetimi | <img src="docs/screenshots/devices.png" width="400"> |
+| DNS Filtreleme | <img src="docs/screenshots/dns-blocking.png" width="400"> |
+| DDoS Saldiri Haritasi | <img src="docs/screenshots/ddos-map.png" width="400"> |
+| VPN Yonetimi | <img src="docs/screenshots/vpn.png" width="400"> |
+| AI Sohbet | <img src="docs/screenshots/ai-chat.png" width="400"> |
+| Guvenlik Duvari | <img src="docs/screenshots/firewall.png" width="400"> |
 | Trafik Analizi | <img src="docs/screenshots/traffic.png" width="400"> |
-| AI Icgoruler | <img src="docs/screenshots/insights.png" width="400"> |
+| DHCP Yonetimi | <img src="docs/screenshots/dhcp.png" width="400"> |
+| Sistem Monitoru | <img src="docs/screenshots/system-monitor.png" width="400"> |
 | Profiller | <img src="docs/screenshots/profiles.png" width="400"> |
 | Icerik Kategorileri | <img src="docs/screenshots/content-categories.png" width="400"> |
 | Telegram Bildirimleri | <img src="docs/screenshots/telegram.png" width="400"> |
-| AI Ayarlari | <img src="docs/screenshots/ai-settings.png" width="400"> |
-| Sistem Zamani | <img src="docs/screenshots/system-time.png" width="400"> |
-| Hesap Ayarlari | <img src="docs/screenshots/settings.png" width="400"> |
-| Sistem Yonetimi | <img src="docs/screenshots/system-management.png" width="400"> |
-| Sistem Loglari | <img src="docs/screenshots/system-logs.png" width="400"> |
+| Giris Ekrani | <img src="docs/screenshots/login.png" width="400"> |
 
 </details>
 
@@ -183,31 +142,49 @@ Cyberpunk/glassmorphism temali modern web arayuzu ile tum ag operasyonlarinizi t
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Raspberry Pi                            │
-│                                                             │
-│  ┌──────────┐    ┌──────────────┐    ┌─────────────────┐   │
-│  │  Nginx   │───▶│   FastAPI    │───▶│    MariaDB      │   │
-│  │ (Reverse │    │   Backend    │    │   (Veritabani)  │   │
-│  │  Proxy)  │    │  :8000       │    │   :3306         │   │
-│  │ :80/:443 │    │              │    └─────────────────┘   │
-│  └──────────┘    │  Workers:    │    ┌─────────────────┐   │
-│       │          │  - DNS Proxy │───▶│     Redis       │   │
-│       │          │  - Bandwidth │    │   (Cache)       │   │
-│       ▼          │  - Device    │    │   :6379         │   │
-│  ┌──────────┐    │  - DDoS      │    └─────────────────┘   │
-│  │ Frontend │    │  - Telegram  │                           │
-│  │ (React)  │    │  - AI Engine │    ┌─────────────────┐   │
-│  │ Static   │    │  - Traffic   │───▶│   nftables      │   │
-│  │ dist/    │    │  - DHCP      │    │  (Firewall)     │   │
-│  └──────────┘    └──────────────┘    └─────────────────┘   │
-│                         │                                   │
-│                         ▼                                   │
-│                  ┌──────────────┐    ┌─────────────────┐   │
-│                  │  WebSocket   │    │   WireGuard     │   │
-│                  │  (Canli      │    │   (VPN)         │   │
-│                  │   Veri)      │    │                 │   │
-│                  └──────────────┘    └─────────────────┘   │
+│                     Raspberry Pi (Router Modu)               │
+│                                                              │
+│  ┌────────────────────────────────────────────────────┐      │
+│  │  br0 = eth0 (WAN/Modem) + eth1 (LAN/Switch)       │      │
+│  │  L2 Forward DROP (izolasyon) + NAT MASQUERADE      │      │
+│  └────────────────────────────────────────────────────┘      │
+│                          │                                    │
+│  ┌──────────┐    ┌──────────────┐    ┌─────────────────┐    │
+│  │  Nginx   │───▶│   FastAPI    │───▶│    MariaDB      │    │
+│  │ (Reverse │    │   Backend    │    │   (Veritabani)  │    │
+│  │  Proxy)  │    │  :8000       │    │   :3306         │    │
+│  │ :80/:443 │    │              │    └─────────────────┘    │
+│  └──────────┘    │  Workers:    │    ┌─────────────────┐    │
+│       │          │  - DNS Proxy │───▶│     Redis       │    │
+│       │          │  - Bandwidth │    │   (Cache)       │    │
+│       ▼          │  - Device    │    │   :6379         │    │
+│  ┌──────────┐    │  - Flow Track│    └─────────────────┘    │
+│  │ Frontend │    │  - DDoS      │                            │
+│  │ (React)  │    │  - Telegram  │    ┌─────────────────┐    │
+│  │ Static   │    │  - AI Engine │───▶│   nftables      │    │
+│  │ dist/    │    │  - Traffic   │    │  bridge filter   │    │
+│  └──────────┘    │  - DHCP      │    │  bridge account  │    │
+│                  └──────────────┘    │  inet tonbilai   │    │
+│                         │            │  inet nat        │    │
+│                         ▼            └─────────────────┘    │
+│                  ┌──────────────┐    ┌─────────────────┐    │
+│                  │  WebSocket   │    │   WireGuard     │    │
+│                  │  (Canli      │    │   (VPN)         │    │
+│                  │   Veri)      │    │                 │    │
+│                  └──────────────┘    └─────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
+```
+
+### nftables Zincir Yapisi (v5)
+
+```
+bridge filter forward     → L2 izolasyon (eth0↔eth1 drop)
+bridge accounting upload   → input hook, iifname eth1, ether saddr MAC → byte sayaci
+bridge accounting download → output hook, oifname eth1, ether daddr MAC → byte sayaci
+bridge tc_mark_up          → input hook, iifname eth1, ether saddr MAC → meta mark
+bridge tc_mark_down        → output hook, oifname eth1, ether daddr MAC → meta mark
+inet tonbilai              → MAC bazli cihaz engelleme
+inet nat                   → MASQUERADE (postrouting)
 ```
 
 ### Teknoloji Yigini
@@ -224,10 +201,11 @@ Cyberpunk/glassmorphism temali modern web arayuzu ile tum ag operasyonlarinizi t
 | **ORM** | SQLAlchemy (async) | 2.0 |
 | **Veritabani** | MariaDB | 10.x |
 | **Cache** | Redis | 5.2+ |
-| **Firewall** | nftables | - |
+| **Firewall** | nftables (bridge + inet) | - |
 | **VPN** | WireGuard | - |
-| **DNS** | Ozel DNS Proxy | - |
+| **DNS** | Ozel DNS Proxy (profil tabanli) | - |
 | **DHCP** | dnsmasq | - |
+| **Trafik** | conntrack (per-flow) | - |
 
 ---
 
@@ -236,32 +214,31 @@ Cyberpunk/glassmorphism temali modern web arayuzu ile tum ag operasyonlarinizi t
 ### Donanim
 - Raspberry Pi 4/5 (4GB+ RAM onerilen)
 - SD kart veya USB SSD (32GB+)
-- Ethernet baglantisi
+- **2 Ethernet portu** (eth0: WAN/Modem, eth1: LAN/Switch) — USB Ethernet dongle veya hat switch
 
 ### Yazilim
-- Raspberry Pi OS (Debian 11/12 tabanli)
+- Raspberry Pi OS Bookworm (Debian 12 tabanli)
 - Python 3.11+
 - Node.js 18+
 - MariaDB 10.x
 - Redis 6+
 - Nginx
+- nftables, dnsmasq, conntrack-tools
 
 ---
 
-## Hizli Kurulum (Tek Komut)
-
-Raspberry Pi'ye dosyalari kopyalayin ve calistirin:
+## Hizli Kurulum
 
 ```bash
 # 1. Repo'yu klonlayin
-git clone https://github.com/TonbiLX/TonbilAiFirewall.git /opt/tonbilaios
+git clone https://github.com/TonbiLX/TonbilAiFirewallv5.git /opt/tonbilaios
 
 # 2. Kurulumu baslatın
 cd /opt/tonbilaios
 sudo bash setup.sh
 ```
 
-Bu kadar! Script otomatik olarak:
+Script otomatik olarak:
 - Tum sistem paketlerini kurar (Python, Node.js, MariaDB, Redis, Nginx, nftables, WireGuard)
 - MariaDB veritabanini ve kullaniciyi olusturur
 - Python sanal ortam ve bagimliliklari kurar
@@ -269,23 +246,14 @@ Bu kadar! Script otomatik olarak:
 - `.env` dosyasini guvenli varsayilanlarla olusturur
 - systemd servisini yapilandirir ve baslatir
 - Nginx reverse proxy'yi yapilandirir
-
-Kurulum tamamlandiginda asagidaki bilgiler gorunecek:
-
-```
-╔══════════════════════════════════════════════════╗
-║         Kurulum Basariyla Tamamlandi!            ║
-╠══════════════════════════════════════════════════╣
-║  Dashboard:  http://192.168.1.X                  ║
-║  API Docs:   http://192.168.1.X/docs             ║
-╚══════════════════════════════════════════════════╝
-```
+- Bridge izolasyon kalicilik dosyalarini yazar (sysctl.d, modules-load.d, nftables.service)
 
 ---
 
 ## Manuel Kurulum
 
-Adim adim kurulum yapmak istiyorsaniz:
+<details>
+<summary><strong>Adim adim kurulum (tiklayarak acin)</strong></summary>
 
 ### 1. Sistem Paketleri
 
@@ -294,7 +262,7 @@ sudo apt update
 sudo apt install -y python3 python3-venv python3-pip python3-dev \
     mariadb-server mariadb-client libmariadb-dev \
     redis-server nginx nftables dnsmasq \
-    wireguard wireguard-tools \
+    wireguard wireguard-tools conntrack \
     curl wget git build-essential libffi-dev libssl-dev
 ```
 
@@ -321,18 +289,11 @@ EOF
 
 ```bash
 cd /opt/tonbilaios/backend
-
-# Sanal ortam
 python3 -m venv venv
 source venv/bin/activate
-
-# Bagimliliklari kur
 pip install -r requirements.txt
-
-# .env dosyasi
 cp ../.env.example .env
-# .env dosyasini duzenleyin: DATABASE_URL, SECRET_KEY vb.
-nano .env
+nano .env  # DATABASE_URL, SECRET_KEY vb. duzenleyin
 ```
 
 ### 4. Frontend
@@ -361,30 +322,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
----
-
-## Yapilandirma
-
-### .env Dosyasi
-
-Backend `.env` dosyasi (`/opt/tonbilaios/backend/.env`):
-
-| Degisken | Aciklama | Varsayilan |
-|----------|----------|------------|
-| `DATABASE_URL` | MariaDB baglanti URL'si | *(zorunlu)* |
-| `REDIS_URL` | Redis baglanti URL'si | `redis://localhost:6379/0` |
-| `ENVIRONMENT` | Calisma ortami | `development` |
-| `SECRET_KEY` | JWT token imzalama anahtari (min 32 karakter) | *(zorunlu)* |
-| `CORS_ORIGINS` | Izin verilen originler | `http://localhost:5173` |
-| `TRUSTED_PROXIES` | Guvenilir proxy IP'leri | `172.16.0.0/12,...` |
-| `LOG_RETENTION_DAYS` | Log saklama suresi (gun) | `730` (2 yil) |
-| `DNS_BLOCKLIST_UPDATE_HOURS` | Engelleme listesi guncelleme suresi | `6` |
-
-#### Guvenli SECRET_KEY Uretme
-
-```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(48))"
-```
+</details>
 
 ---
 
@@ -392,159 +330,18 @@ python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 
 ```bash
 # Backend servisi
-sudo systemctl start tonbilaios       # Baslat
-sudo systemctl stop tonbilaios        # Durdur
-sudo systemctl restart tonbilaios     # Yeniden baslat
-sudo systemctl status tonbilaios      # Durum
+sudo systemctl start tonbilaios-backend
+sudo systemctl stop tonbilaios-backend
+sudo systemctl restart tonbilaios-backend
+sudo systemctl status tonbilaios-backend
 
 # Loglar
-sudo journalctl -u tonbilaios -f      # Canli log takibi
-sudo journalctl -u tonbilaios -n 100  # Son 100 satir
+sudo journalctl -u tonbilaios-backend -f
 
-# Nginx
-sudo systemctl reload nginx           # Yapilandirma yeniden yukle
-sudo nginx -t                         # Yapilandirma testi
-
-# MariaDB
-sudo systemctl status mariadb
-sudo mysql -u tonbilai -p tonbilaios  # Veritabanina baglan
-
-# Redis
-redis-cli ping                        # Baglanti testi
-redis-cli info memory                 # Bellek kullanimi
-```
-
----
-
-## Guncelleme
-
-```bash
-cd /opt/tonbilaios
-
-# Yeni kodlari cek
-git pull origin main
-
-# Backend bagimliliklari guncelle
-cd backend
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Frontend yeniden build et
-cd ../frontend
-npm install
-npm run build
-
-# Servisi yeniden baslat
-sudo systemctl restart tonbilaios
-```
-
----
-
-## Dizin Yapisi
-
-```
-/opt/tonbilaios/
-├── setup.sh                    # Tek komut kurulum scripti
-├── .env.example                # Ortam degiskenleri sablonu
-├── config/
-│   ├── tonbilaios.service      # systemd servis dosyasi
-│   └── nginx-tonbilaios.conf   # Nginx yapilandirmasi
-│
-├── backend/
-│   ├── .env                    # Ortam degiskenleri (git'te YOK)
-│   ├── requirements.txt        # Python bagimliliklari
-│   ├── venv/                   # Python sanal ortam (git'te YOK)
-│   └── app/
-│       ├── main.py             # FastAPI uygulama giris noktasi
-│       ├── config.py           # Yapilandirma yonetimi
-│       ├── api/v1/             # REST API endpoint'ler (25+)
-│       ├── models/             # SQLAlchemy modelleri (28+)
-│       ├── schemas/            # Pydantic semalari
-│       ├── services/           # Is mantigi servisleri
-│       ├── workers/            # Arka plan islemciler (14+)
-│       ├── hal/                # Donanim soyutlama katmani
-│       └── db/                 # Veritabani baglantisi
-│
-├── frontend/
-│   ├── package.json            # Node.js bagimliliklari
-│   ├── tsconfig.json           # TypeScript yapilandirmasi
-│   ├── vite.config.ts          # Vite build yapilandirmasi
-│   ├── tailwind.config.js      # TailwindCSS temasi
-│   ├── index.html              # HTML giris noktasi
-│   ├── dist/                   # Build ciktisi (git'te YOK)
-│   └── src/
-│       ├── main.tsx            # React giris noktasi
-│       ├── App.tsx             # Router yapisi
-│       ├── index.css           # Global stiller
-│       ├── pages/              # Sayfa bilesenleri (23)
-│       ├── components/         # UI bilesenleri
-│       ├── hooks/              # Ozel React hook'lari
-│       ├── services/           # API istemcileri (20+)
-│       ├── types/              # TypeScript tip tanimlari
-│       └── config/             # Widget yapilandirmasi
-│
-└── docs/
-    └── screenshots/            # Ekran goruntuleri
-```
-
----
-
-## Sorun Giderme
-
-### Backend baslamiyor
-
-```bash
-# Loglari kontrol edin
-sudo journalctl -u tonbilaios -n 50
-
-# .env dosyasini kontrol edin
-cat /opt/tonbilaios/backend/.env
-
-# Manuel calistirmayi deneyin
-cd /opt/tonbilaios/backend
-source venv/bin/activate
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-### Veritabani baglanti hatasi
-
-```bash
-# MariaDB servisini kontrol edin
-sudo systemctl status mariadb
-
-# Veritabani erisimini test edin
-mysql -u tonbilai -p -e "USE tonbilaios; SHOW TABLES;"
-```
-
-### Frontend build hatasi
-
-```bash
-cd /opt/tonbilaios/frontend
-
-# Node modulleri temizle ve yeniden kur
-rm -rf node_modules package-lock.json
-npm install
-npm run build
-```
-
-### Nginx 502 Bad Gateway
-
-```bash
-# Backend'in calistigini kontrol edin
-curl http://localhost:8000/health
-
-# Nginx yapilandirmasini test edin
-sudo nginx -t
-
-# Nginx loglarini kontrol edin
-sudo tail -f /var/log/nginx/error.log
-```
-
-### WebSocket baglantisi kurulamiyor
-
-```bash
-# Nginx config'inde WebSocket desteginin aktif oldugunu dogrulayin
-grep -A5 "Upgrade" /etc/nginx/sites-available/tonbilaios
+# Bridge izolasyon durumu
+sudo nft list chain bridge filter forward
+sudo sysctl net.ipv4.ip_forward
+sudo sysctl net.bridge.bridge-nf-call-iptables
 ```
 
 ---
@@ -554,21 +351,58 @@ grep -A5 "Upgrade" /etc/nginx/sites-available/tonbilaios
 Backend calisirken Swagger UI'a erisin:
 - **Swagger UI:** `http://<PI_IP>/docs`
 - **ReDoc:** `http://<PI_IP>/redoc`
-- **OpenAPI JSON:** `http://<PI_IP>/openapi.json`
 
 ---
 
 ## Guvenlik Notlari
 
-- `.env` dosyasi **asla** Git'e eklenmemeli (`.gitignore`'da)
+- `.env` dosyasi **asla** Git'e eklenmemeli
 - Uretim ortaminda `SECRET_KEY` en az 32 karakter olmali
-- `ENVIRONMENT=production` ayarlandiginda zayif anahtarlar reddedilir
+- Bridge izolasyon aktifken modem sadece Pi'nin MAC adresini gorur
+- nftables kurallari `/etc/nftables.conf` uzerinden reboot sonrasi otomatik yuklenir
+- sysctl parametreleri `/etc/sysctl.d/99-bridge-isolation.conf` ile kalicidir
+- `br_netfilter` modulu `/etc/modules-load.d/99-bridge-isolation.conf` ile boot'ta yuklenir
 - 5651 sayili kanun uyumlulugu: Loglar 2 yil boyunca kriptografik imza ile saklanir
-- nftables kurallari uygulama basladiginda otomatik senkronize edilir
-- CORS, CSRF ve guvenlik baslik korumalari aktif
+
+---
+
+## Dizin Yapisi
+
+```
+/opt/tonbilaios/
+├── setup.sh                    # Tek komut kurulum scripti
+├── validate.sh                 # Bridge izolasyon dogrulama scripti (9 kontrol)
+├── .env.example                # Ortam degiskenleri sablonu
+│
+├── backend/app/
+│   ├── main.py                 # FastAPI uygulama + lifespan (bridge isolation)
+│   ├── api/v1/                 # REST API endpoint'ler (25+)
+│   ├── models/                 # SQLAlchemy modelleri (28+)
+│   ├── schemas/                # Pydantic semalari
+│   ├── services/               # Is mantigi (AI, DDoS, Telegram)
+│   ├── workers/                # Arka plan islemciler
+│   │   ├── dns_proxy.py        # Profil tabanli DNS filtreleme
+│   │   ├── bandwidth_monitor.py # Split chain bant genisligi izleme
+│   │   ├── flow_tracker.py     # Per-flow baglanti takibi (conntrack)
+│   │   └── ...                 # 14+ worker
+│   ├── hal/                    # Donanim soyutlama katmani
+│   │   ├── linux_nftables.py   # Bridge izolasyon + accounting + TC mark
+│   │   ├── linux_tc.py         # QoS / bandwidth limiting
+│   │   └── linux_dhcp_driver.py # DHCP sunucu yonetimi
+│   └── db/                     # Veritabani baglantisi
+│
+├── frontend/src/
+│   ├── pages/                  # 23 sayfa bileseni
+│   ├── components/             # UI bilesenleri (common, layout, dashboard, charts, ddos)
+│   ├── hooks/                  # WebSocket, dashboard, DHCP, DNS hook'lari
+│   ├── services/               # 20+ API istemcisi
+│   └── config/                 # Widget yapilandirmasi (11 widget)
+│
+└── docs/screenshots/           # Ekran goruntuleri
+```
 
 ---
 
 <p align="center">
-  <sub>TonbilAiFirewall &copy; 2025-2026 TonbiLX. Tum haklari saklidir.</sub>
+  <sub>TonbilAiFirewall v5 &copy; 2025-2026 TonbiLX. Tum haklari saklidir.</sub>
 </p>
