@@ -175,7 +175,7 @@ DEFAULT_DHCP_POOLS = [
     {
         "name": "Ana AG",
         "subnet": "192.168.1.0",
-        "netmask": "255.255.255.0",
+        "netmask": "255.255.255.255",
         "range_start": "192.168.1.100",
         "range_end": "192.168.1.200",
         "gateway": "192.168.1.2",
@@ -186,7 +186,7 @@ DEFAULT_DHCP_POOLS = [
     {
         "name": "Misafir AG",
         "subnet": "192.168.1.0",
-        "netmask": "255.255.255.0",
+        "netmask": "255.255.255.255",
         "range_start": "192.168.1.201",
         "range_end": "192.168.1.250",
         "gateway": "192.168.1.2",

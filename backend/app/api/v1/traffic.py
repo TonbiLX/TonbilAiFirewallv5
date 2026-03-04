@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, Query, Path
 from app.api.deps import get_current_user
 from app.models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, func, and_
+from sqlalchemy import select, desc, func, and_, or_
+from sqlalchemy.orm import aliased
 from typing import List, Optional
 from datetime import datetime, timedelta
 
@@ -425,6 +426,8 @@ def _redis_hash_to_flow(h: dict) -> dict:
         "last_seen": h.get("last_seen"),
         "ended_at": None,
         "category": h.get("category") or None,
+        "dst_device_id": int(h["dst_device_id"]) if h.get("dst_device_id") else None,
+        "dst_device_hostname": h.get("dst_device_hostname") or None,
     }
 
 
@@ -444,6 +447,7 @@ async def flow_stats(
         total_bytes_out=int(stats.get("total_bytes_out", 0)),
         total_devices_with_flows=int(stats.get("total_devices_with_flows", 0)),
         large_transfer_count=int(stats.get("large_transfer_count", 0)),
+        total_internal_flows=int(stats.get("total_internal_flows", 0)),
         last_update=stats.get("last_update"),
     )
 
@@ -455,6 +459,7 @@ async def live_flows(
     dst_port: Optional[int] = None,
     dst_domain: Optional[str] = None,
     min_bytes: Optional[int] = None,
+    direction: Optional[str] = None,
     sort_by: str = Query(default="bytes_total"),
     sort_order: str = Query(default="desc"),
     limit: int = Query(default=200, le=500),
@@ -481,8 +486,12 @@ async def live_flows(
         flow = _redis_hash_to_flow(h)
 
         # Filtreler
-        if device_id is not None and flow.get("device_id") != device_id:
+        if direction and flow.get("direction") != direction:
             continue
+        if device_id is not None:
+            # device_id veya dst_device_id eslesmesi (internal flow'larda her iki taraf)
+            if flow.get("device_id") != device_id and flow.get("dst_device_id") != device_id:
+                continue
         if protocol and flow.get("protocol", "").upper() != protocol.upper():
             continue
         if dst_port is not None and flow.get("dst_port") != dst_port:
@@ -497,7 +506,8 @@ async def live_flows(
     # Siralama
     reverse = sort_order == "desc"
     sort_key = sort_by if sort_by in ("bytes_total", "bps_in", "bps_out",
-                                       "bytes_sent", "bytes_received") else "bytes_total"
+                                       "bytes_sent", "bytes_received",
+                                       "last_seen", "first_seen") else "bytes_total"
     flows.sort(key=lambda f: f.get(sort_key, 0) or 0, reverse=reverse)
 
     return flows[:limit]
@@ -540,6 +550,7 @@ async def flow_history(
     dst_port: Optional[int] = None,
     protocol: Optional[str] = None,
     min_bytes: Optional[int] = None,
+    direction: Optional[str] = None,
     hours: int = Query(default=24, ge=1, le=168),
     limit: int = Query(default=100, le=500),
     offset: int = Query(default=0, ge=0),
@@ -554,7 +565,12 @@ async def flow_history(
     # Temel sorgu
     conditions = [ConnectionFlow.first_seen >= since]
     if device_id is not None:
-        conditions.append(ConnectionFlow.device_id == device_id)
+        conditions.append(
+            or_(ConnectionFlow.device_id == device_id,
+                ConnectionFlow.dst_device_id == device_id)
+        )
+    if direction:
+        conditions.append(ConnectionFlow.direction == direction)
     if dst_domain:
         conditions.append(ConnectionFlow.dst_domain.contains(dst_domain))
     if dst_port is not None:
@@ -584,13 +600,16 @@ async def flow_history(
     order_col = order_col_map.get(sort_by, ConnectionFlow.last_seen)
     order_func = desc(order_col) if sort_order == "desc" else order_col
 
-    # Veri sorgusu (Device JOIN)
+    # Veri sorgusu (Device JOIN — src + dst)
+    DstDevice = aliased(Device)
     result = await db.execute(
         select(
             ConnectionFlow,
             Device.hostname.label("device_hostname"),
+            DstDevice.hostname.label("dst_device_hostname"),
         )
         .outerjoin(Device, ConnectionFlow.device_id == Device.id)
+        .outerjoin(DstDevice, ConnectionFlow.dst_device_id == DstDevice.id)
         .where(where_clause)
         .order_by(order_func)
         .offset(offset)
@@ -602,6 +621,7 @@ async def flow_history(
     for row in rows:
         cf = row[0]
         hostname = row[1]
+        dst_hostname = row[2]
         items.append(LiveFlowResponse(
             flow_id=cf.flow_id,
             device_id=cf.device_id,
@@ -614,6 +634,7 @@ async def flow_history(
             dst_domain=cf.dst_domain,
             protocol=cf.protocol,
             state=cf.state,
+            direction=cf.direction,
             bytes_sent=cf.bytes_sent or 0,
             bytes_received=cf.bytes_received or 0,
             bytes_total=(cf.bytes_sent or 0) + (cf.bytes_received or 0),
@@ -623,6 +644,8 @@ async def flow_history(
             last_seen=cf.last_seen,
             ended_at=cf.ended_at,
             category=cf.category,
+            dst_device_id=cf.dst_device_id,
+            dst_device_hostname=dst_hostname,
         ))
 
     return FlowHistoryResponse(items=items, total=total, limit=limit, offset=offset)
@@ -638,7 +661,8 @@ async def device_flow_summary(
     """Cihaz bazli flow ozeti: top domain'ler, top port'lar."""
     since = datetime.now() - timedelta(hours=hours)
     where = and_(
-        ConnectionFlow.device_id == device_id,
+        or_(ConnectionFlow.device_id == device_id,
+            ConnectionFlow.dst_device_id == device_id),
         ConnectionFlow.first_seen >= since,
     )
 

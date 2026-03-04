@@ -107,6 +107,12 @@ _PORT_SERVICE_MAP: dict[int, tuple[str, str | None]] = {
     # Proxy / Diger
     1080: ("SOCKS", "Proxy"), 8888: ("HTTP-Alt", None),
     9090: ("HTTP-Alt", None),
+    # Medya sunucu
+    32400: ("Plex", "Plex Media Server"),
+    8096: ("Jellyfin", "Jellyfin"), 8920: ("Jellyfin-HTTPS", "Jellyfin"),
+    445: ("SMB", "File Sharing"), 139: ("NetBIOS", "File Sharing"),
+    548: ("AFP", "File Sharing"), 631: ("IPP", "Printing"),
+    9100: ("RAW-Print", "Printing"),
 }
 
 # Domain → Uygulama adi (port 443/80 icin detay tespiti)
@@ -352,6 +358,21 @@ async def _resolve_bulk(redis_client, src_ips: list[str],
     return device_map, domain_map
 
 
+async def _resolve_dst_devices(redis_client, dst_ips: list[str]) -> dict[str, int | None]:
+    """Internal flow hedef IP'lerini device_id'ye cozumle."""
+    lan_ips = [ip for ip in dst_ips if ip.startswith(LAN_PREFIX)]
+    if not lan_ips:
+        return {}
+    pipe = redis_client.pipeline(transaction=False)
+    for ip in lan_ips:
+        pipe.get(f"dns:ip_to_device:{ip}")
+    try:
+        results = await pipe.execute()
+    except Exception:
+        return {}
+    return {ip: int(val) if val else None for ip, val in zip(lan_ips, results)}
+
+
 async def _resolve_device_hostnames(redis_client, device_ids: set[int]) -> dict[int, str]:
     """Device hostname'lerini Redis veya DB'den coz."""
     if not device_ids:
@@ -404,6 +425,11 @@ async def _process_conntrack(output: str, redis_client) -> dict[str, dict]:
                 entry["packets_sent"], entry["packets_received"] = entry["packets_received"], entry["packets_sent"]
                 entry["direction"] = "inbound"
                 raw_flows.append(entry)
+        # 3) LAN -> LAN (dahili trafik: Plex, SMB, NAS, printer vb.)
+        elif src.startswith(LAN_PREFIX) and dst.startswith(LAN_PREFIX):
+            if src != ROUTER_IP and dst != ROUTER_IP:
+                entry["direction"] = "internal"
+                raw_flows.append(entry)
 
     if not raw_flows:
         return {}
@@ -424,20 +450,31 @@ async def _process_conntrack(output: str, redis_client) -> dict[str, dict]:
     dst_ips = list({f["dst_ip"] for f in unique})
     device_map, domain_map = await _resolve_bulk(redis_client, src_ips, dst_ips)
 
+    # Internal flow'lar icin hedef cihaz cozumleme
+    dst_device_map = await _resolve_dst_devices(redis_client, dst_ips)
+
     # Flow dict olustur
     current_flows: dict[str, dict] = {}
     for f in unique:
         fid = f["flow_id"]
         device_id = device_map.get(f["src_ip"])
-        domain = domain_map.get(f["dst_ip"])
-        category = _categorize_domain(domain) if domain else None
+        direction = f.get("direction", "outbound")
+        is_internal = direction == "internal"
 
-        # Servis/uygulama tespiti
+        # Internal flow'larda domain yok, kategori "internal"
+        domain = None if is_internal else domain_map.get(f["dst_ip"])
+        category = "internal" if is_internal else (_categorize_domain(domain) if domain else None)
+
+        # Servis/uygulama tespiti (port bazli her durumda calisir)
         svc_name, app_name = _identify_service(f["dst_port"], f["proto"], domain)
+
+        # Hedef cihaz (internal flow'lar icin)
+        dst_device_id = dst_device_map.get(f["dst_ip"]) if is_internal else None
 
         current_flows[fid] = {
             "flow_id": fid,
             "device_id": device_id,
+            "dst_device_id": dst_device_id,
             "src_ip": f["src_ip"],
             "src_port": f["src_port"],
             "dst_ip": f["dst_ip"],
@@ -445,7 +482,7 @@ async def _process_conntrack(output: str, redis_client) -> dict[str, dict]:
             "dst_domain": domain,
             "protocol": f["proto"],
             "state": f["state"],
-            "direction": f.get("direction", "outbound"),
+            "direction": direction,
             "bytes_sent": f["bytes_sent"],
             "bytes_received": f["bytes_received"],
             "packets_sent": f["packets_sent"],
@@ -471,6 +508,7 @@ async def _update_redis_flows(current_flows: dict[str, dict],
 
     total_in = 0
     total_out = 0
+    internal_count = 0
     device_ids_set: set[int] = set()
 
     for fid, flow in current_flows.items():
@@ -487,18 +525,30 @@ async def _update_redis_flows(current_flows: dict[str, dict],
         total_in += flow["bytes_received"]
         total_out += flow["bytes_sent"]
 
+        if flow.get("direction") == "internal":
+            internal_count += 1
+
         device_id = flow.get("device_id")
+        dst_device_id = flow.get("dst_device_id")
         hostname = device_hostnames.get(device_id, "") if device_id else ""
+        dst_hostname = device_hostnames.get(dst_device_id, "") if dst_device_id else ""
 
         if device_id:
             device_ids_set.add(device_id)
             device_flow_map[device_id].append(fid)
+
+        # Internal flow'lari hedef cihazin setine de ekle
+        if dst_device_id:
+            device_ids_set.add(dst_device_id)
+            device_flow_map[dst_device_id].append(fid)
 
         # Flow hash
         flow_data = {
             "flow_id": fid,
             "device_id": str(device_id or ""),
             "device_hostname": hostname,
+            "dst_device_id": str(dst_device_id or ""),
+            "dst_device_hostname": dst_hostname,
             "src_ip": flow["src_ip"],
             "src_port": str(flow["src_port"]),
             "dst_ip": flow["dst_ip"],
@@ -561,6 +611,7 @@ async def _update_redis_flows(current_flows: dict[str, dict],
         "total_bytes_out": str(total_out),
         "total_devices_with_flows": str(len(device_ids_set)),
         "large_transfer_count": str(len(large_transfers)),
+        "total_internal_flows": str(internal_count),
         "last_update": now_ts,
     })
 
@@ -608,6 +659,8 @@ async def _sync_to_db(current_flows: dict[str, dict]):
                             state=flow.get("state"),
                             dst_domain=flow.get("dst_domain") or ConnectionFlow.dst_domain,
                             category=flow.get("category"),
+                            direction=flow.get("direction"),
+                            dst_device_id=flow.get("dst_device_id"),
                             last_seen=now,
                         )
                     )
@@ -616,6 +669,7 @@ async def _sync_to_db(current_flows: dict[str, dict]):
                     session.add(ConnectionFlow(
                         flow_id=fid,
                         device_id=flow.get("device_id"),
+                        dst_device_id=flow.get("dst_device_id"),
                         src_ip=flow["src_ip"],
                         src_port=flow["src_port"],
                         dst_ip=flow["dst_ip"],
@@ -623,6 +677,7 @@ async def _sync_to_db(current_flows: dict[str, dict]):
                         dst_domain=flow.get("dst_domain"),
                         protocol=flow["protocol"],
                         state=flow.get("state"),
+                        direction=flow.get("direction"),
                         bytes_sent=flow["bytes_sent"],
                         bytes_received=flow["bytes_received"],
                         packets_sent=flow["packets_sent"],
@@ -731,9 +786,13 @@ async def start_flow_tracker():
             current_flows = await _process_conntrack(output, redis_client)
 
             if current_flows:
-                # Device hostname'leri coz
-                device_ids = {f["device_id"] for f in current_flows.values()
-                              if f.get("device_id")}
+                # Device hostname'leri coz (src + dst cihazlar)
+                device_ids = set()
+                for f in current_flows.values():
+                    if f.get("device_id"):
+                        device_ids.add(f["device_id"])
+                    if f.get("dst_device_id"):
+                        device_ids.add(f["dst_device_id"])
                 hostnames = await _resolve_device_hostnames(redis_client, device_ids)
 
                 # Redis'e yaz

@@ -33,6 +33,8 @@ class LiveFlowResponse(BaseModel):
     last_seen: Optional[datetime] = None
     ended_at: Optional[datetime] = None
     category: Optional[str] = None
+    dst_device_id: Optional[int] = None
+    dst_device_hostname: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -65,4 +67,5 @@ class FlowStatsResponse(BaseModel):
     total_bytes_out: int = 0
     total_devices_with_flows: int = 0
     large_transfer_count: int = 0
+    total_internal_flows: int = 0
     last_update: Optional[datetime] = None

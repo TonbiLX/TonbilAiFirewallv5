@@ -50,7 +50,9 @@ export const fetchLiveFlows = (params?: {
   dst_port?: number;
   dst_domain?: string;
   min_bytes?: number;
-  sort?: string;
+  direction?: string;
+  sort_by?: string;
+  sort_order?: string;
 }) => api.get('/traffic/flows/live', { params });
 
 // Buyuk transferler >1MB (Redis ZSET)
@@ -62,6 +64,7 @@ export const fetchFlowHistory = (params?: {
   device_id?: number;
   protocol?: string;
   dst_domain?: string;
+  direction?: string;
   hours?: number;
   limit?: number;
   offset?: number;

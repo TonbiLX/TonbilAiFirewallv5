@@ -57,6 +57,14 @@ def generate_pool_config(pool: Dict[str, Any]) -> str:
     if dns_servers:
         lines.append(f"dhcp-option=6,{','.join(dns_servers)}")
 
+    # /32 netmask: Classless Static Routes (RFC 3442) — gateway'e host route + default route
+    # Cihazlar /32 mask ile diger cihazlara dogrudan ulasamaz, tum trafik Pi uzerinden gecer
+    if netmask == "255.255.255.255" and gateway:
+        # Option 121: RFC 3442 classless static routes
+        lines.append(f"dhcp-option=121,{gateway}/32,0.0.0.0,0.0.0.0/0,{gateway}")
+        # Option 249: Microsoft classless routes (eski Windows uyumlulugu)
+        lines.append(f"dhcp-option=249,{gateway}/32,0.0.0.0,0.0.0.0/0,{gateway}")
+
     return "\n".join(lines)
 
 

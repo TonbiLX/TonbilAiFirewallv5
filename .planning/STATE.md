@@ -133,6 +133,15 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-03
-Stopped at: Completed plan 05-02 (validate.sh with 9 checks - DHCP-01, DHCP-02, VALD-01 through VALD-07)
+Last session: 2026-03-04
+Stopped at: Güvenlik Ayarları sayfası Güvenlik Duvarı tab'ına taşındı, toggle fix, deploy yapıldı. Tüm milestone'lar tamamlandı. Commit: 1ddd12b.
 Resume file: None
+
+## Post-Milestone Work (GSD dışı, 2026-03-04)
+
+| # | Açıklama | Commit | Durum |
+|---|----------|--------|-------|
+| 1 | Telegram tam yetenek güncellemesi (16 intent) | d02cc87 | TAMAMLANDI + DEPLOY |
+| 2 | WiFi AP yönetim sistemi (hostapd + bridge) | 4742aa8 | TAMAMLANDI + DEPLOY |
+| 3 | Güvenlik Ayarları sayfası (DB + Redis hot-reload) | 3768914 | TAMAMLANDI + DEPLOY |
+| 4 | Güvenlik Ayarları → Firewall tab + toggle fix | 1ddd12b | TAMAMLANDI + DEPLOY |

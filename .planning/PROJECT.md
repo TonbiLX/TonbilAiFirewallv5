@@ -39,11 +39,13 @@ RPi 5 dahili WiFi (CYW43455) ile hostapd tabanlı erişim noktası yönetimi. Co
 | ddos_service hot-reload | Alert thresholds + cooldown | TAMAMLANDI + DEPLOY |
 | dns_fingerprint hot-reload | TTL + cooldown + min_matches | TAMAMLANDI + DEPLOY |
 | Frontend Page | 5-tab UI (Tehdit/DNS/Uyarı/IP/İstatistik) | TAMAMLANDI + DEPLOY |
-| Frontend Routing | App.tsx route + Sidebar nav item | TAMAMLANDI + DEPLOY |
+| Frontend Routing | Güvenlik Duvarı sayfasında 5. tab olarak entegre | TAMAMLANDI + DEPLOY |
+| Toggle Fix | Açık/kapalı toggle buton taşma düzeltmesi (left-0) | TAMAMLANDI + DEPLOY |
 
-**Yeni dosyalar (5):** security_config model, schema, API endpoint, securityApi.ts, SecuritySettingsPage.tsx
-**Düzenlenen dosyalar (10):** models/__init__, router, main, threat_analyzer, dns_proxy, ddos_service, dns_fingerprint, types/index.ts, App.tsx, Sidebar.tsx
-**Yedek:** `/opt/tonbilaios/backup-security-20260304-1529/`
+**Yeni dosyalar (6):** security_config model, schema, API endpoint, securityApi.ts, SecuritySettingsPage.tsx, SecuritySettingsTab.tsx
+**Düzenlenen dosyalar (10):** models/__init__, router, main, threat_analyzer, dns_proxy, ddos_service, dns_fingerprint, types/index.ts, FirewallPage.tsx, Sidebar.tsx
+**Yedek:** `/opt/tonbilaios/backup-security-20260304-1548/`
+**Not:** Güvenlik Ayarları ayrı sayfa değil, Güvenlik Duvarı sayfasında DDoS Koruma'dan sonra 5. tab olarak yer alır.
 
 ## Aktif Milestone
 
@@ -56,4 +58,4 @@ Henüz yeni milestone belirlenmedi.
 - **Deployment**: Paramiko SSH (pi.tonbil.com:2323 → 192.168.1.2)
 
 ---
-*Last updated: 2026-03-04 after Security Settings deploy*
+*Last updated: 2026-03-04 after Security Settings tab migration + toggle fix + deploy*

@@ -6,9 +6,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Wifi, WifiOff, Upload, Download, Network, Globe,
   Activity, Clock, Shield, Smartphone, Tv, Laptop, Cpu, Gamepad2,
-  MonitorSmartphone, Router, RefreshCw, ArrowUpRight, ArrowDownLeft,
+  MonitorSmartphone, Router, RefreshCw, ArrowUpRight, ArrowDownLeft, ArrowLeftRight,
   Ban, Pencil, Check, X, Users, Gauge, Pin, ShieldBan, History,
   CheckCircle, AlertTriangle, ShieldAlert, Glasses, Monitor,
+  ChevronUp, ChevronDown, ChevronsUpDown,
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { GlassCard } from '../components/common/GlassCard';
@@ -44,6 +45,41 @@ function formatBps(bps: number): string {
   if (bps < 1000000) return (bps / 1000).toFixed(1) + ' Kbps';
   if (bps < 1000000000) return (bps / 1000000).toFixed(1) + ' Mbps';
   return (bps / 1000000000).toFixed(2) + ' Gbps';
+}
+
+// Zaman formatlama
+function formatTime(ts: string | null): string {
+  if (!ts) return "--";
+  return new Date(ts).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+// Flow siralama
+type FlowSortKey = "bytes_sent" | "bytes_received" | "bytes_total" | "bps" | "last_seen" | "dst" | "protocol" | "app" | "state";
+type FlowSortDir = "asc" | "desc";
+
+function getFlowSortVal(flow: LiveFlow, key: FlowSortKey): number | string {
+  switch (key) {
+    case "bytes_sent": return flow.bytes_sent;
+    case "bytes_received": return flow.bytes_received;
+    case "bytes_total": return flow.bytes_sent + flow.bytes_received;
+    case "bps": return (flow.bps_in || 0) + (flow.bps_out || 0);
+    case "last_seen": return flow.last_seen || "";
+    case "dst": return (flow.dst_domain || flow.dst_ip || "").toLowerCase();
+    case "protocol": return flow.protocol || "";
+    case "app": return (flow.app_name || flow.service_name || "").toLowerCase();
+    case "state": return flow.state || "";
+    default: return 0;
+  }
+}
+
+function sortDeviceFlows(flows: LiveFlow[], key: FlowSortKey, dir: FlowSortDir): LiveFlow[] {
+  return [...flows].sort((a, b) => {
+    const va = getFlowSortVal(a, key);
+    const vb = getFlowSortVal(b, key);
+    if (va < vb) return dir === "asc" ? -1 : 1;
+    if (va > vb) return dir === "asc" ? 1 : -1;
+    return 0;
+  });
 }
 
 // Online sure formatlama
@@ -96,6 +132,24 @@ export function DeviceDetailPage() {
   const [dnsQueries, setDnsQueries] = useState<any[]>([]);
   const [trafficSummary, setTrafficSummary] = useState<any>(null);
   const [deviceFlows, setDeviceFlows] = useState<LiveFlow[]>([]);
+  const [flowSortKey, setFlowSortKey] = useState<FlowSortKey>("last_seen");
+  const [flowSortDir, setFlowSortDir] = useState<FlowSortDir>("desc");
+
+  const toggleFlowSort = (key: FlowSortKey) => {
+    if (flowSortKey === key) {
+      setFlowSortDir(d => d === "desc" ? "asc" : "desc");
+    } else {
+      setFlowSortKey(key);
+      setFlowSortDir("desc");
+    }
+  };
+
+  const FlowSortIcon = ({ col }: { col: FlowSortKey }) => {
+    if (flowSortKey !== col) return <ChevronsUpDown size={10} className="inline ml-0.5 opacity-30" />;
+    return flowSortDir === "desc"
+      ? <ChevronDown size={10} className="inline ml-0.5 text-neon-cyan" />
+      : <ChevronUp size={10} className="inline ml-0.5 text-neon-cyan" />;
+  };
   const [loading, setLoading] = useState(true);
 
   // --- Yonetim state ---
@@ -171,7 +225,7 @@ export function DeviceDetailPage() {
 
   const loadDeviceFlows = useCallback(async () => {
     try {
-      const { data } = await fetchLiveFlows({ device_id: deviceId, sort: 'bytes_desc' });
+      const { data } = await fetchLiveFlows({ device_id: deviceId, sort_by: 'last_seen', sort_order: 'desc' });
       setDeviceFlows(data);
     } catch (e) { console.error(e); }
   }, [deviceId]);
@@ -570,28 +624,34 @@ export function DeviceDetailPage() {
                   <thead>
                     <tr className="text-gray-400 border-b border-white/10 text-xs uppercase tracking-wider">
                       <th className="text-center py-2 px-1 w-8">Yon</th>
-                      <th className="text-left py-2 px-2">Hedef</th>
-                      <th className="text-left py-2 px-2">Proto</th>
-                      <th className="text-left py-2 px-2">Uygulama</th>
-                      <th className="text-left py-2 px-2">Durum</th>
-                      <th className="text-right py-2 px-2">
-                        <Upload size={10} className="inline mr-0.5" />Giden
+                      <th className="text-left py-2 px-2 cursor-pointer select-none hover:text-neon-cyan transition-colors" onClick={() => toggleFlowSort("dst")}>Hedef<FlowSortIcon col="dst" /></th>
+                      <th className="text-left py-2 px-2 cursor-pointer select-none hover:text-neon-cyan transition-colors" onClick={() => toggleFlowSort("protocol")}>Proto<FlowSortIcon col="protocol" /></th>
+                      <th className="text-left py-2 px-2 cursor-pointer select-none hover:text-neon-cyan transition-colors" onClick={() => toggleFlowSort("app")}>Uygulama<FlowSortIcon col="app" /></th>
+                      <th className="text-left py-2 px-2 cursor-pointer select-none hover:text-neon-cyan transition-colors" onClick={() => toggleFlowSort("state")}>Durum<FlowSortIcon col="state" /></th>
+                      <th className="text-right py-2 px-2 cursor-pointer select-none hover:text-neon-cyan transition-colors" onClick={() => toggleFlowSort("bytes_sent")}>
+                        <Upload size={10} className="inline mr-0.5" />Giden<FlowSortIcon col="bytes_sent" />
                       </th>
-                      <th className="text-right py-2 px-2">
-                        <Download size={10} className="inline mr-0.5" />Gelen
+                      <th className="text-right py-2 px-2 cursor-pointer select-none hover:text-neon-cyan transition-colors" onClick={() => toggleFlowSort("bytes_received")}>
+                        <Download size={10} className="inline mr-0.5" />Gelen<FlowSortIcon col="bytes_received" />
                       </th>
-                      <th className="text-right py-2 px-2">Toplam</th>
-                      <th className="text-right py-2 px-2">Hiz</th>
+                      <th className="text-right py-2 px-2 cursor-pointer select-none hover:text-neon-cyan transition-colors" onClick={() => toggleFlowSort("bytes_total")}>Toplam<FlowSortIcon col="bytes_total" /></th>
+                      <th className="text-right py-2 px-2 cursor-pointer select-none hover:text-neon-cyan transition-colors" onClick={() => toggleFlowSort("bps")}>Hiz<FlowSortIcon col="bps" /></th>
+                      <th className="text-right py-2 px-2 cursor-pointer select-none hover:text-neon-cyan transition-colors" onClick={() => toggleFlowSort("last_seen")}>Zaman<FlowSortIcon col="last_seen" /></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {deviceFlows.map((flow) => {
+                    {sortDeviceFlows(deviceFlows, flowSortKey, flowSortDir).map((flow) => {
                       const bytesTotal = flow.bytes_sent + flow.bytes_received;
                       const isLarge = bytesTotal >= 10_000_000;
                       return (
                         <tr key={flow.flow_id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                          <td className="py-1.5 px-1 text-center" title={flow.direction === "inbound" ? "Gelen" : "Giden"}>
-                            {flow.direction === "inbound" ? (
+                          <td className="py-1.5 px-1 text-center" title={
+                            flow.direction === "inbound" ? "Gelen" :
+                            flow.direction === "internal" ? "Dahili" : "Giden"
+                          }>
+                            {flow.direction === "internal" ? (
+                              <ArrowLeftRight size={14} className="text-green-400 inline-block" />
+                            ) : flow.direction === "inbound" ? (
                               <ArrowDownLeft size={14} className="text-pink-400 inline-block" />
                             ) : (
                               <ArrowUpRight size={14} className="text-cyan-400 inline-block" />
@@ -599,10 +659,20 @@ export function DeviceDetailPage() {
                           </td>
                           <td className="py-1.5 px-2 font-mono text-xs">
                             <div>
-                              <span className="text-gray-200">{flow.dst_domain || flow.dst_ip}</span>
-                              <span className="text-gray-500">:{flow.dst_port}</span>
-                              {flow.dst_domain && flow.dst_domain !== flow.dst_ip && (
-                                <span className="block text-gray-600 text-[10px]">{flow.dst_ip}</span>
+                              {flow.direction === "internal" && flow.dst_device_hostname ? (
+                                <>
+                                  <span className="text-green-400">{flow.dst_device_hostname}</span>
+                                  <span className="text-gray-500">:{flow.dst_port}</span>
+                                  <span className="block text-gray-600 text-[10px]">{flow.dst_ip}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-gray-200">{flow.dst_domain || flow.dst_ip}</span>
+                                  <span className="text-gray-500">:{flow.dst_port}</span>
+                                  {flow.dst_domain && flow.dst_domain !== flow.dst_ip && (
+                                    <span className="block text-gray-600 text-[10px]">{flow.dst_ip}</span>
+                                  )}
+                                </>
                               )}
                             </div>
                           </td>
@@ -645,6 +715,9 @@ export function DeviceDetailPage() {
                             ) : (
                               <span className="text-gray-600">--</span>
                             )}
+                          </td>
+                          <td className="py-1.5 px-2 text-xs text-right text-gray-500 font-mono whitespace-nowrap">
+                            {formatTime(flow.last_seen)}
                           </td>
                         </tr>
                       );

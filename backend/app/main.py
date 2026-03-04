@@ -406,6 +406,28 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Veritabani tablolari oluşturuldu/dogrulandi.")
 
+    # Migration: connection_flows tablosuna direction + dst_device_id sutunlari
+    from sqlalchemy import text
+    async with engine.begin() as conn:
+        for stmt in [
+            "ALTER TABLE connection_flows ADD COLUMN direction VARCHAR(10) DEFAULT NULL",
+            "ALTER TABLE connection_flows ADD COLUMN dst_device_id INT DEFAULT NULL",
+        ]:
+            try:
+                await conn.execute(text(stmt))
+                logger.info(f"Migration OK: {stmt[:60]}...")
+            except Exception:
+                pass  # Sutun zaten varsa hata verir, sessizce gec
+        # Index'ler (create_all ile de olusabilir ama garanti olsun)
+        for idx_stmt in [
+            "CREATE INDEX IF NOT EXISTS idx_cf_direction ON connection_flows (direction)",
+            "CREATE INDEX IF NOT EXISTS idx_cf_dst_device ON connection_flows (dst_device_id)",
+        ]:
+            try:
+                await conn.execute(text(idx_stmt))
+            except Exception:
+                pass
+
     # Redis ve HAL surucusunu başlat
     redis_client = await get_redis()
     driver = await get_network_driver(redis_client)

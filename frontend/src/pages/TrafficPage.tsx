@@ -30,6 +30,10 @@ import {
   RefreshCw,
   ArrowUpRight,
   ArrowDownLeft,
+  ArrowLeftRight,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
 } from "lucide-react";
 
 // ─── Yardimci Fonksiyonlar ──────────────────────────────────
@@ -77,7 +81,43 @@ const categoryVariant: Record<
   communication: "amber",
   shopping: "magenta",
   technology: "cyan",
+  internal: "green",
 };
+
+function formatTime(ts: string | null): string {
+  if (!ts) return "--";
+  return new Date(ts).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+type SortKey = "bytes_sent" | "bytes_received" | "bytes_total" | "bps" | "last_seen" | "device" | "dst" | "protocol" | "app" | "state" | "category";
+type SortDir = "asc" | "desc";
+
+function getSortValue(flow: LiveFlow, key: SortKey): number | string {
+  switch (key) {
+    case "bytes_sent": return flow.bytes_sent;
+    case "bytes_received": return flow.bytes_received;
+    case "bytes_total": return flow.bytes_sent + flow.bytes_received;
+    case "bps": return (flow.bps_in || 0) + (flow.bps_out || 0);
+    case "last_seen": return flow.last_seen || "";
+    case "device": return (flow.device_hostname || flow.src_ip || "").toLowerCase();
+    case "dst": return (flow.dst_domain || flow.dst_ip || "").toLowerCase();
+    case "protocol": return flow.protocol || "";
+    case "app": return (flow.app_name || flow.service_name || "").toLowerCase();
+    case "state": return flow.state || "";
+    case "category": return flow.category || "";
+    default: return 0;
+  }
+}
+
+function sortFlows(flows: LiveFlow[], key: SortKey, dir: SortDir): LiveFlow[] {
+  return [...flows].sort((a, b) => {
+    const va = getSortValue(a, key);
+    const vb = getSortValue(b, key);
+    if (va < vb) return dir === "asc" ? -1 : 1;
+    if (va > vb) return dir === "asc" ? 1 : -1;
+    return 0;
+  });
+}
 
 type ActiveTab = "live" | "large" | "history";
 
@@ -101,11 +141,16 @@ export function TrafficPage() {
   // Canli akislar
   const [liveFlows, setLiveFlows] = useState<LiveFlow[]>([]);
   const [liveProtocol, setLiveProtocol] = useState("");
+  const [liveDirection, setLiveDirection] = useState("");
   const [liveSearchText, setLiveSearchText] = useState("");
   const [liveDomainFilter, setLiveDomainFilter] = useState("");
 
   // Buyuk transferler
   const [largeTransfers, setLargeTransfers] = useState<LiveFlow[]>([]);
+
+  // Client-side siralama
+  const [sortKey, setSortKey] = useState<SortKey>("bytes_total");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   // Gecmis
   const [historyData, setHistoryData] = useState<FlowHistoryResponse | null>(
@@ -114,6 +159,7 @@ export function TrafficPage() {
   const [historyPage, setHistoryPage] = useState(0);
   const [historyPeriod, setHistoryPeriod] = useState(24);
   const [historyProtocol, setHistoryProtocol] = useState("");
+  const [historyDirection, setHistoryDirection] = useState("");
   const [historySearchText, setHistorySearchText] = useState("");
   const [historyDomainFilter, setHistoryDomainFilter] = useState("");
 
@@ -147,8 +193,9 @@ export function TrafficPage() {
 
   const loadLive = useCallback(async () => {
     try {
-      const params: Record<string, unknown> = { sort: "bytes_desc" };
+      const params: Record<string, unknown> = { sort_by: "bytes_total", sort_order: "desc" };
       if (liveProtocol) params.protocol = liveProtocol;
+      if (liveDirection) params.direction = liveDirection;
       if (liveDomainFilter) params.dst_domain = liveDomainFilter;
       const { data } = await fetchLiveFlows(
         params as Parameters<typeof fetchLiveFlows>[0]
@@ -159,7 +206,7 @@ export function TrafficPage() {
     } finally {
       setLoading(false);
     }
-  }, [liveProtocol, liveDomainFilter]);
+  }, [liveProtocol, liveDirection, liveDomainFilter]);
 
   const loadLarge = useCallback(async () => {
     try {
@@ -180,6 +227,7 @@ export function TrafficPage() {
         offset: historyPage * 50,
       };
       if (historyProtocol) params.protocol = historyProtocol;
+      if (historyDirection) params.direction = historyDirection;
       if (historyDomainFilter) params.dst_domain = historyDomainFilter;
       const { data } = await fetchFlowHistory(
         params as Parameters<typeof fetchFlowHistory>[0]
@@ -190,7 +238,7 @@ export function TrafficPage() {
     } finally {
       setLoading(false);
     }
-  }, [historyPeriod, historyPage, historyProtocol, historyDomainFilter]);
+  }, [historyPeriod, historyPage, historyProtocol, historyDirection, historyDomainFilter]);
 
   // ─── Otomatik Yenileme ─────────────────────────────────────
 
@@ -247,6 +295,24 @@ export function TrafficPage() {
     loadStats();
   };
 
+  // ─── Siralama Toggle ───────────────────────────────────────
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => d === "desc" ? "asc" : "desc");
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  };
+
+  const SortIcon = ({ col }: { col: SortKey }) => {
+    if (sortKey !== col) return <ChevronsUpDown size={11} className="inline ml-0.5 opacity-30" />;
+    return sortDir === "desc"
+      ? <ChevronDown size={11} className="inline ml-0.5 text-neon-cyan" />
+      : <ChevronUp size={11} className="inline ml-0.5 text-neon-cyan" />;
+  };
+
   // ─── Flow Satiri Render ─────────────────────────────────────
 
   const renderFlowRow = (flow: LiveFlow, showEnded = false) => {
@@ -273,8 +339,13 @@ export function TrafficPage() {
         </td>
 
         {/* Yon */}
-        <td className="py-2.5 pr-2 text-center" title={flow.direction === "inbound" ? "Gelen" : "Giden"}>
-          {flow.direction === "inbound" ? (
+        <td className="py-2.5 pr-2 text-center" title={
+          flow.direction === "inbound" ? "Gelen" :
+          flow.direction === "internal" ? "Dahili" : "Giden"
+        }>
+          {flow.direction === "internal" ? (
+            <ArrowLeftRight size={15} className="text-neon-green inline-block" />
+          ) : flow.direction === "inbound" ? (
             <ArrowDownLeft size={15} className="text-neon-magenta inline-block" />
           ) : (
             <ArrowUpRight size={15} className="text-neon-cyan inline-block" />
@@ -284,14 +355,28 @@ export function TrafficPage() {
         {/* Hedef */}
         <td className="py-2.5 pr-3 font-mono text-xs">
           <div>
-            <span className="text-gray-200">
-              {flow.dst_domain || flow.dst_ip}
-            </span>
-            <span className="text-gray-500">:{flow.dst_port}</span>
-            {flow.dst_domain && flow.dst_domain !== flow.dst_ip && (
-              <span className="block text-gray-600 text-[10px]">
-                {flow.dst_ip}
-              </span>
+            {flow.direction === "internal" && flow.dst_device_hostname ? (
+              <>
+                <span className="text-neon-green">
+                  {flow.dst_device_hostname}
+                </span>
+                <span className="text-gray-500">:{flow.dst_port}</span>
+                <span className="block text-gray-600 text-[10px]">
+                  {flow.dst_ip}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-gray-200">
+                  {flow.dst_domain || flow.dst_ip}
+                </span>
+                <span className="text-gray-500">:{flow.dst_port}</span>
+                {flow.dst_domain && flow.dst_domain !== flow.dst_ip && (
+                  <span className="block text-gray-600 text-[10px]">
+                    {flow.dst_ip}
+                  </span>
+                )}
+              </>
             )}
           </div>
         </td>
@@ -380,6 +465,11 @@ export function TrafficPage() {
           )}
         </td>
 
+        {/* Zaman */}
+        <td className="py-2.5 pl-2 text-xs text-gray-500 font-mono whitespace-nowrap">
+          {formatTime(flow.last_seen)}
+        </td>
+
         {/* Bitis (sadece gecmis) */}
         {showEnded && (
           <td className="py-2.5 pl-3 text-xs text-gray-500 font-mono">
@@ -394,26 +484,29 @@ export function TrafficPage() {
 
   // ─── Tablo Header ────────────────────────────────────────────
 
+  const thCls = "pb-2 pr-3 cursor-pointer select-none hover:text-neon-cyan transition-colors";
+
   const renderTableHeader = (showEnded = false) => (
     <thead>
       <tr className="text-left text-gray-400 border-b border-glass-border text-xs uppercase tracking-wider">
-        <th className="pb-2 pr-3">Cihaz</th>
+        <th className={thCls} onClick={() => toggleSort("device")}>Cihaz<SortIcon col="device" /></th>
         <th className="pb-2 pr-2 text-center w-8">Yon</th>
-        <th className="pb-2 pr-3">Hedef</th>
-        <th className="pb-2 pr-3">Proto</th>
-        <th className="pb-2 pr-3">Uygulama</th>
-        <th className="pb-2 pr-3">Durum</th>
-        <th className="pb-2 pr-3 text-right">
+        <th className={thCls} onClick={() => toggleSort("dst")}>Hedef<SortIcon col="dst" /></th>
+        <th className={thCls} onClick={() => toggleSort("protocol")}>Proto<SortIcon col="protocol" /></th>
+        <th className={thCls} onClick={() => toggleSort("app")}>Uygulama<SortIcon col="app" /></th>
+        <th className={thCls} onClick={() => toggleSort("state")}>Durum<SortIcon col="state" /></th>
+        <th className={`${thCls} text-right`} onClick={() => toggleSort("bytes_sent")}>
           <Upload size={12} className="inline mr-1" />
-          Giden
+          Giden<SortIcon col="bytes_sent" />
         </th>
-        <th className="pb-2 pr-3 text-right">
+        <th className={`${thCls} text-right`} onClick={() => toggleSort("bytes_received")}>
           <Download size={12} className="inline mr-1" />
-          Gelen
+          Gelen<SortIcon col="bytes_received" />
         </th>
-        <th className="pb-2 pr-3 text-right">Toplam</th>
-        <th className="pb-2 pr-3 text-right">Hiz</th>
-        <th className="pb-2">Kategori</th>
+        <th className={`${thCls} text-right`} onClick={() => toggleSort("bytes_total")}>Toplam<SortIcon col="bytes_total" /></th>
+        <th className={`${thCls} text-right`} onClick={() => toggleSort("bps")}>Hiz<SortIcon col="bps" /></th>
+        <th className={thCls} onClick={() => toggleSort("category")}>Kategori<SortIcon col="category" /></th>
+        <th className={`${thCls} pl-2`} onClick={() => toggleSort("last_seen")}>Zaman<SortIcon col="last_seen" /></th>
         {showEnded && <th className="pb-2 pl-3">Bitis</th>}
       </tr>
     </thead>
@@ -427,7 +520,7 @@ export function TrafficPage() {
 
       {/* Ozet Kartlar */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <StatCard
             title="Aktif Akis"
             value={stats.total_active_flows}
@@ -445,6 +538,12 @@ export function TrafficPage() {
             value={formatBytes(stats.total_bytes_out)}
             icon={<ArrowUpCircle size={28} />}
             neonColor="cyan"
+          />
+          <StatCard
+            title="Dahili Akis"
+            value={stats.total_internal_flows}
+            icon={<ArrowLeftRight size={28} />}
+            neonColor="green"
           />
           <StatCard
             title="Buyuk Transfer"
@@ -509,6 +608,16 @@ export function TrafficPage() {
                   <option value="TCP">TCP</option>
                   <option value="UDP">UDP</option>
                 </select>
+                <select
+                  value={liveDirection}
+                  onChange={(e) => setLiveDirection(e.target.value)}
+                  className="bg-glass-light border border-glass-border text-white text-xs rounded-lg px-3 py-1.5 focus:border-neon-cyan/50 outline-none"
+                >
+                  <option value="">Tum Yonler</option>
+                  <option value="outbound">Giden</option>
+                  <option value="inbound">Gelen</option>
+                  <option value="internal">Dahili</option>
+                </select>
                 <input
                   type="text"
                   placeholder="Domain ara..."
@@ -540,7 +649,7 @@ export function TrafficPage() {
                   <table className="w-full text-sm">
                     {renderTableHeader()}
                     <tbody>
-                      {liveFlows.map((flow) => renderFlowRow(flow))}
+                      {sortFlows(liveFlows, sortKey, sortDir).map((flow) => renderFlowRow(flow))}
                     </tbody>
                   </table>
                   <div className="mt-3 text-xs text-gray-500 text-right">
@@ -580,7 +689,7 @@ export function TrafficPage() {
                   <table className="w-full text-sm">
                     {renderTableHeader()}
                     <tbody>
-                      {largeTransfers.map((flow) => renderFlowRow(flow))}
+                      {sortFlows(largeTransfers, sortKey, sortDir).map((flow) => renderFlowRow(flow))}
                     </tbody>
                   </table>
                   <div className="mt-3 text-xs text-gray-500 text-right">
@@ -627,6 +736,19 @@ export function TrafficPage() {
                   <option value="TCP">TCP</option>
                   <option value="UDP">UDP</option>
                 </select>
+                <select
+                  value={historyDirection}
+                  onChange={(e) => {
+                    setHistoryDirection(e.target.value);
+                    setHistoryPage(0);
+                  }}
+                  className="bg-glass-light border border-glass-border text-white text-xs rounded-lg px-3 py-1.5 focus:border-neon-cyan/50 outline-none"
+                >
+                  <option value="">Tum Yonler</option>
+                  <option value="outbound">Giden</option>
+                  <option value="inbound">Gelen</option>
+                  <option value="internal">Dahili</option>
+                </select>
                 <input
                   type="text"
                   placeholder="Domain ara..."
@@ -656,7 +778,7 @@ export function TrafficPage() {
                     <table className="w-full text-sm">
                       {renderTableHeader(true)}
                       <tbody>
-                        {historyData.items.map((flow) =>
+                        {sortFlows(historyData.items, sortKey, sortDir).map((flow) =>
                           renderFlowRow(flow, true)
                         )}
                       </tbody>

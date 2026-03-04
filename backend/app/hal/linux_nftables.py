@@ -22,6 +22,11 @@ BRIDGE_CHAIN_DOWNLOAD = "download"   # Output hook, oifname eth1, ether daddr
 BRIDGE_MASQ_TABLE = "bridge masquerade_fix"
 BRIDGE_MASQ_CHAIN = "mac_rewrite"
 
+# --- inet bw_accounting (IP bazli, forward hook) ---
+INET_BW_TABLE = "bw_accounting"
+INET_BW_CHAIN_UP = "upload"
+INET_BW_CHAIN_DOWN = "download"
+
 
 async def run_nft(args: List[str], check: bool = True) -> str:
     """nft komutunu sudo ile calistir."""
@@ -1285,6 +1290,15 @@ async def ensure_bridge_isolation():
         ["sudo", "sysctl", "-w", "net.ipv4.conf.br0.send_redirects=0"], check=False
     )
 
+    # Step 3b: Enable proxy_arp — Pi tum LAN IP'leri icin ARP yaniti verir
+    # /32 subnet mask ile birlikte cihazlar arasi trafik Pi uzerinden zorlanir
+    await _run_system_cmd(
+        ["sudo", "sysctl", "-w", "net.ipv4.conf.br0.proxy_arp=1"], check=False
+    )
+    await _run_system_cmd(
+        ["sudo", "sysctl", "-w", "net.ipv4.conf.eth1.proxy_arp=1"], check=False
+    )
+
     # Step 4: Verify MASQUERADE rule is present BEFORE applying drop rules
     # CRITICAL: Do not apply drop rules without NAT — SSH lockout has no remote recovery path
     wan_iface = await _get_wan_bridge_port()
@@ -1356,6 +1370,8 @@ async def _write_sysctl_persistence():
         "net.bridge.bridge-nf-call-iptables = 1\n"
         "net.ipv4.conf.all.send_redirects = 0\n"
         "net.ipv4.conf.br0.send_redirects = 0\n"
+        "net.ipv4.conf.br0.proxy_arp = 1\n"
+        "net.ipv4.conf.eth1.proxy_arp = 1\n"
     )
     proc = await asyncio.create_subprocess_exec(
         "sudo", "tee", "/etc/sysctl.d/99-bridge-isolation.conf",
@@ -1727,3 +1743,313 @@ async def _setup_vpn_ebtables_fallback(lan_subnet: str = "192.168.1.0/24"):
         logger.info(f"VPN routing: ebtables broute fallback kuruldu (LAN={lan_subnet})")
     except Exception as e:
         logger.error(f"ebtables fallback hatasi: {e}")
+
+
+# ============================================================================
+# inet bw_accounting — IP Bazli Bandwidth Accounting (Forward Hook)
+#
+# br_netfilter aktifken bridge input/output hook'lari trafigin %99'unu
+# kaciriyor. inet forward hook tum routed trafigi gorur.
+# Bonus: WiFi (wlan0) trafigi de yakalanir.
+#
+# Yapi:
+#   table inet bw_accounting {
+#       chain upload   { type filter hook forward priority -2; policy accept;
+#           ip saddr <LAN_SUBNET> counter comment "bw_total_up"
+#           ip saddr <ip> counter comment "bw_<ip>_up"  ...
+#       }
+#       chain download { type filter hook forward priority -2; policy accept;
+#           ip daddr <LAN_SUBNET> counter comment "bw_total_down"
+#           ip daddr <ip> counter comment "bw_<ip>_down" ...
+#       }
+#   }
+# ============================================================================
+
+
+async def ensure_inet_bw_accounting():
+    """inet bw_accounting tablosu ve upload/download chain'lerini olustur (idempotent).
+
+    Her chain'in basinda LAN subnet total counter bulunur.
+    """
+    lan_subnet = await _detect_lan_subnet()
+
+    ruleset = await run_nft(["list", "ruleset"], check=False)
+
+    # Idempotency: tablo + her iki chain + total counter'lar varsa donus
+    if (f"table inet {INET_BW_TABLE}" in ruleset
+            and f"chain {INET_BW_CHAIN_UP}" in ruleset
+            and f"chain {INET_BW_CHAIN_DOWN}" in ruleset
+            and "bw_total_up" in ruleset
+            and "bw_total_down" in ruleset):
+        logger.debug("inet bw_accounting tablosu zaten mevcut")
+        return
+
+    # Tablo varsa once sil (temiz baslangic)
+    if f"table inet {INET_BW_TABLE}" in ruleset:
+        await run_nft(["delete", "table", "inet", INET_BW_TABLE], check=False)
+
+    logger.info(f"inet bw_accounting tablosu olusturuluyor (subnet={lan_subnet})...")
+
+    nft_commands = f"""
+table inet {INET_BW_TABLE} {{
+    chain {INET_BW_CHAIN_UP} {{
+        type filter hook forward priority -2; policy accept;
+        ip saddr {lan_subnet} counter comment "bw_total_up"
+    }}
+    chain {INET_BW_CHAIN_DOWN} {{
+        type filter hook forward priority -2; policy accept;
+        ip daddr {lan_subnet} counter comment "bw_total_down"
+    }}
+}}
+"""
+    proc = await asyncio.create_subprocess_exec(
+        "sudo", NFT_BIN, "-f", "-",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await proc.communicate(input=nft_commands.encode())
+    if proc.returncode != 0:
+        err = stderr.decode().strip()
+        logger.error(f"inet bw_accounting olusturma hatasi: {err}")
+        raise RuntimeError(f"inet bw_accounting create error: {err}")
+
+    logger.info("inet bw_accounting tablosu olusturuldu")
+
+
+async def add_ip_counter(ip: str):
+    """Per-cihaz IP counter kurallari ekle (upload + download chain).
+
+    Upload:   ip saddr {ip} counter comment "bw_{ip}_up"
+    Download: ip daddr {ip} counter comment "bw_{ip}_down"
+
+    Idempotent: comment zaten varsa ekleme yapilmaz.
+    """
+    ip = _validate_ip(ip)
+    comment_up = f"bw_{ip}_up"
+    comment_down = f"bw_{ip}_down"
+
+    # Idempotency: upload chain'de comment var mi kontrol et
+    out_up = await run_nft(
+        ["-a", "list", "chain", "inet", INET_BW_TABLE, INET_BW_CHAIN_UP],
+        check=False,
+    )
+    if comment_up in out_up:
+        return
+
+    # Upload chain'e kural ekle
+    await run_nft([
+        "add", "rule", "inet", INET_BW_TABLE, INET_BW_CHAIN_UP,
+        "ip", "saddr", ip, "counter",
+        "comment", f'"{comment_up}"',
+    ])
+
+    # Download chain'e kural ekle
+    await run_nft([
+        "add", "rule", "inet", INET_BW_TABLE, INET_BW_CHAIN_DOWN,
+        "ip", "daddr", ip, "counter",
+        "comment", f'"{comment_down}"',
+    ])
+
+    logger.debug(f"IP counter eklendi: {ip}")
+
+
+async def remove_ip_counter(ip: str):
+    """Per-cihaz IP counter kurallarini sil (upload + download chain).
+
+    Comment bazli handle ile siler. Bulunamazsa uyari loglanir.
+    """
+    ip = _validate_ip(ip)
+    comment_up = f"bw_{ip}_up"
+    comment_down = f"bw_{ip}_down"
+
+    for chain, comment in [
+        (INET_BW_CHAIN_UP, comment_up),
+        (INET_BW_CHAIN_DOWN, comment_down),
+    ]:
+        out = await run_nft(
+            ["-a", "list", "chain", "inet", INET_BW_TABLE, chain],
+            check=False,
+        )
+        found = False
+        for line in out.splitlines():
+            if comment in line:
+                handle_match = re.search(r"# handle (\d+)", line)
+                if handle_match:
+                    handle = handle_match.group(1)
+                    await run_nft([
+                        "delete", "rule", "inet", INET_BW_TABLE, chain,
+                        "handle", handle,
+                    ], check=False)
+                    found = True
+        if not found:
+            logger.warning(f"remove_ip_counter: {chain} chain'de IP bulunamadi: {ip}")
+
+    logger.debug(f"IP counter silindi: {ip}")
+
+
+async def read_ip_counters() -> Dict[str, Dict[str, int]]:
+    """Tum per-IP counter degerlerini oku-ve-sifirla (nft reset).
+
+    nft reset semantigi: counter degerlerini okur VE atomik olarak sifirlar.
+    Her cagri bir DELTA dondurur.
+
+    Returns:
+        {
+            "192.168.1.10": {
+                "upload_bytes": 1234, "upload_packets": 10,
+                "download_bytes": 5678, "download_packets": 20,
+            },
+            "_total": {
+                "upload_bytes": ..., "upload_packets": ...,
+                "download_bytes": ..., "download_packets": ...,
+            },
+        }
+    """
+    result: Dict[str, Dict[str, int]] = {}
+
+    # Regex: bw_<ip>_up/down veya bw_total_up/down
+    ip_re = re.compile(r'comment\s+"bw_([\d.]+)_(up|down)"')
+    total_re = re.compile(r'comment\s+"bw_total_(up|down)"')
+    counter_re = re.compile(r'counter\s+packets\s+(\d+)\s+bytes\s+(\d+)')
+
+    def _parse_chain(out: str, direction: str):
+        for line in out.splitlines():
+            line_s = line.strip()
+            if "counter" not in line_s or "comment" not in line_s:
+                continue
+
+            counter_match = counter_re.search(line_s)
+            if not counter_match:
+                continue
+            packets = int(counter_match.group(1))
+            bytes_val = int(counter_match.group(2))
+
+            # Total counter
+            total_match = total_re.search(line_s)
+            if total_match:
+                if "_total" not in result:
+                    result["_total"] = {
+                        "upload_bytes": 0, "upload_packets": 0,
+                        "download_bytes": 0, "download_packets": 0,
+                    }
+                result["_total"][f"{direction}_bytes"] = bytes_val
+                result["_total"][f"{direction}_packets"] = packets
+                continue
+
+            # Per-IP counter
+            ip_match = ip_re.search(line_s)
+            if ip_match:
+                ip_addr = ip_match.group(1)
+                if ip_addr not in result:
+                    result[ip_addr] = {
+                        "upload_bytes": 0, "upload_packets": 0,
+                        "download_bytes": 0, "download_packets": 0,
+                    }
+                result[ip_addr][f"{direction}_bytes"] = bytes_val
+                result[ip_addr][f"{direction}_packets"] = packets
+
+    try:
+        out_up = await run_nft(
+            ["-a", "reset", "rules", "inet", INET_BW_TABLE, INET_BW_CHAIN_UP],
+            check=True,
+        )
+    except Exception as e:
+        logger.error(f"read_ip_counters: upload chain okuma hatasi: {e}")
+        return {}
+
+    try:
+        out_down = await run_nft(
+            ["-a", "reset", "rules", "inet", INET_BW_TABLE, INET_BW_CHAIN_DOWN],
+            check=True,
+        )
+    except Exception as e:
+        logger.error(f"read_ip_counters: download chain okuma hatasi: {e}")
+        return {}
+
+    _parse_chain(out_up, "upload")
+    _parse_chain(out_down, "download")
+
+    return result
+
+
+async def sync_ip_counters(ips: List[str]):
+    """Bilinen cihaz IP listesi ile inet bw counter kurallarini senkronize et.
+
+    Yeni IP'ler icin counter ekle, kaldirilmis olanlari sil.
+    Total counter'a dokunmaz.
+    """
+    # Mevcut IP counter'larini oku (upload chain uzerinden)
+    out = await run_nft(
+        ["-a", "list", "chain", "inet", INET_BW_TABLE, INET_BW_CHAIN_UP],
+        check=False,
+    )
+    existing_ips = set()
+    for match in re.finditer(r'comment\s+"bw_([\d.]+)_up"', out):
+        existing_ips.add(match.group(1))
+
+    target_ips = set(ips)
+
+    # Yeni IP'ler icin counter ekle
+    for ip in target_ips - existing_ips:
+        await add_ip_counter(ip)
+
+    # Kaldirilmis IP'lerin counter'larini sil
+    for ip in existing_ips - target_ips:
+        await remove_ip_counter(ip)
+
+    if target_ips != existing_ips:
+        added = len(target_ips - existing_ips)
+        removed = len(existing_ips - target_ips)
+        logger.info(f"inet bw counter sync: +{added} eklendi, -{removed} silindi, toplam {len(target_ips)}")
+
+
+async def cleanup_bridge_accounting():
+    """Eski bridge accounting upload/download chain'lerini sil.
+
+    TC mark chain'lerine DOKUNMAZ — sadece bw_* comment'li upload/download
+    chain'leri temizlenir. Bridge tablosu korunur (tc_mark chain'leri kalir).
+    """
+    ruleset = await run_nft(["list", "ruleset"], check=False)
+    if "table bridge accounting" not in ruleset:
+        logger.debug("Bridge accounting tablosu bulunamadi, temizlik gereksiz")
+        return
+
+    cleaned = False
+
+    for chain_name in (BRIDGE_CHAIN_UPLOAD, BRIDGE_CHAIN_DOWNLOAD):
+        # Chain'in bridge accounting tablosunda olup olmadigini kontrol et
+        chain_check = await run_nft(
+            ["-a", "list", "chain", "bridge", "accounting", chain_name],
+            check=False,
+        )
+        if not chain_check:
+            continue
+
+        # Sadece bw_* counter'li chain'leri temizle
+        # TC mark chain'i "tc_mark" adinda, dokunulmaz
+        has_bw = "bw_" in chain_check
+        has_tc = "tc_" in chain_check
+
+        if has_tc:
+            # Bu chain'de TC kurallari da var, sadece bw_ kurallarini sil
+            logger.warning(f"Bridge {chain_name} chain'de TC kurallari var, sadece bw_ kurallari siliniyor")
+            for line in chain_check.splitlines():
+                if "bw_" in line:
+                    handle_match = re.search(r"# handle (\d+)", line)
+                    if handle_match:
+                        handle = handle_match.group(1)
+                        await run_nft([
+                            "delete", "rule", "bridge", "accounting", chain_name,
+                            "handle", handle,
+                        ], check=False)
+            continue
+
+        # bw_ comment'li veya hook type'li chain — tamamen sil
+        await run_nft(["flush", "chain", "bridge", "accounting", chain_name], check=False)
+        await run_nft(["delete", "chain", "bridge", "accounting", chain_name], check=False)
+        logger.info(f"Bridge accounting {chain_name} chain silindi")
+        cleaned = True
+
+    if cleaned:
+        logger.info("Eski bridge accounting chain'leri temizlendi (TC mark korundu)")

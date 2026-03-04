@@ -769,6 +769,8 @@ export interface LiveFlow {
   last_seen: string | null;
   ended_at: string | null;
   category: string | null;
+  dst_device_id: number | null;
+  dst_device_hostname: string | null;
 }
 
 export interface FlowHistoryResponse {
@@ -784,6 +786,7 @@ export interface FlowStats {
   total_bytes_out: number;
   total_devices_with_flows: number;
   large_transfer_count: number;
+  total_internal_flows: number;
   last_update: string | null;
 }
 

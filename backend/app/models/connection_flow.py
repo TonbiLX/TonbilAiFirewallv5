@@ -47,6 +47,15 @@ class ConnectionFlow(Base):
     # Kategori
     category = Column(String(100), nullable=True)
 
+    # Yon bilgisi: "outbound" / "inbound" / "internal"
+    direction = Column(String(10), nullable=True)
+
+    # Hedef cihaz (internal flow'lar icin — LAN-to-LAN)
+    dst_device_id = Column(
+        Integer, ForeignKey("devices.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Zaman damgalari
     first_seen = Column(DateTime, server_default=func.now())
     last_seen = Column(DateTime, server_default=func.now())
@@ -58,7 +67,10 @@ class ConnectionFlow(Base):
         Index("idx_cf_dst_domain", "dst_domain"),
         Index("idx_cf_ended", "ended_at"),
         Index("idx_cf_first_seen", "first_seen"),
+        Index("idx_cf_direction", "direction"),
+        Index("idx_cf_dst_device", "dst_device_id"),
     )
 
     # Iliskiler
-    device = relationship("Device")
+    device = relationship("Device", foreign_keys=[device_id])
+    dst_device = relationship("Device", foreign_keys=[dst_device_id])
