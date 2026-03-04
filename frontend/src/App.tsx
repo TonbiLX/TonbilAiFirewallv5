@@ -31,7 +31,7 @@ import { DeviceDetailPage } from "./pages/DeviceDetailPage";
 import { SystemManagementPage } from "./pages/SystemManagementPage";
 import { DdosMapPage } from "./pages/DdosMapPage";
 import { WifiPage } from "./pages/WifiPage";
-import { SecuritySettingsPage } from "./pages/SecuritySettingsPage";
+
 
 export default function App() {
   return (
@@ -56,7 +56,6 @@ export default function App() {
                 <Route path="/dns" element={<DnsBlockingPage />} />
                 <Route path="/dhcp" element={<DhcpPage />} />
                 <Route path="/wifi" element={<WifiPage />} />
-                <Route path="/security-settings" element={<SecuritySettingsPage />} />
                 <Route path="/firewall" element={<FirewallPage />} />
                 <Route path="/ddos-map" element={<DdosMapPage />} />
                 <Route path="/ip-management" element={<IpManagementPage />} />

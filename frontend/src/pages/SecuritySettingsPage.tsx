@@ -217,7 +217,7 @@ export function SecuritySettingsPage() {
         } border`}
       >
         <span
-          className={`absolute top-0.5 w-5 h-5 rounded-full transition-transform ${
+          className={`absolute left-0 top-0.5 w-5 h-5 rounded-full transition-transform ${
             (form as Record<string, unknown>)[field]
               ? "translate-x-6 bg-neon-green"
               : "translate-x-0.5 bg-gray-400"
