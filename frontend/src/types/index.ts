@@ -837,3 +837,50 @@ export interface WifiClient {
   connected_seconds: number;
   hostname: string | null;
 }
+
+// --- Güvenlik Ayarları ---
+
+export interface SecurityConfig {
+  id: number;
+  external_rate_threshold: number;
+  local_rate_threshold: number;
+  block_duration_sec: number;
+  dga_detection_enabled: boolean;
+  dga_entropy_threshold: number;
+  insight_cooldown_sec: number;
+  subnet_flood_enabled: boolean;
+  subnet_flood_threshold: number;
+  subnet_window_sec: number;
+  subnet_block_duration_sec: number;
+  scan_pattern_enabled: boolean;
+  scan_pattern_threshold: number;
+  scan_pattern_window_sec: number;
+  threat_score_auto_block: number;
+  threat_score_ttl: number;
+  aggregated_cooldown_sec: number;
+  dns_rate_limit_per_sec: number;
+  dns_blocked_qtypes: number[];
+  sinkhole_ipv4: string;
+  sinkhole_ipv6: string;
+  ddos_alert_syn_flood: number;
+  ddos_alert_udp_flood: number;
+  ddos_alert_icmp_flood: number;
+  ddos_alert_conn_limit: number;
+  ddos_alert_invalid_packet: number;
+  ddos_alert_cooldown_sec: number;
+  fingerprint_ttl: number;
+  fingerprint_min_matches: number;
+  fingerprint_update_cooldown: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface SecurityStats {
+  blocked_ip_count: number;
+  total_auto_blocks: number;
+  total_external_blocked: number;
+  total_suspicious: number;
+  dga_detections: number;
+  blocked_subnet_count: number;
+  last_threat_time: string | null;
+}

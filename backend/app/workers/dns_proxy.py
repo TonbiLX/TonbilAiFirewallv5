@@ -122,7 +122,7 @@ def check_rate_limit(ip: str) -> bool:
     bucket = _rate_limit_buckets[ip]
     # Son 1 saniyedeki istekleri tut
     _rate_limit_buckets[ip] = [t for t in bucket if now - t < 1.0]
-    if len(_rate_limit_buckets[ip]) >= RATE_LIMIT_PER_SEC:
+    if len(_rate_limit_buckets[ip]) >= _cached_rate_limit:
         return False
     _rate_limit_buckets[ip].append(now)
     return True
@@ -142,6 +142,37 @@ BLOCKED_QTYPES = {10, 252, 255}  # NULL, WKS, HINFO, AXFR, ANY
 # Pi'nin IP'si: tarayici bu IP'ye baglaninca nginx block page gosterir
 SINKHOLE_IPV4 = "192.168.1.2"
 SINKHOLE_IPV6 = "::"
+
+# --- Redis Hot-Reload Cache (30sn aralikla guncellenir) ---
+_cached_rate_limit = RATE_LIMIT_PER_SEC
+_cached_blocked_qtypes = BLOCKED_QTYPES.copy()
+_cached_sinkhole_v4 = SINKHOLE_IPV4
+_cached_sinkhole_v6 = SINKHOLE_IPV6
+_cache_ts = 0.0
+
+async def _refresh_dns_security_cache(redis_client):
+    """30 saniyede bir Redis security:config HASH'ten DNS guvenlik ayarlarini oku."""
+    global _cached_rate_limit, _cached_blocked_qtypes, _cached_sinkhole_v4, _cached_sinkhole_v6, _cache_ts
+    import time as _time
+    now = _time.monotonic()
+    if now - _cache_ts < 30:
+        return
+    _cache_ts = now
+    try:
+        val = await redis_client.hget("security:config", "dns_rate_limit_per_sec")
+        if val:
+            _cached_rate_limit = int(val)
+        val = await redis_client.hget("security:config", "dns_blocked_qtypes")
+        if val:
+            _cached_blocked_qtypes = {int(x.strip()) for x in val.split(",") if x.strip()}
+        val = await redis_client.hget("security:config", "sinkhole_ipv4")
+        if val:
+            _cached_sinkhole_v4 = val
+        val = await redis_client.hget("security:config", "sinkhole_ipv6")
+        if val:
+            _cached_sinkhole_v6 = val
+    except Exception:
+        pass
 
 # Yerel ag DNS override: guard.tonbilx.com -> Pi yerel IP (DoT/Private DNS için)
 LOCAL_DNS_OVERRIDES = {
@@ -239,13 +270,13 @@ def build_blocked_response(query_data: bytes, qtype: int) -> bytes:
         answer_type = struct.pack("!H", 28)
         answer_class = struct.pack("!H", 1)
         answer_ttl = struct.pack("!I", blocked_ttl)
-        rdata = socket.inet_pton(socket.AF_INET6, SINKHOLE_IPV6)
+        rdata = socket.inet_pton(socket.AF_INET6, _cached_sinkhole_v6)
         answer_rdlength = struct.pack("!H", len(rdata))
     else:  # A
         answer_type = struct.pack("!H", 1)
         answer_class = struct.pack("!H", 1)
         answer_ttl = struct.pack("!I", blocked_ttl)
-        rdata = socket.inet_aton(SINKHOLE_IPV4)
+        rdata = socket.inet_aton(_cached_sinkhole_v4)
         answer_rdlength = struct.pack("!H", 4)
 
     answer = answer_name + answer_type + answer_class + answer_ttl + answer_rdlength + rdata
@@ -557,6 +588,8 @@ class DnsProxyProtocol(asyncio.DatagramProtocol):
         client_ip = addr[0]
         start_time = time.monotonic()
 
+        await _refresh_dns_security_cache(self.redis)
+
         # Tehdit listesindeki IP'leri hizlica at (hem dis hem yerel)
         if await is_ip_blocked(client_ip):
             self.stats.setdefault("threat_blocked", 0)
@@ -593,7 +626,7 @@ class DnsProxyProtocol(asyncio.DatagramProtocol):
         if not blocked:
             try:
                 # 1) Sorgu tipi bazli engelleme (HINFO, WKS, NULL, AXFR, ANY)
-                if qtype in BLOCKED_QTYPES:
+                if qtype in _cached_blocked_qtypes:
                     blocked = True
                     block_reason = "query_type_block"
                     qtype_label = DNS_TYPES.get(qtype, f"TYPE{qtype}")
@@ -659,7 +692,7 @@ class DnsProxyProtocol(asyncio.DatagramProtocol):
             response = build_blocked_response(data, qtype)
             self.stats["blocked_queries"] += 1
             elapsed_ms = (time.monotonic() - start_time) * 1000
-            answer_ip = SINKHOLE_IPV4 if qtype != 28 else SINKHOLE_IPV6
+            answer_ip = _cached_sinkhole_v4 if qtype != 28 else _cached_sinkhole_v6
             logger.info(f"BLOCKED {domain} ({qtype_name}) from {client_ip} [{elapsed_ms:.1f}ms] reason={block_reason}")
             # Block sebebini Redis'e kaydet (block page icin)
             try:
@@ -907,6 +940,8 @@ async def handle_dot_client(
             qtype_name = query["qtype_name"]
             start_time = time.monotonic()
 
+            await _refresh_dns_security_cache(redis_client)
+
             # Tehdit listesindeki IP'leri at (DoT için de gecerli)
             if await is_ip_blocked(client_ip):
                 continue
@@ -963,7 +998,7 @@ async def handle_dot_client(
                 response = build_blocked_response(dns_data, qtype)
                 stats["blocked_queries"] += 1
                 elapsed_ms = (time.monotonic() - start_time) * 1000
-                answer_ip = SINKHOLE_IPV4 if qtype != 28 else SINKHOLE_IPV6
+                answer_ip = _cached_sinkhole_v4 if qtype != 28 else _cached_sinkhole_v6
                 logger.info(
                     f"DoT BLOCKED {domain} ({qtype_name}) from {client_ip} [{elapsed_ms:.1f}ms] reason={block_reason}"
                 )

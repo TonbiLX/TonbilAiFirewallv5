@@ -1,77 +1,59 @@
-# TonbilAiOS — Bridge Izolasyon Gecisi
+# TonbilAiOS v5 — Proje Durumu
 
-## What This Is
+## Tamamlanan Milestone'lar
 
-TonbilAiOS, Raspberry Pi uzerinde calisan AI destekli bir router yonetim sistemidir. DNS filtreleme, cihaz yonetimi, VPN, DHCP, DDoS koruma, trafik izleme ve firewall ozellikleri sunar. Bu milestone'da seffaf kopru (transparent bridge) modundan izole router moduna gecis yapilacak.
+### 1. Bridge Izolasyon Gecisi (2026-02-25 → 2026-03-04) — %100
 
-## Core Value
+Seffaf kopru (transparent bridge) modundan izole router moduna gecis. Modem sadece Pi'yi goruyor, tum LAN cihazlari modemden gizli.
 
-Modem sadece Pi'yi gorsun, tum LAN cihazlari modemden tamamen gizlensin — trafik Pi'nin IP stack'i uzerinden route edilsin.
+| Aşama | İçerik | Durum |
+|-------|--------|-------|
+| 01 | Bridge Isolation Core — L2 drop + NAT MASQUERADE + rollback | TAMAMLANDI |
+| 02 | Accounting Chain Migration — split upload/download chains | TAMAMLANDI |
+| 03 | TC Mark Chain Migration — split tc_mark_up/tc_mark_down | TAMAMLANDI |
+| 04 | Startup and Persistence — sysctl.d + modules-load.d + nftables.service | TAMAMLANDI |
+| 05 | DHCP Gateway and Validation — gateway .1→.2 + validate.sh | TAMAMLANDI |
 
-## Requirements
+### 2. Telegram Tam Yetenek Güncellemesi (2026-03-04) — %100
 
-### Validated
+16 yeni intent, JSON fix, onay mekanizması, v5.0 versiyon. Commit: `d02cc87`.
 
-- ✓ DNS filtreleme (profil tabanli) — existing
-- ✓ Cihaz yonetimi (CRUD, kesfetme) — existing
-- ✓ VPN yonetimi (WireGuard) — existing
-- ✓ DHCP yonetimi — existing
-- ✓ DDoS koruma — existing
-- ✓ Trafik izleme (per-flow) — existing
-- ✓ Bandwidth accounting (bridge counter) — existing
-- ✓ TC bandwidth limiting — existing
-- ✓ Dashboard (drag-drop grid) — existing
-- ✓ AI sohbet — existing
-- ✓ Telegram bildirimleri — existing
-- ✓ Firewall kural yonetimi — existing
-- ✓ Bridge masquerade (MAC rewrite) — existing (kaldirilacak)
+### 3. WiFi AP Yönetim Sistemi (2026-03-04) — %100
 
-### Active
+RPi 5 dahili WiFi (CYW43455) ile hostapd tabanlı erişim noktası yönetimi. Commit: `4742aa8`.
 
-- [ ] Bridge L2 forwarding izolasyonu (eth0↔eth1 arasi drop)
-- [ ] Router modu NAT/MASQUERADE (Pi kendi MAC'i ile)
-- [ ] Bridge accounting gecisi (forward → input/output hooks)
-- [ ] TC marking gecisi (forward → input/output hooks)
-- [ ] DHCP gateway degisikligi (.1 → .2)
-- [ ] ICMP redirect devre disi birakma
-- [ ] Eski bridge masquerade_fix tablosu temizligi
-- [ ] Rollback mekanizmasi (izole → seffaf kopru geri donus)
-- [ ] Startup guncelleme (main.py lifespan)
+**Mimari:** hostapd (wlan0) → br0 bridge üyesi → 192.168.1.0/24 (aynı subnet)
 
-### Out of Scope
+### 4. Güvenlik Ayarları Sayfası (2026-03-04) — %100
 
-- Frontend UI degisiklikleri — bu milestone sadece backend/HAL katmanini kapsar
-- Pi'ye SSH ile deploy — kullanici manuel yapacak
-- Yeni ozellik ekleme — sadece mevcut yapiyi router moduna gecirme
-- Modem konfigurasyonu — modem tarafinda degisiklik yok
+Çok katmanlı güvenlik sistemi (DDoS, tehdit analizi, DNS filtreleme, DGA tespiti) için UI tabanlı yapılandırma sayfası. ~25 hardcoded sabit → DB-backed config + Redis hot-reload.
 
-## Context
+| Bileşen | Detay | Durum |
+|---------|-------|-------|
+| Backend Model | `security_config.py` — singleton, ~30 kolon | TAMAMLANDI + DEPLOY |
+| Backend Schema | `security_config.py` — Response, Update, Stats | TAMAMLANDI + DEPLOY |
+| Backend API | `security_settings.py` — 6 REST endpoint | TAMAMLANDI + DEPLOY |
+| Startup Sync | `main.py` — DB→Redis push | TAMAMLANDI + DEPLOY |
+| threat_analyzer hot-reload | 13 sabit → Redis dinamik okuma | TAMAMLANDI + DEPLOY |
+| dns_proxy hot-reload | Rate limit + blocked qtypes + sinkhole (30sn cache) | TAMAMLANDI + DEPLOY |
+| ddos_service hot-reload | Alert thresholds + cooldown | TAMAMLANDI + DEPLOY |
+| dns_fingerprint hot-reload | TTL + cooldown + min_matches | TAMAMLANDI + DEPLOY |
+| Frontend Page | 5-tab UI (Tehdit/DNS/Uyarı/IP/İstatistik) | TAMAMLANDI + DEPLOY |
+| Frontend Routing | App.tsx route + Sidebar nav item | TAMAMLANDI + DEPLOY |
 
-- Pi uzerinde br0 = eth0 (WAN) + eth1 (LAN) seffaf kopru calisiyor
-- Modem (192.168.1.1) tum cihazlarin MAC adreslerini gorebiliyor
-- DHCP gateway su an .1 (modem), DNS zaten .2 (Pi)
-- MASQUERADE + MAC rewrite (bridge_masquerade_fix) aktif
-- Bandwidth accounting bridge forward hook'unda calisiyor
-- TC marking de bridge forward hook'unda calisiyor
-- Gecis sonrasi: L2 forwarding engellenir, trafik IP stack uzerinden route edilir
-- BRIDGE_ISOLATION_PLAN.md detayli uygulama plani mevcut
+**Yeni dosyalar (5):** security_config model, schema, API endpoint, securityApi.ts, SecuritySettingsPage.tsx
+**Düzenlenen dosyalar (10):** models/__init__, router, main, threat_analyzer, dns_proxy, ddos_service, dns_fingerprint, types/index.ts, App.tsx, Sidebar.tsx
+**Yedek:** `/opt/tonbilaios/backup-security-20260304-1529/`
+
+## Aktif Milestone
+
+Henüz yeni milestone belirlenmedi.
 
 ## Constraints
 
-- **Platform**: Raspberry Pi (ARM, Linux) — tum degisiklikler nftables ve sysctl uzerinden
-- **Downtime**: Gecis sirasinda kisa sure internet kesintisi olabilir, minimize edilmeli
-- **Uyumluluk**: Mevcut bandwidth accounting ve TC limiting aynen calismali (hook degisikligi ile)
-- **Geri donus**: remove_bridge_isolation() ile seffaf kopru moduna donebilmeli
-
-## Key Decisions
-
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Bridge L2 drop (forward chain) | Modem cihazlari gormemeli, en temiz izolasyon | — Pending |
-| Accounting input/output hook | Forward hook izolasyondan sonra trafik gormez | — Pending |
-| DHCP gateway .2 | Pi router olunca gateway Pi olmali | — Pending |
-| Eski masquerade_fix kaldirilir | Router modunda MAC rewrite gereksiz | — Pending |
-| Rollback dahil | Risk azaltma, geri donus mumkun olmali | — Pending |
+- **Platform**: Raspberry Pi 5 (ARM64, Debian Bookworm)
+- **Ağ**: br0 = eth0 (WAN) + eth1 (LAN), wlan0 bridge'e eklenebilir
+- **Deployment**: Paramiko SSH (pi.tonbil.com:2323 → 192.168.1.2)
 
 ---
-*Last updated: 2026-02-25 after initialization*
+*Last updated: 2026-03-04 after Security Settings deploy*

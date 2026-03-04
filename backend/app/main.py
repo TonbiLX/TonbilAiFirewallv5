@@ -55,6 +55,7 @@ from app.models import (  # noqa: F401
     DdosConfig,
     ConnectionFlow,
     WifiConfig,
+    SecurityConfig,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -352,6 +353,23 @@ async def _wifi_schedule_worker():
         await asyncio.sleep(60)
 
 
+async def _sync_security_config_on_startup():
+    """DB'deki SecurityConfig'i oku, Redis security:config HASH'e push et."""
+    try:
+        from app.models.security_config import SecurityConfig
+        from app.api.v1.security_settings import _push_config_to_redis, _get_or_create_config
+        from app.db.session import async_session_factory
+
+        async with async_session_factory() as db:
+            config = await _get_or_create_config(db)
+            await _push_config_to_redis(config)
+            logger.info("Guvenlik ayarlari baslangic sync tamamlandi")
+    except Exception as e:
+        logger.error(f"Guvenlik ayarlari baslangic sync hatasi: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 async def _sync_ddos_on_startup():
     """DB'deki DDoS config'ini oku, nftables/sysctl/nginx kurallarini uygula."""
     try:
@@ -425,6 +443,9 @@ async def lifespan(app: FastAPI):
 
     # DDoS koruma kurallarini DB'den oku ve uygula
     await _sync_ddos_on_startup()
+
+    # Guvenlik ayarlarini DB'den Redis'e push et (worker hot-reload icin)
+    await _sync_security_config_on_startup()
 
     # WiFi AP: DB'de enabled ise hostapd baslat
     await _sync_wifi_on_startup()

@@ -73,6 +73,9 @@ MIN_MATCHES_FOR_UPDATE = 1
 # DB güncelleme aralığı (ayni cihaz için 5 dk'da bir)
 UPDATE_COOLDOWN = 300
 
+# NOT: Yukaridaki sabitler fallback degerleridir.
+# Runtime'da Redis security:config HASH'ten dinamik okunur.
+
 # Bellek ici cooldown - ayni IP için tekrar tekrar DB güncelleme yapma
 _update_cooldowns: dict[str, float] = {}
 
@@ -91,6 +94,13 @@ async def analyze_fingerprint(client_ip: str, domain: str, qtype_name: str):
         # Domain'i normalize et
         normalized = domain.rstrip(".").lower()
 
+        # Redis'ten dinamik TTL oku
+        try:
+            _fp_ttl_val = await redis.hget("security:config", "fingerprint_ttl")
+            _fp_ttl = int(_fp_ttl_val) if _fp_ttl_val else FINGERPRINT_TTL
+        except Exception:
+            _fp_ttl = FINGERPRINT_TTL
+
         # Redis'e ekle (IP bazli domain gecmisi)
         fp_key = f"dns:fp:{client_ip}:domains"
         await redis.sadd(fp_key, normalized)
@@ -98,20 +108,25 @@ async def analyze_fingerprint(client_ip: str, domain: str, qtype_name: str):
         # Ilk ekleme ise TTL ayarla
         ttl = await redis.ttl(fp_key)
         if ttl == -1:
-            await redis.expire(fp_key, FINGERPRINT_TTL)
+            await redis.expire(fp_key, _fp_ttl)
 
         # Qtype istatistigi
         qt_key = f"dns:fp:{client_ip}:qtypes"
         await redis.hincrby(qt_key, qtype_name, 1)
         qt_ttl = await redis.ttl(qt_key)
         if qt_ttl == -1:
-            await redis.expire(qt_key, FINGERPRINT_TTL)
+            await redis.expire(qt_key, _fp_ttl)
 
         # Cooldown kontrolü - ayni IP için cok sik güncelleme yapma
         import time
         now = time.monotonic()
+        try:
+            _upd_cd_val = await redis.hget("security:config", "fingerprint_update_cooldown")
+            _upd_cd = int(_upd_cd_val) if _upd_cd_val else UPDATE_COOLDOWN
+        except Exception:
+            _upd_cd = UPDATE_COOLDOWN
         last_update = _update_cooldowns.get(client_ip, 0)
-        if now - last_update < UPDATE_COOLDOWN:
+        if now - last_update < _upd_cd:
             return
 
         # Pattern eslestirmesi
@@ -137,7 +152,12 @@ async def analyze_fingerprint(client_ip: str, domain: str, qtype_name: str):
                     best_matches = matches
 
         # Yeterli confidence varsa DB güncelle
-        if best_match and best_confidence >= 0.7 and best_matches >= MIN_MATCHES_FOR_UPDATE:
+        try:
+            _min_m_val = await redis.hget("security:config", "fingerprint_min_matches")
+            _min_matches = int(_min_m_val) if _min_m_val else MIN_MATCHES_FOR_UPDATE
+        except Exception:
+            _min_matches = MIN_MATCHES_FOR_UPDATE
+        if best_match and best_confidence >= 0.7 and best_matches >= _min_matches:
             detected_os, device_type = best_match
             await _update_device_fingerprint(client_ip, detected_os, device_type)
             _update_cooldowns[client_ip] = now

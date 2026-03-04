@@ -24,7 +24,7 @@ from app.services.telegram_service import notify_ip_blocked, notify_device_isola
 
 logger = logging.getLogger("tonbilai.threat_analyzer")
 
-# --- Sabitler ---
+# --- Sabitler (fallback degerler — Redis'te yoksa bunlar kullanilir) ---
 EXTERNAL_RATE_THRESHOLD = 20       # dis IP: 20 sorgu/dk -> engelle
 LOCAL_RATE_THRESHOLD = 300         # yerel: 300 sorgu/dk -> uyari
 BLOCK_DURATION_SEC = 3600          # otomatik engel süresi: 1 saat
@@ -41,6 +41,37 @@ THREAT_SCORE_AUTO_BLOCK = 15       # tehdit skoru 15+ -> otomatik engel
 THREAT_SCORE_TTL = 3600            # skor TTL: 1 saat
 SUBNET_BLOCK_DURATION_SEC = 3600   # subnet engel süresi: 1 saat
 AGGREGATED_COOLDOWN_SEC = 1800     # toplu uyari cooldown: 30 dk
+
+
+# --- Redis Hot-Reload Yardimcilari ---
+
+async def _get_sec_int(redis, key: str, default: int) -> int:
+    """Redis security:config HASH'ten integer oku, yoksa fallback."""
+    try:
+        val = await redis.hget("security:config", key)
+        return int(val) if val else default
+    except Exception:
+        return default
+
+
+async def _get_sec_float(redis, key: str, default: float) -> float:
+    """Redis security:config HASH'ten float oku, yoksa fallback."""
+    try:
+        val = await redis.hget("security:config", key)
+        return float(val) if val else default
+    except Exception:
+        return default
+
+
+async def _get_sec_bool(redis, key: str, default: bool) -> bool:
+    """Redis security:config HASH'ten bool oku, yoksa fallback."""
+    try:
+        val = await redis.hget("security:config", key)
+        if val is None:
+            return default
+        return val.lower() in ("true", "1", "yes") if isinstance(val, str) else bool(val)
+    except Exception:
+        return default
 
 # Güvenilir IP'ler - otomatik engellemeye tabi TUTULMAYACAK IP'ler
 # Pi'nin kendi public IP'si, gateway, yerel DNS sunuculari vb.
@@ -82,7 +113,8 @@ def is_trusted_ip(ip: str) -> bool:
 
 # Bellek ici duplike onleme - ayni IP/olay için tekrar tekrar insight yazmamak
 _recent_insights: dict[str, float] = {}
-_INSIGHT_COOLDOWN = 1800  # ayni olay için 30 dk bekleme (v2: 5 dk -> 30 dk)
+_INSIGHT_COOLDOWN = 1800  # ayni olay için 30 dk bekleme (v2: 5 dk -> 30 dk) — fallback
+# NOT: Runtime'da Redis'ten insight_cooldown_sec okunur
 
 
 # --- Shannon Entropi (DGA Algilama) ---
@@ -112,7 +144,7 @@ def calculate_entropy(domain: str) -> float:
     return entropy
 
 
-def _is_dga_suspicious(domain: str) -> bool:
+def _is_dga_suspicious(domain: str, entropy_threshold: float = DGA_ENTROPY_THRESHOLD) -> bool:
     """Domain DGA suphesi tasiyor mu?"""
     parts = domain.rstrip(".").split(".")
     if len(parts) < 2:
@@ -125,7 +157,7 @@ def _is_dga_suspicious(domain: str) -> bool:
 
     # Entropi kontrolü
     entropy = calculate_entropy(domain)
-    if entropy < DGA_ENTROPY_THRESHOLD:
+    if entropy < entropy_threshold:
         return False
 
     # Ek kontrol: rakam oranı yuksek mi?
@@ -136,7 +168,7 @@ def _is_dga_suspicious(domain: str) -> bool:
     # Ek kontrol: sesli harf oranı cok dusuk mu?
     vowels = set("aeiouy")
     vowel_ratio = sum(1 for c in name.lower() if c in vowels) / len(name)
-    if vowel_ratio < 0.15 and entropy >= DGA_ENTROPY_THRESHOLD:
+    if vowel_ratio < 0.15 and entropy >= entropy_threshold:
         return True
 
     return entropy >= 4.0  # Cok yuksek entropi -> kesin şüpheli
@@ -264,7 +296,8 @@ async def auto_block_ip(ip: str, reason: str):
             return  # Zaten engelli
 
         # Engel süresi için ayri key (TTL ile otomatik kalkar)
-        await redis.set(f"dns:threat:block_expire:{ip}", reason, ex=BLOCK_DURATION_SEC)
+        block_dur = await _get_sec_int(redis, "block_duration_sec", BLOCK_DURATION_SEC)
+        await redis.set(f"dns:threat:block_expire:{ip}", reason, ex=block_dur)
 
         # İstatistikleri güncelle
         await redis.hincrby("dns:threat:stats", "total_auto_blocks", 1)
@@ -276,7 +309,7 @@ async def auto_block_ip(ip: str, reason: str):
         # nftables blocked_ips setine de ekle (ag seviyesi engelleme)
         try:
             from app.hal import linux_nftables as nft
-            await nft.add_blocked_ip(ip, BLOCK_DURATION_SEC)
+            await nft.add_blocked_ip(ip, block_dur)
         except Exception as nft_err:
             logger.warning(f"nftables IP engelleme hatasi: {nft_err}")
 
@@ -310,6 +343,7 @@ async def auto_block_subnet(subnet: str, reason: str, triggering_ips: set[str] |
             return
     try:
         redis = await _get_redis()
+        subnet_block_dur = await _get_sec_int(redis, "subnet_block_duration_sec", SUBNET_BLOCK_DURATION_SEC)
 
         # Subnet engel key'ini ayarla (TTL ile otomatik kalkar)
         already_blocked = await redis.exists(f"dns:threat:subnet_blocked:{subnet}")
@@ -319,7 +353,7 @@ async def auto_block_subnet(subnet: str, reason: str, triggering_ips: set[str] |
         await redis.set(
             f"dns:threat:subnet_blocked:{subnet}",
             reason,
-            ex=SUBNET_BLOCK_DURATION_SEC,
+            ex=subnet_block_dur,
         )
 
         # Bilinen IP'leri bireysel olarak da engelle
@@ -329,7 +363,7 @@ async def auto_block_subnet(subnet: str, reason: str, triggering_ips: set[str] |
                 await redis.set(
                     f"dns:threat:block_expire:{ip}",
                     f"Subnet engeli: {reason}",
-                    ex=SUBNET_BLOCK_DURATION_SEC,
+                    ex=subnet_block_dur,
                 )
 
         # İstatistikleri güncelle
@@ -346,10 +380,10 @@ async def auto_block_subnet(subnet: str, reason: str, triggering_ips: set[str] |
         # nftables subnet kurallarini da ekle
         try:
             from app.hal import linux_nftables as nft
-            await nft.add_blocked_subnet(subnet, SUBNET_BLOCK_DURATION_SEC)
+            await nft.add_blocked_subnet(subnet, subnet_block_dur)
             if triggering_ips:
                 for tip in triggering_ips:
-                    await nft.add_blocked_ip(tip, SUBNET_BLOCK_DURATION_SEC)
+                    await nft.add_blocked_ip(tip, subnet_block_dur)
         except Exception as nft_err:
             logger.warning(f"nftables subnet engelleme hatasi: {nft_err}")
 
@@ -360,7 +394,7 @@ async def auto_block_subnet(subnet: str, reason: str, triggering_ips: set[str] |
                 f"{blocked_count} benzersiz IP tespit edildi. {reason}"
             ),
             suggested_action=(
-                f"Subnet {subnet} {SUBNET_BLOCK_DURATION_SEC // 60} dakika boyunca engelli. "
+                f"Subnet {subnet} {subnet_block_dur // 60} dakika boyunca engelli. "
                 "Tum alt ag trafiği reddedilecek."
             ),
             category="security",
@@ -524,11 +558,19 @@ async def _check_subnet_flood(client_ip: str, domain: str, qtype_name: str) -> b
 
     try:
         redis = await _get_redis()
+
+        # Redis'ten dinamik toggle + esik oku
+        subnet_enabled = await _get_sec_bool(redis, "subnet_flood_enabled", True)
+        if not subnet_enabled:
+            return False
+
         subnet = _extract_subnet(client_ip)
 
         # Subnet zaten engelli mi?
         if await redis.exists(f"dns:threat:subnet_blocked:{subnet}"):
             return True  # Zaten engelli, tekrar engellemeye gerek yok
+
+        subnet_window = await _get_sec_int(redis, "subnet_window_sec", SUBNET_WINDOW_SEC)
 
         # Bu IP'yi subnet SET'ine ekle (benzersiz IP takibi)
         subnet_key = f"dns:threat:subnet:{subnet}"
@@ -537,18 +579,19 @@ async def _check_subnet_flood(client_ip: str, domain: str, qtype_name: str) -> b
         # Ilk ekleme ise TTL ayarla
         ttl = await redis.ttl(subnet_key)
         if ttl == -1:  # TTL yok -> yeni key
-            await redis.expire(subnet_key, SUBNET_WINDOW_SEC)
+            await redis.expire(subnet_key, subnet_window)
 
         # Subnet sorgu sayacıni artir
         count_key = f"dns:threat:subnet_count:{subnet}"
         count = await redis.incr(count_key)
         if count == 1:
-            await redis.expire(count_key, SUBNET_WINDOW_SEC)
+            await redis.expire(count_key, subnet_window)
 
         # Benzersiz IP sayısıni kontrol et
         unique_ips = await redis.scard(subnet_key)
 
-        if unique_ips >= SUBNET_FLOOD_THRESHOLD:
+        subnet_threshold = await _get_sec_int(redis, "subnet_flood_threshold", SUBNET_FLOOD_THRESHOLD)
+        if unique_ips >= subnet_threshold:
             # Subnet'ten gelen tum bilinen IP'leri al
             triggering_ips = await redis.smembers(subnet_key)
             # str'ye cevir (Redis bytes donebilir)
@@ -599,9 +642,16 @@ async def _check_scan_pattern(client_ip: str, domain: str, qtype_name: str) -> b
     try:
         redis = await _get_redis()
 
+        # Redis'ten dinamik toggle + esik oku
+        scan_enabled = await _get_sec_bool(redis, "scan_pattern_enabled", True)
+        if not scan_enabled:
+            return False
+
         # Domain'i normalize et (kucuk harf, sondaki nokta kaldir)
         normalized_domain = domain.rstrip(".").lower()
         pattern_key = f"dns:threat:pattern:{qtype_name}:{normalized_domain}"
+
+        scan_window = await _get_sec_int(redis, "scan_pattern_window_sec", SCAN_PATTERN_WINDOW_SEC)
 
         # Bu IP'yi pattern SET'ine ekle
         await redis.sadd(pattern_key, client_ip)
@@ -609,12 +659,13 @@ async def _check_scan_pattern(client_ip: str, domain: str, qtype_name: str) -> b
         # Ilk ekleme ise TTL ayarla
         ttl = await redis.ttl(pattern_key)
         if ttl == -1:
-            await redis.expire(pattern_key, SCAN_PATTERN_WINDOW_SEC)
+            await redis.expire(pattern_key, scan_window)
 
         # Benzersiz IP sayısıni kontrol et
         unique_ips = await redis.scard(pattern_key)
 
-        if unique_ips >= SCAN_PATTERN_THRESHOLD:
+        scan_threshold = await _get_sec_int(redis, "scan_pattern_threshold", SCAN_PATTERN_THRESHOLD)
+        if unique_ips >= scan_threshold:
             # Aggregated uyari yaz (cooldown ile spam onleme)
             cooldown_key = f"scan_pattern:{qtype_name}:{normalized_domain}"
             await _write_insight(
@@ -661,7 +712,8 @@ async def _update_threat_score(client_ip: str, domain: str, qtype_name: str) -> 
         normalized_domain = domain.rstrip(".").lower()
         pattern_key = f"dns:threat:pattern:{qtype_name}:{normalized_domain}"
         pattern_count = await redis.scard(pattern_key)
-        if pattern_count >= SCAN_PATTERN_THRESHOLD:
+        scan_thr = await _get_sec_int(redis, "scan_pattern_threshold", SCAN_PATTERN_THRESHOLD)
+        if pattern_count >= scan_thr:
             points += 5
 
         # Subnet zaten flaglenmis mi: +3 puan
@@ -672,7 +724,9 @@ async def _update_threat_score(client_ip: str, domain: str, qtype_name: str) -> 
             points += 3
 
         # DGA domain sorgusu: +10 puan
-        if _is_dga_suspicious(domain):
+        dga_enabled = await _get_sec_bool(redis, "dga_detection_enabled", True)
+        dga_thr = await _get_sec_float(redis, "dga_entropy_threshold", DGA_ENTROPY_THRESHOLD)
+        if dga_enabled and _is_dga_suspicious(domain, dga_thr):
             points += 10
 
         if points == 0:
@@ -682,7 +736,8 @@ async def _update_threat_score(client_ip: str, domain: str, qtype_name: str) -> 
         new_score = await redis.hincrby(score_key, "total", points)
 
         # TTL ayarla (her güncellemeye yenilenir)
-        await redis.expire(score_key, THREAT_SCORE_TTL)
+        score_ttl = await _get_sec_int(redis, "threat_score_ttl", THREAT_SCORE_TTL)
+        await redis.expire(score_key, score_ttl)
 
         # Detay bilgisi kaydet
         await redis.hset(score_key, "last_domain", domain)
@@ -690,13 +745,14 @@ async def _update_threat_score(client_ip: str, domain: str, qtype_name: str) -> 
         await redis.hset(score_key, "last_update", datetime.utcnow().isoformat())
 
         # Esik kontrolü: 15+ -> otomatik engel
-        if new_score >= THREAT_SCORE_AUTO_BLOCK:
+        auto_block_thr = await _get_sec_int(redis, "threat_score_auto_block", THREAT_SCORE_AUTO_BLOCK)
+        if new_score >= auto_block_thr:
             # Zaten engelli mi kontrol et
             already_blocked = await redis.sismember("dns:threat:blocked", client_ip)
             if not already_blocked:
                 reason = (
                     f"Tehdit skoru esigi asildi: {new_score} puan "
-                    f"(esik: {THREAT_SCORE_AUTO_BLOCK}). "
+                    f"(esik: {auto_block_thr}). "
                     f"Son sorgu: {domain} ({qtype_name})"
                 )
                 await auto_block_ip(client_ip, reason)
@@ -735,7 +791,8 @@ async def report_external_query(client_ip: str, domain: str, qtype_name: str):
             if count == 1:
                 await redis.expire(key, 60)
             # Esik asilirsa uyari oluştur (engelleme yok)
-            if count == EXTERNAL_RATE_THRESHOLD:
+            trusted_ext_thr = await _get_sec_int(redis, "external_rate_threshold", EXTERNAL_RATE_THRESHOLD)
+            if count == trusted_ext_thr:
                 reason = (
                     f"Güvenilir IP'den asiri dis sorgu: {count} sorgu/dk "
                     f"(esik: {EXTERNAL_RATE_THRESHOLD}). "
@@ -771,11 +828,12 @@ async def report_external_query(client_ip: str, domain: str, qtype_name: str):
         # Toplam dis sorgu sayacıni artir
         await redis.hincrby("dns:threat:stats", "total_external_blocked", 1)
 
-        # Esik kontrolü
-        if count >= EXTERNAL_RATE_THRESHOLD:
+        # Esik kontrolü (Redis dinamik)
+        ext_thr = await _get_sec_int(redis, "external_rate_threshold", EXTERNAL_RATE_THRESHOLD)
+        if count >= ext_thr:
             reason = (
                 f"Dış IP flood: {count} sorgu/dk "
-                f"(esik: {EXTERNAL_RATE_THRESHOLD}). "
+                f"(esik: {ext_thr}). "
                 f"Son sorgu: {domain} ({qtype_name})"
             )
             await auto_block_ip(client_ip, reason)
@@ -788,7 +846,8 @@ async def report_external_query(client_ip: str, domain: str, qtype_name: str):
 
         # --- 3. v2: Tehdit skor güncelleme ---
         score = await _update_threat_score(client_ip, domain, qtype_name)
-        if score >= THREAT_SCORE_AUTO_BLOCK:
+        auto_block_score = await _get_sec_int(redis, "threat_score_auto_block", THREAT_SCORE_AUTO_BLOCK)
+        if score >= auto_block_score:
             return  # Skor esigi asildi, IP zaten engellendi
 
         # --- 4. v2: Tarama pattern kontrolü ---
@@ -833,14 +892,15 @@ async def report_local_query(
         if count == 1:
             await redis.expire(key, 60)
 
-        # Yerel flood tespiti
-        if count == LOCAL_RATE_THRESHOLD:
+        # Yerel flood tespiti (Redis dinamik)
+        local_thr = await _get_sec_int(redis, "local_rate_threshold", LOCAL_RATE_THRESHOLD)
+        if count == local_thr:
             await redis.hincrby("dns:threat:stats", "total_suspicious", 1)
             await _write_insight(
                 severity=Severity.WARNING,
                 message=(
                     f"Yerel cihaz asiri DNS sorgusu: {client_ip} -> "
-                    f"{count} sorgu/dk (esik: {LOCAL_RATE_THRESHOLD}). "
+                    f"{count} sorgu/dk (esik: {local_thr}). "
                     f"Cihaz ele gecirilmis veya malware bulasmis olabilir."
                 ),
                 suggested_action=(
@@ -865,7 +925,9 @@ async def report_local_query(
             )
 
         # DGA tespiti (her 50 sorguda bir kontrol - performans için)
-        if count % 50 == 1 and _is_dga_suspicious(domain):
+        dga_on = await _get_sec_bool(redis, "dga_detection_enabled", True)
+        dga_ent = await _get_sec_float(redis, "dga_entropy_threshold", DGA_ENTROPY_THRESHOLD)
+        if count % 50 == 1 and dga_on and _is_dga_suspicious(domain, dga_ent):
             await redis.hincrby("dns:threat:stats", "total_suspicious", 1)
             entropy = calculate_entropy(domain)
             await _write_insight(

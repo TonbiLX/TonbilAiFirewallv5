@@ -31,6 +31,7 @@ from app.models.device_traffic_snapshot import DeviceTrafficSnapshot
 from app.models.ddos_config import DdosConfig
 from app.models.connection_flow import ConnectionFlow
 from app.models.wifi_config import WifiConfig
+from app.models.security_config import SecurityConfig
 
 __all__ = [
     "Profile", "ProfileType",
@@ -64,4 +65,5 @@ __all__ = [
     "DdosConfig",
     "ConnectionFlow",
     "WifiConfig",
+    "SecurityConfig",
 ]

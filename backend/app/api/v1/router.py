@@ -8,7 +8,7 @@ from app.api.v1 import (
     auth, chat, vpn_client, tls, content_categories,
     services, system_logs, system_time, telegram,
     ip_management, system_monitor, device_custom_rules,
-    ai_settings, ddos, system_management,
+    ai_settings, ddos, system_management, security_settings,
 )
 
 api_v1_router = APIRouter()
@@ -38,4 +38,5 @@ api_v1_router.include_router(ai_settings.router, prefix="/ai-settings", tags=["Y
 api_v1_router.include_router(ddos.router, prefix="/ddos", tags=["DDoS Koruma"])
 api_v1_router.include_router(system_management.router, prefix="/system-management", tags=["Sistem Yönetimi"])
 api_v1_router.include_router(wifi.router, prefix="/wifi", tags=["WiFi AP"])
+api_v1_router.include_router(security_settings.router, prefix="/security", tags=["Güvenlik Ayarları"])
 api_v1_router.include_router(ws.router, tags=["WebSocket"])

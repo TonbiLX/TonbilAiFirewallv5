@@ -614,6 +614,15 @@ ALERT_THRESHOLDS = {
     "invalid_packet": 100,  # 100+ yeni geçersiz paket drop → uyari
 }
 
+# Redis key mapping: security:config field -> ALERT_THRESHOLDS key
+_ALERT_REDIS_KEYS = {
+    "syn_flood": "ddos_alert_syn_flood",
+    "udp_flood": "ddos_alert_udp_flood",
+    "icmp_flood": "ddos_alert_icmp_flood",
+    "conn_limit": "ddos_alert_conn_limit",
+    "invalid_packet": "ddos_alert_invalid_packet",
+}
+
 # Ic ag (private) IP'leri DDoS saldırgan olarak raporlama
 import ipaddress
 _PRIVATE_NETWORKS = [
@@ -632,7 +641,7 @@ def _is_private_ip(ip_str: str) -> bool:
         return False
 
 # Ayni alarm tekrar tekrar gönderilmesin (30 dk cooldown)
-ALERT_COOLDOWN_SECONDS = 1800  # 30 dakika
+ALERT_COOLDOWN_SECONDS = 1800  # 30 dakika (fallback — Redis'ten dinamik okunur)
 
 
 async def check_ddos_anomaly_and_alert():
@@ -661,7 +670,16 @@ async def check_ddos_anomaly_and_alert():
             prev = last.get(prot, 0)
             delta = pkt - prev
 
-            threshold = ALERT_THRESHOLDS.get(prot, 500)
+            # Redis'ten dinamik esik oku (yoksa fallback)
+            redis_key = _ALERT_REDIS_KEYS.get(prot)
+            if redis_key:
+                try:
+                    dyn_val = await redis.hget("security:config", redis_key)
+                    threshold = int(dyn_val) if dyn_val else ALERT_THRESHOLDS.get(prot, 500)
+                except Exception:
+                    threshold = ALERT_THRESHOLDS.get(prot, 500)
+            else:
+                threshold = ALERT_THRESHOLDS.get(prot, 500)
             if delta > threshold:
                 alerts.append({
                     "protection": prot,
@@ -721,8 +739,13 @@ async def check_ddos_anomaly_and_alert():
                 # Cooldown ayarla
                 for alert in real_alerts:
                     cooldown_key = f"ddos:alert_cooldown:{alert['protection']}"
-                    await redis.setex(cooldown_key, ALERT_COOLDOWN_SECONDS, "1")
-                    logger.info(f"DDoS {alert['protection']} için {ALERT_COOLDOWN_SECONDS}sn cooldown ayarlandi")
+                    try:
+                        cd_val = await redis.hget("security:config", "ddos_alert_cooldown_sec")
+                        cd_sec = int(cd_val) if cd_val else ALERT_COOLDOWN_SECONDS
+                    except Exception:
+                        cd_sec = ALERT_COOLDOWN_SECONDS
+                    await redis.setex(cooldown_key, cd_sec, "1")
+                    logger.info(f"DDoS {alert['protection']} için {cd_sec}sn cooldown ayarlandi")
 
         return alerts
 
