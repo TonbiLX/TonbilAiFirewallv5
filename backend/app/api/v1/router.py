@@ -4,7 +4,7 @@
 from fastapi import APIRouter
 from app.api.v1 import (
     profiles, devices, traffic, insights, dashboard, ws,
-    dns, dhcp, firewall, vpn,
+    dns, dhcp, firewall, vpn, wifi,
     auth, chat, vpn_client, tls, content_categories,
     services, system_logs, system_time, telegram,
     ip_management, system_monitor, device_custom_rules,
@@ -37,4 +37,5 @@ api_v1_router.include_router(device_custom_rules.router, prefix="/device-rules",
 api_v1_router.include_router(ai_settings.router, prefix="/ai-settings", tags=["Yapay Zeka Ayarları"])
 api_v1_router.include_router(ddos.router, prefix="/ddos", tags=["DDoS Koruma"])
 api_v1_router.include_router(system_management.router, prefix="/system-management", tags=["Sistem Yönetimi"])
+api_v1_router.include_router(wifi.router, prefix="/wifi", tags=["WiFi AP"])
 api_v1_router.include_router(ws.router, tags=["WebSocket"])

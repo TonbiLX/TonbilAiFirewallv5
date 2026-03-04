@@ -18,6 +18,7 @@ import {
   Lock,
   Filter,
   Radar,
+  Wifi,
   LogOut,
   Settings,
   ScrollText,
@@ -41,6 +42,7 @@ const navItems = [
   { to: "/content-categories", icon: Filter, label: "İçerik Filtreleri" },
   { to: "/dns", icon: ShieldBan, label: "DNS Engelleme" },
   { to: "/dhcp", icon: Network, label: "DHCP" },
+  { to: "/wifi", icon: Wifi, label: "WiFi AP" },
   { to: "/firewall", icon: Flame, label: "Güvenlik Duvarı" },
   { to: "/ddos-map", icon: Map, label: "DDoS Harita" },
   { to: "/ip-management", icon: ShieldCheck, label: "IP Yönetimi" },
@@ -87,7 +89,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               <FirewallLogo size={34} />
               <div>
                 <h1 className="text-lg font-bold neon-text">TonbilAi</h1>
-                <p className="text-xs text-gray-500">AI Firewall v2.0</p>
+                <p className="text-xs text-gray-500">AI Firewall v5.0</p>
               </div>
             </div>
             {/* Mobil kapat butonu */}
@@ -178,7 +180,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <span>Çıkış Yap</span>
           </button>
           <div className="text-xs text-gray-600 text-center">
-            <p>TonbilAiFirewall V2.0</p>
+            <p>TonbilAiFirewall V5.0</p>
             <p className="text-neon-cyan/50 mt-1">Yapay Zeka Destekli Güvenlik Duvarı</p>
           </div>
         </div>

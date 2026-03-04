@@ -39,6 +39,7 @@ from app.workers.traffic_monitor import start_traffic_monitor
 from app.workers.bandwidth_monitor import start_bandwidth_monitor
 from app.workers.flow_tracker import start_flow_tracker
 from app.services.system_monitor_service import start_system_monitor_worker
+from app.workers.wifi_monitor import start_wifi_monitor
 
 # Tum modelleri import et (tablo oluşturma için)
 from app.models import (  # noqa: F401
@@ -53,6 +54,7 @@ from app.models import (  # noqa: F401
     DeviceTrafficSnapshot,
     DdosConfig,
     ConnectionFlow,
+    WifiConfig,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -249,6 +251,107 @@ async def _watchdog_kick_worker():
         await asyncio.sleep(30)
 
 
+async def _sync_wifi_on_startup():
+    """WiFi config DB'den oku, enabled ise hostapd baslat."""
+    try:
+        from app.models.wifi_config import WifiConfig
+        from app.hal.wifi_driver import write_hostapd_config, start_wifi_ap, set_mac_filter
+        from app.db.session import async_session_factory
+        from sqlalchemy import select as sel
+        import json as _json
+
+        async with async_session_factory() as db:
+            result = await db.execute(sel(WifiConfig).limit(1))
+            config = result.scalar_one_or_none()
+            if config and config.enabled:
+                mac_list = []
+                if config.mac_filter_list:
+                    try:
+                        mac_list = _json.loads(config.mac_filter_list)
+                    except Exception:
+                        pass
+                hostapd_dict = {
+                    "ssid": config.ssid,
+                    "password": config.password,
+                    "channel": config.channel,
+                    "band": config.band,
+                    "tx_power": config.tx_power,
+                    "hidden_ssid": config.hidden_ssid,
+                    "mac_filter_mode": config.mac_filter_mode or "disabled",
+                    "mac_filter_list": mac_list,
+                }
+                await write_hostapd_config(hostapd_dict)
+                await set_mac_filter(config.mac_filter_mode or "disabled", mac_list)
+                await start_wifi_ap()
+                logger.info("WiFi AP baslatildi (startup recovery)")
+    except Exception as e:
+        logger.error(f"WiFi startup sync hatasi: {e}")
+
+
+async def _wifi_schedule_worker():
+    """WiFi zamanlama worker: Her 60s kontrol, schedule araliginda AP ac/kapat."""
+    await asyncio.sleep(60)  # Baslangicta 1 dakika bekle
+    logger.info("WiFi zamanlama worker baslatildi (60sn aralik)")
+    while True:
+        try:
+            from app.models.wifi_config import WifiConfig
+            from app.hal.wifi_driver import start_wifi_ap, stop_wifi_ap, write_hostapd_config
+            from app.db.session import async_session_factory
+            from sqlalchemy import select as sel
+            from datetime import datetime
+            import json as _json
+
+            async with async_session_factory() as db:
+                result = await db.execute(sel(WifiConfig).limit(1))
+                config = result.scalar_one_or_none()
+
+                if config and config.schedule_enabled and config.schedule_start and config.schedule_stop:
+                    now = datetime.now().strftime("%H:%M")
+                    start = config.schedule_start
+                    stop = config.schedule_stop
+
+                    # Aralik icinde mi? (start < stop: normal, start > stop: gece arasi)
+                    if start <= stop:
+                        in_range = start <= now < stop
+                    else:
+                        in_range = now >= start or now < stop
+
+                    if in_range and not config.enabled:
+                        # Zamanlamaya gore ac
+                        mac_list = []
+                        if config.mac_filter_list:
+                            try:
+                                mac_list = _json.loads(config.mac_filter_list)
+                            except Exception:
+                                pass
+                        hostapd_dict = {
+                            "ssid": config.ssid,
+                            "password": config.password,
+                            "channel": config.channel,
+                            "band": config.band,
+                            "tx_power": config.tx_power,
+                            "hidden_ssid": config.hidden_ssid,
+                            "mac_filter_mode": config.mac_filter_mode or "disabled",
+                            "mac_filter_list": mac_list,
+                        }
+                        await write_hostapd_config(hostapd_dict)
+                        await start_wifi_ap()
+                        config.enabled = True
+                        await db.commit()
+                        logger.info(f"WiFi AP zamanlama ile acildi ({now})")
+                    elif not in_range and config.enabled:
+                        # Zamanlamaya gore kapat
+                        await stop_wifi_ap()
+                        config.enabled = False
+                        await db.commit()
+                        logger.info(f"WiFi AP zamanlama ile kapatildi ({now})")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"WiFi zamanlama worker hatasi: {e}")
+        await asyncio.sleep(60)
+
+
 async def _sync_ddos_on_startup():
     """DB'deki DDoS config'ini oku, nftables/sysctl/nginx kurallarini uygula."""
     try:
@@ -323,6 +426,9 @@ async def lifespan(app: FastAPI):
     # DDoS koruma kurallarini DB'den oku ve uygula
     await _sync_ddos_on_startup()
 
+    # WiFi AP: DB'de enabled ise hostapd baslat
+    await _sync_wifi_on_startup()
+
     # Bridge isolation: router modu — modem sadece Pi MAC'ini gorur
     # L2 forwarding drop + NAT MASQUERADE + sysctl/modules/nftables persistence
     try:
@@ -394,10 +500,16 @@ async def lifespan(app: FastAPI):
     # DDoS anomali izleme worker - periyodik counter kontrolü + uyari
     ddos_monitor_task = asyncio.create_task(_ddos_anomaly_monitor())
 
+    # WiFi zamanlama worker - schedule'a gore AP ac/kapat
+    wifi_schedule_task = asyncio.create_task(_wifi_schedule_worker())
+
+    # WiFi monitor worker - bagli istemci bilgilerini Redis'e yaz (30sn)
+    wifi_monitor_task = asyncio.create_task(start_wifi_monitor())
+
     # systemd watchdog kick worker
     watchdog_task = asyncio.create_task(_watchdog_kick_worker())
 
-    logger.info("Arka plan iscileri başlatildi (blocklist + DNS proxy + cihaz kesfi + DHCP + tehdit analizci + telegram + sistem monitörü + LLM log analyzer + MAC resolver + 5651 log imzalama + trafik izleme + bandwidth monitor + flow tracker + DDoS monitor + watchdog).")
+    logger.info("Arka plan iscileri başlatildi (blocklist + DNS proxy + cihaz kesfi + DHCP + tehdit analizci + telegram + sistem monitörü + LLM log analyzer + MAC resolver + 5651 log imzalama + trafik izleme + bandwidth monitor + flow tracker + DDoS monitor + WiFi schedule + WiFi monitor + watchdog).")
 
     # systemd'ye hazir sinyali gönder
     _sd_notify("READY=1")
@@ -421,6 +533,8 @@ async def lifespan(app: FastAPI):
     bandwidth_monitor_task.cancel()
     flow_tracker_task.cancel()
     ddos_monitor_task.cancel()
+    wifi_schedule_task.cancel()
+    wifi_monitor_task.cancel()
     watchdog_task.cancel()
     await redis_pool.aclose()
     await engine.dispose()

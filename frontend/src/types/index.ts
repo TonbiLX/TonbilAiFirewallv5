@@ -797,3 +797,43 @@ export interface DeviceFlowSummary {
   top_domains: Array<{ domain: string; count: number; bytes: number }>;
   top_ports: Array<{ port: number; count: number; bytes: number }>;
 }
+
+// --- WiFi AP ---
+
+export interface WifiStatus {
+  enabled: boolean;
+  ssid: string | null;
+  channel: number | null;
+  band: string | null;
+  tx_power: number | null;
+  clients_count: number;
+  interface: string;
+}
+
+export interface WifiConfig {
+  ssid: string;
+  password: string | null;
+  channel: number;
+  band: string;
+  tx_power: number;
+  hidden_ssid: boolean;
+  enabled: boolean;
+  guest_enabled: boolean;
+  guest_ssid: string | null;
+  guest_password: string | null;
+  mac_filter_mode: string;
+  mac_filter_list: string[];
+  schedule_enabled: boolean;
+  schedule_start: string | null;
+  schedule_stop: string | null;
+}
+
+export interface WifiClient {
+  mac_address: string;
+  ip_address: string | null;
+  signal_dbm: number;
+  tx_bitrate_mbps: number;
+  rx_bitrate_mbps: number;
+  connected_seconds: number;
+  hostname: string | null;
+}

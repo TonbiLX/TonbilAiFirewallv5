@@ -30,6 +30,7 @@ from app.models.log_signature import LogSignature
 from app.models.device_traffic_snapshot import DeviceTrafficSnapshot
 from app.models.ddos_config import DdosConfig
 from app.models.connection_flow import ConnectionFlow
+from app.models.wifi_config import WifiConfig
 
 __all__ = [
     "Profile", "ProfileType",
@@ -62,4 +63,5 @@ __all__ = [
     "DeviceTrafficSnapshot",
     "DdosConfig",
     "ConnectionFlow",
+    "WifiConfig",
 ]
