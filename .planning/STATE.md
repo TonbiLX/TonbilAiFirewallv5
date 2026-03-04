@@ -133,15 +133,17 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-04
-Stopped at: Güvenlik Ayarları sayfası Güvenlik Duvarı tab'ına taşındı, toggle fix, deploy yapıldı. Tüm milestone'lar tamamlandı. Commit: 1ddd12b.
+Last session: 2026-03-05
+Stopped at: Bandwidth accounting bridge→inet forward hook gecisi tamamlandi. Trafik tablolarina zaman sutunu ve tiklanabilir siralama eklendi. Tum deploy'lar yapildi. Commit: 804195d.
 Resume file: None
 
-## Post-Milestone Work (GSD dışı, 2026-03-04)
+## Post-Milestone Work (GSD disi)
 
-| # | Açıklama | Commit | Durum |
-|---|----------|--------|-------|
-| 1 | Telegram tam yetenek güncellemesi (16 intent) | d02cc87 | TAMAMLANDI + DEPLOY |
-| 2 | WiFi AP yönetim sistemi (hostapd + bridge) | 4742aa8 | TAMAMLANDI + DEPLOY |
-| 3 | Güvenlik Ayarları sayfası (DB + Redis hot-reload) | 3768914 | TAMAMLANDI + DEPLOY |
-| 4 | Güvenlik Ayarları → Firewall tab + toggle fix | 1ddd12b | TAMAMLANDI + DEPLOY |
+| # | Aciklama | Commit | Tarih | Durum |
+|---|----------|--------|-------|-------|
+| 1 | Telegram tam yetenek guncellemesi (16 intent) | d02cc87 | 2026-03-04 | TAMAMLANDI + DEPLOY |
+| 2 | WiFi AP yonetim sistemi (hostapd + bridge) | 4742aa8 | 2026-03-04 | TAMAMLANDI + DEPLOY |
+| 3 | Guvenlik Ayarlari sayfasi (DB + Redis hot-reload) | 3768914 | 2026-03-04 | TAMAMLANDI + DEPLOY |
+| 4 | Guvenlik Ayarlari → Firewall tab + toggle fix | 1ddd12b | 2026-03-04 | TAMAMLANDI + DEPLOY |
+| 5 | Bandwidth: bridge→inet forward hook + 3s poll | 804195d | 2026-03-05 | TAMAMLANDI + DEPLOY |
+| 6 | Trafik tablolari: zaman sutunu + tiklanabilir siralama | 804195d | 2026-03-05 | TAMAMLANDI + DEPLOY |

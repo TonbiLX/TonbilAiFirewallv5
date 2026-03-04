@@ -47,15 +47,34 @@ RPi 5 dahili WiFi (CYW43455) ile hostapd tabanlı erişim noktası yönetimi. Co
 **Yedek:** `/opt/tonbilaios/backup-security-20260304-1548/`
 **Not:** Güvenlik Ayarları ayrı sayfa değil, Güvenlik Duvarı sayfasında DDoS Koruma'dan sonra 5. tab olarak yer alır.
 
+### 5. Bandwidth Accounting Gecisi + Trafik Tablo Iyilestirmeleri (2026-03-05) — %100
+
+Bridge hook → inet forward hook gecisi. br_netfilter aktifken bridge hook'lari trafigin %99'unu kaciriyordu.
+
+| Bilesen | Detay | Durum |
+|---------|-------|-------|
+| inet bw_accounting | Yeni nftables tablo: IP bazli forward hook, per-IP + total counter | TAMAMLANDI + DEPLOY |
+| bandwidth_monitor | MAC→IP gecisi, POLL_INTERVAL 10s→3s, `_get_known_device_ips()` | TAMAMLANDI + DEPLOY |
+| cleanup_bridge_accounting | Eski bridge upload/download chain temizligi (TC mark korunur) | TAMAMLANDI + DEPLOY |
+| Traffic API sort fix | `sort` → `sort_by` + `sort_order`, `last_seen`/`first_seen` sort desteği | TAMAMLANDI + DEPLOY |
+| TrafficPage siralama | Tum sutun baslikları tiklanabilir (asc/desc toggle), zaman sutunu | TAMAMLANDI + DEPLOY |
+| DeviceDetailPage siralama | Ayni siralama + zaman sutunu, varsayilan: last_seen desc | TAMAMLANDI + DEPLOY |
+
+**Commit:** `804195d`
+**Duzenlenen dosyalar (7):** linux_nftables.py, bandwidth_monitor.py, traffic.py, TrafficPage.tsx, DeviceDetailPage.tsx, trafficApi.ts
+**Onceki sorun:** 98 Mbps speedtest'te dashboard 0 gosteriyordu (bridge hook). Simdi ~68 Mbps (10s poll) → ~95+ Mbps (3s poll)
+
 ## Aktif Milestone
 
-Henüz yeni milestone belirlenmedi.
+Henuz yeni milestone belirlenmedi.
 
 ## Constraints
 
 - **Platform**: Raspberry Pi 5 (ARM64, Debian Bookworm)
-- **Ağ**: br0 = eth0 (WAN) + eth1 (LAN), wlan0 bridge'e eklenebilir
+- **Ag**: br0 = eth0 (WAN) + eth1 (LAN), wlan0 bridge'e eklenebilir
 - **Deployment**: Paramiko SSH (pi.tonbil.com:2323 → 192.168.1.2)
+- **Redis sifresi**: `TonbilAiRedis2026` (CLAUDE.md'deki `TonbilAiOS2026Router` yanlis)
+- **SFTP**: `/opt/tonbilaios/` root'a ait → `/tmp/` uzerinden `sudo cp` gerekli
 
 ---
-*Last updated: 2026-03-04 after Security Settings tab migration + toggle fix + deploy*
+*Last updated: 2026-03-05 after bandwidth accounting migration + sortable traffic tables*
