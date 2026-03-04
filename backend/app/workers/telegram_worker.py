@@ -22,6 +22,12 @@ logger = logging.getLogger("tonbilai.telegram_worker")
 # Son islenen update_id
 _last_update_id = 0
 
+# Onay bekleyen islemler: chat_id -> {"action": str, "timestamp": float}
+_pending_confirmations: dict[str, dict] = {}
+
+# Telegram mesaj karakter limiti
+_TELEGRAM_MAX_LENGTH = 4096
+
 
 async def _build_db_context(db) -> dict:
     """NLP için DB context oluştur (chat.py ile ayni pattern)."""
@@ -91,8 +97,13 @@ async def _try_llm_for_telegram(
         # direct_reply kontrolü
         first_cmd = commands_data[0]
         if first_cmd.get("direct_reply"):
+            reply_text = first_cmd.get("reply", "")
+            # Ham JSON Telegram'a gitmesin — JSON ile basliyorsa TF-IDF'e dusur
+            if reply_text.strip().startswith(("{", "[", "```")):
+                logger.warning("LLM direct_reply ham JSON iceriyor, TF-IDF fallback")
+                return None
             return ChatResponse(
-                reply=first_cmd.get("reply", result.get("raw_response", "")),
+                reply=reply_text,
                 action_type="direct_reply",
                 action_result=None,
             )
@@ -148,6 +159,74 @@ async def _try_llm_for_telegram(
         return None
 
 
+async def _send_long_message(text: str, bot_token: str, chat_id: str):
+    """Uzun mesajlari satirdan bolerek parcalar halinde gonder."""
+    if len(text) <= _TELEGRAM_MAX_LENGTH:
+        await send_message(text, bot_token=bot_token, chat_ids=[chat_id], use_html=True)
+        return
+
+    # Satirlardan bol (HTML tag'larini bozmamak icin)
+    lines = text.split("\n")
+    chunk = ""
+    for line in lines:
+        if len(chunk) + len(line) + 1 > _TELEGRAM_MAX_LENGTH:
+            if chunk:
+                await send_message(chunk, bot_token=bot_token, chat_ids=[chat_id], use_html=True)
+            chunk = line
+        else:
+            chunk = f"{chunk}\n{line}" if chunk else line
+    if chunk:
+        await send_message(chunk, bot_token=bot_token, chat_ids=[chat_id], use_html=True)
+
+
+async def _handle_confirmation(text: str, chat_id: str, bot_token: str) -> bool:
+    """Onay bekleyen islem varsa isle. True donerse mesaj islendi demektir."""
+    import time
+
+    if chat_id not in _pending_confirmations:
+        return False
+
+    pending = _pending_confirmations[chat_id]
+
+    # 60 saniye timeout
+    if time.time() - pending["timestamp"] > 60:
+        del _pending_confirmations[chat_id]
+        return False
+
+    text_lower = text.lower().strip()
+
+    # Onay kelimeleri
+    if any(w in text_lower for w in ["evet", "onayliyorum", "onay", "tamam", "yes"]):
+        action = pending["action"]
+        del _pending_confirmations[chat_id]
+
+        if action == "system_reboot":
+            try:
+                import subprocess
+                await send_message(
+                    "\u2699\ufe0f Sistem yeniden baslatiliyor...",
+                    bot_token=bot_token, chat_ids=[chat_id], use_html=True,
+                )
+                subprocess.Popen(["sudo", "reboot"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception as e:
+                await send_message(
+                    f"\u274c Reboot hatasi: {str(e)[:200]}",
+                    bot_token=bot_token, chat_ids=[chat_id],
+                )
+        return True
+
+    # Iptal kelimeleri
+    if any(w in text_lower for w in ["hayir", "iptal", "vazgec", "cancel", "no"]):
+        del _pending_confirmations[chat_id]
+        await send_message(
+            "\u274c Islem iptal edildi.",
+            bot_token=bot_token, chat_ids=[chat_id], use_html=True,
+        )
+        return True
+
+    return False
+
+
 async def _process_message(text: str, chat_id: str, bot_token: str):
     """Tek bir mesaji isle: LLM + TF-IDF fallback."""
     from app.api.v1.chat import execute_commands
@@ -183,20 +262,22 @@ async def _process_message(text: str, chat_id: str, bot_token: str):
             db.add(assistant_msg)
             await db.commit()
 
+            # system_reboot onay mekanizmasi
+            if response.action_type == "system_reboot" and response.action_result and response.action_result.get("needs_confirmation"):
+                import time
+                _pending_confirmations[chat_id] = {
+                    "action": "system_reboot",
+                    "timestamp": time.time(),
+                }
+
             # Telegram için HTML formatlama
             reply_text = response.reply
-
-            # list_devices özel Telegram formati
-            if response.action_type == "list_devices" and response.action_result:
-                # Özel format için chat.py'den device data'yi kullanamayiz,
-                # ama markdown->HTML donusumu yeterli olacak
-                pass
 
             # Markdown -> Telegram HTML donusumu
             from app.services.chat_formatter import markdown_to_telegram_html
             reply_text = markdown_to_telegram_html(reply_text)
 
-            await send_message(reply_text, bot_token=bot_token, chat_ids=[chat_id], use_html=True)
+            await _send_long_message(reply_text, bot_token, chat_id)
 
     except Exception as e:
         logger.error(f"Telegram mesaj işleme hatasi: {e}")
@@ -258,6 +339,10 @@ async def _poll_updates(bot_token: str, allowed_chat_ids: list[str]):
                         bot_token=bot_token,
                         chat_ids=[chat_id],
                     )
+                    continue
+
+                # Onay bekleyen islem varsa once onu isle
+                if await _handle_confirmation(text, chat_id, bot_token):
                     continue
 
                 # NLP motoru ile isle

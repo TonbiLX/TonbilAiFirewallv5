@@ -410,7 +410,7 @@ export function LoginPage() {
         {/* Alt bilgi */}
         <div className="text-center mt-6">
           <p className="text-gray-600 text-xs">
-            TonbilAiFirewall V2.0 &middot; Yapay Zeka Destekli Güvenlik Duvarı
+            TonbilAiFirewall V5.0 &middot; Yapay Zeka Destekli Güvenlik Duvarı
           </p>
         </div>
       </div>

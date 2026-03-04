@@ -18,7 +18,7 @@ Markdown formatlama kurallari:
 
 def separator() -> str:
     """Gorsel ayirici çizgi."""
-    return "───────────────────────"
+    return "━━━━━━━━━━━━━━━━━━━━━━━"
 
 
 def section_header(title: str, icon: str = "") -> str:
@@ -488,6 +488,24 @@ def format_help() -> str:
         "📋 **Log Sorgulama**",
         "  `bugunun loglari` · `en cok engellenen domainler`",
         "",
+        "📊 **Dashboard & Trafik**",
+        "  `dashboard özeti` · `canlı trafik` · `büyük transferler`",
+        "",
+        "🛡️ **DDoS Koruma**",
+        "  `ddos durumu`",
+        "",
+        "🔧 **DHCP**",
+        "  `dhcp kiralamaları` · `ip rezervasyonu yap`",
+        "",
+        "👤 **Profil Yönetimi**",
+        "  `profil oluştur` · `profil sil`",
+        "",
+        "📂 **Kategoriler**",
+        "  `kategorileri listele`",
+        "",
+        "⚙️ **Sistem**",
+        "  `sistemi yeniden başlat`",
+        "",
         separator(),
         info_box("Birden fazla işlemi tek seferde: `facebook, instagram ve tiktok engelle`"),
     ]
@@ -505,6 +523,319 @@ def format_greeting(online: int, alias_count: int) -> str:
         lines.append(f"🏷️ Kayıtlı **{alias_count}** cihaz takma adi var.")
     lines.append("")
     lines.append(info_box("`yardim` yazarak tum yeteneklerimi görebilirsin"))
+    return "\n".join(lines)
+
+
+def _format_bytes(b: int | float) -> str:
+    """Byte degerini okunabilir formata donustur."""
+    if b is None:
+        return "0 B"
+    b = float(b)
+    if b < 1024:
+        return f"{b:.0f} B"
+    elif b < 1024 ** 2:
+        return f"{b / 1024:.1f} KB"
+    elif b < 1024 ** 3:
+        return f"{b / (1024 ** 2):.1f} MB"
+    else:
+        return f"{b / (1024 ** 3):.2f} GB"
+
+
+def format_dashboard_summary(data: dict) -> str:
+    """
+    Dashboard ozet bilgileri.
+    data: {"total_devices", "online_devices", "blocked_devices",
+           "dns_queries_24h", "dns_blocked_24h",
+           "bandwidth_download", "bandwidth_upload",
+           "top_domains": [{"domain", "count"}]}
+    """
+    lines = [
+        "📊 **Dashboard Özeti**",
+        separator(),
+        "",
+        "📡 **Ag**",
+        stat_line_extra("Cihaz", data.get("total_devices", 0),
+                        f"{data.get('online_devices', 0)} çevrimiçi, {data.get('blocked_devices', 0)} engelli"),
+        "",
+        "🛡️ **DNS (Son 24 Saat)**",
+        stat_line("Toplam sorgu", data.get("dns_queries_24h", 0)),
+        stat_line("Engellenen", data.get("dns_blocked_24h", 0)),
+        "",
+        "📶 **Bant Genişliği**",
+        stat_line("İndirme", _format_bytes(data.get("bandwidth_download", 0)) + "/s"),
+        stat_line("Yükleme", _format_bytes(data.get("bandwidth_upload", 0)) + "/s"),
+    ]
+
+    top_domains = data.get("top_domains", [])
+    if top_domains:
+        lines.append("")
+        lines.append("🔝 **En Çok Sorgulanan (Top 5)**")
+        for i, d in enumerate(top_domains[:5], 1):
+            lines.append(f"  {i}. `{d['domain']}` — **{d['count']}** sorgu")
+
+    lines.append(separator())
+    return "\n".join(lines)
+
+
+def format_live_flows(flows: list[dict], total: int) -> str:
+    """
+    Canlı akış listesi.
+    flows: [{"direction", "device_name", "dest_ip", "dest_port", "bytes_total",
+             "service_name", "app_name", "state"}]
+    """
+    lines = [
+        f"🌊 **Canlı Trafik Akışları** — {total} aktif bağlantı",
+        separator(),
+    ]
+
+    for f in flows[:15]:
+        direction = f.get("direction", "outbound")
+        arrow = "⬆️" if direction == "outbound" else "⬇️"
+        device = f.get("device_name", "?")
+        dest = f.get("dest_ip", "?")
+        port = f.get("dest_port", "")
+        size = _format_bytes(f.get("bytes_total", 0))
+        app = f.get("app_name") or f.get("service_name") or ""
+        app_text = f" [{app}]" if app else ""
+
+        lines.append(f"  {arrow} **{device}** → `{dest}:{port}` — {size}{app_text}")
+
+    if total > 15:
+        lines.append(f"  _... ve {total - 15} akış daha_")
+
+    lines.append(separator())
+    return "\n".join(lines)
+
+
+def format_large_transfers(flows: list[dict]) -> str:
+    """
+    >1MB büyük transferler listesi.
+    flows: [{"device_name", "dest_ip", "dest_port", "bytes_total", "app_name", "service_name"}]
+    """
+    if not flows:
+        return info_box("Şu anda büyük transfer (>1MB) bulunmuyor.")
+
+    lines = [
+        f"📦 **Büyük Transferler** — {len(flows)} adet (>1MB)",
+        separator(),
+    ]
+
+    for f in flows[:10]:
+        device = f.get("device_name", "?")
+        dest = f.get("dest_ip", "?")
+        size = _format_bytes(f.get("bytes_total", 0))
+        app = f.get("app_name") or f.get("service_name") or ""
+        app_text = f" [{app}]" if app else ""
+        lines.append(f"  · **{device}** → `{dest}` — **{size}**{app_text}")
+
+    if len(flows) > 10:
+        lines.append(f"  _... ve {len(flows) - 10} transfer daha_")
+
+    lines.append(separator())
+    return "\n".join(lines)
+
+
+def format_device_traffic_summary(data: dict) -> str:
+    """
+    Tek cihaz trafik özeti.
+    data: {"device_name", "active_flows", "total_bytes",
+           "top_destinations": [{"dest_ip", "bytes_total", "app_name"}]}
+    """
+    lines = [
+        f"📱 **{data.get('device_name', '?')} — Trafik Özeti**",
+        separator(),
+        "",
+        stat_line("Aktif bağlantı", data.get("active_flows", 0)),
+        stat_line("Toplam veri", _format_bytes(data.get("total_bytes", 0))),
+    ]
+
+    top_dests = data.get("top_destinations", [])
+    if top_dests:
+        lines.append("")
+        lines.append("**En çok trafik:**")
+        for d in top_dests[:5]:
+            app = d.get("app_name") or ""
+            app_text = f" [{app}]" if app else ""
+            lines.append(f"  · `{d['dest_ip']}` — {_format_bytes(d.get('bytes_total', 0))}{app_text}")
+
+    lines.append(separator())
+    return "\n".join(lines)
+
+
+def format_ddos_status(data: dict) -> str:
+    """
+    DDoS koruma durumu.
+    data: {"enabled", "total_drops", "active_blocks", "last_attack_time",
+           "blocked_ips": [{"ip", "reason", "drops"}]}
+    """
+    enabled = data.get("enabled", False)
+    status_text = "Aktif" if enabled else "Kapalı"
+    status_icon = "🟢" if enabled else "🔴"
+
+    lines = [
+        "🛡️ **DDoS Koruma Durumu**",
+        separator(),
+        "",
+        stat_line("Durum", f"{status_icon} {status_text}", bold_value=False),
+        stat_line("Toplam drop", data.get("total_drops", 0)),
+        stat_line("Aktif engel", data.get("active_blocks", 0)),
+        stat_line("Son saldırı", data.get("last_attack_time") or "Yok", bold_value=False),
+    ]
+
+    blocked_ips = data.get("blocked_ips", [])
+    if blocked_ips:
+        lines.append("")
+        lines.append("**Engellenen IP'ler:**")
+        for b in blocked_ips[:5]:
+            lines.append(f"  · `{b['ip']}` — {b.get('reason', '?')} ({b.get('drops', 0)} drop)")
+
+    lines.append(separator())
+    return "\n".join(lines)
+
+
+def format_dhcp_leases_list(leases: list[dict], static: int, total: int) -> str:
+    """
+    DHCP kiralama listesi.
+    leases: [{"ip", "mac", "hostname", "is_static", "expires"}]
+    """
+    lines = [
+        f"🔧 **DHCP Kiralamaları** — {total} aktif ({static} statik)",
+        separator(),
+    ]
+
+    for l in leases[:20]:
+        static_icon = "📌" if l.get("is_static") else "🔄"
+        hostname = l.get("hostname") or "—"
+        lines.append(f"  {static_icon} `{l.get('ip', '?')}` — {l.get('mac', '?')} — {hostname}")
+
+    if total > 20:
+        lines.append(f"  _... ve {total - 20} kiralama daha_")
+
+    lines.append(separator())
+    return "\n".join(lines)
+
+
+def format_category_list(categories: list[dict]) -> str:
+    """
+    İçerik kategorileri listesi.
+    categories: [{"key", "name", "domain_count", "enabled"}]
+    """
+    lines = [
+        f"📂 **İçerik Kategorileri** — {len(categories)} adet",
+        separator(),
+    ]
+
+    for c in categories:
+        enabled = "✅" if c.get("enabled") else "❌"
+        count = c.get("domain_count", 0)
+        lines.append(f"  {enabled} **{c.get('name', '?')}** (`{c.get('key', '')}`) — {count} domain")
+
+    lines.append(separator())
+    return "\n".join(lines)
+
+
+def format_device_dns_queries(queries: list[dict], device_name: str) -> str:
+    """
+    Cihazın son DNS sorguları.
+    queries: [{"domain", "timestamp", "blocked", "reason"}]
+    """
+    lines = [
+        f"🔍 **{device_name} — Son DNS Sorguları**",
+        separator(),
+    ]
+
+    if not queries:
+        lines.append("  Henüz sorgu kaydı yok.")
+    else:
+        for q in queries[:20]:
+            icon = "🔴" if q.get("blocked") else "🟢"
+            ts = q.get("timestamp", "")
+            reason = f" ({q['reason']})" if q.get("reason") else ""
+            lines.append(f"  {icon} `{q.get('domain', '?')}` — {ts}{reason}")
+
+        if len(queries) > 20:
+            lines.append(f"  _... ve {len(queries) - 20} sorgu daha_")
+
+    lines.append(separator())
+    return "\n".join(lines)
+
+
+def format_reboot_confirmation() -> str:
+    """Reboot onay mesajı."""
+    lines = [
+        "⚠️ **Sistem Yeniden Başlatma**",
+        separator(),
+        "",
+        "Bu işlem tüm bağlantıları kesecek ve ~30 saniye sürecektir.",
+        "",
+        "Onaylamak için **\"evet, reboot yap\"** yazın.",
+        "İptal etmek için **\"iptal\"** yazın.",
+        "",
+        warning_box("Bu işlem geri alinamaz!"),
+    ]
+    return "\n".join(lines)
+
+
+def format_profile_detail(name: str, action: str, bw: float | None = None, device_count: int = 0) -> str:
+    """
+    Profil oluşturma/güncelleme/silme sonucu.
+    action: "oluşturuldu", "güncellendi", "silindi"
+    """
+    bw_text = f"{bw} Mbps" if bw else "Sınırsız"
+    lines = [
+        result_badge(True, f"Profil **{name}** {action}"),
+    ]
+    if action != "silindi":
+        lines.append(stat_line("Bant genişliği", bw_text))
+        if device_count:
+            lines.append(stat_line("Bağlı cihaz", device_count))
+    return "\n".join(lines)
+
+
+def format_service_usage(service_name: str, device_map: dict[str, dict]) -> str:
+    """
+    Servisi kullanan cihazlar listesi.
+    device_map: {device_name: {"flows": int, "bytes_up": int, "bytes_down": int}}
+    """
+    title = service_name.capitalize()
+    lines = [
+        f"🎬 **{title} Kullanan Cihazlar**",
+        separator(),
+        "",
+    ]
+
+    # Toplam byte'a göre sırala (büyükten küçüğe)
+    sorted_devices = sorted(
+        device_map.items(),
+        key=lambda x: x[1]["bytes_up"] + x[1]["bytes_down"],
+        reverse=True,
+    )
+
+    total_flows = 0
+    for dname, info in sorted_devices:
+        total_bytes = info["bytes_up"] + info["bytes_down"]
+        total_flows += info["flows"]
+        icon = "📱" if "telefon" in dname.lower() or "phone" in dname.lower() else "💻"
+        lines.append(f"{icon} **{dname}**")
+        lines.append(f"     ├─ {info['flows']} aktif bağlantı")
+        lines.append(f"     ├─ Toplam: {_format_bytes(total_bytes)}")
+        lines.append(f"     └─ ⬆️ {_format_bytes(info['bytes_up'])}  ⬇️ {_format_bytes(info['bytes_down'])}")
+        lines.append("")
+
+    lines.append(separator())
+    lines.append(f"📊 Toplam: **{len(device_map)}** cihaz, **{total_flows}** bağlantı")
+
+    return "\n".join(lines)
+
+
+def format_service_not_found(service_name: str) -> str:
+    """Servis kullanan cihaz bulunamadı mesajı."""
+    title = service_name.capitalize()
+    lines = [
+        f"📡 Şu anda **{title}** kullanan cihaz bulunamadı.",
+        "",
+        info_box("Cihaz bağlı değilse veya servis aktif kullanılmıyorsa trafik görünmez."),
+    ]
     return "\n".join(lines)
 
 
@@ -571,11 +902,48 @@ def format_device_list_telegram(devices: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _strip_json_from_text(text: str) -> str:
+    """Metin icindeki JSON bloklarini temizle."""
+    import re as _re
+    import json as _json
+
+    stripped = text.strip()
+
+    # Eger tum metin JSON ise, reply alanini cikar
+    if stripped.startswith(("{", "[")):
+        try:
+            data = _json.loads(stripped)
+            if isinstance(data, dict) and "reply" in data:
+                return data["reply"]
+            if isinstance(data, list) and data and isinstance(data[0], dict):
+                replies = [d.get("reply", "") for d in data if isinstance(d, dict) and d.get("reply")]
+                if replies:
+                    return "\n".join(replies)
+        except (ValueError, _json.JSONDecodeError):
+            # Regex ile reply cikar
+            m = _re.search(r'"reply"\s*:\s*"((?:[^"\\]|\\.)*)"', stripped)
+            if m:
+                return m.group(1).replace("\\n", "\n").replace('\\"', '"')
+
+    # ```json ... ``` bloklarini sil
+    result = _re.sub(r'```(?:json)?\s*\n?\{[\s\S]*?\}\s*```', '', text)
+    result = _re.sub(r'```(?:json)?\s*\n?\[[\s\S]*?\]\s*```', '', result)
+
+    return result.strip() or text
+
+
 def markdown_to_telegram_html(text: str) -> str:
     """Markdown formatli metni Telegram HTML'e donustur."""
     import re as _re
-    result = text
+    import html as _html
 
+    # Oncelikle JSON artiklari temizle
+    result = _strip_json_from_text(text)
+
+    # HTML ozel karakterleri kacisla (< > &)
+    result = _html.escape(result)
+
+    # Markdown -> HTML donusumleri (escape sonrasi, cunku tag ekliyoruz)
     # **bold** -> <b>bold</b>
     result = _re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", result)
 
@@ -583,7 +951,6 @@ def markdown_to_telegram_html(text: str) -> str:
     result = _re.sub(r"`(.+?)`", r"<code>\1</code>", result)
 
     # _italic_ -> <i>italic</i> (tek alt çizgi, bas/son)
-    # Dikkat: hostname_with_underscores bozulmamali
     result = _re.sub(r"(?<![\w])_([^_]+?)_(?![\w])", r"<i>\1</i>", result)
 
     return result

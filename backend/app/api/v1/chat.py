@@ -167,6 +167,23 @@ async def _execute_single(cmd: ParsedCommand, db: AsyncSession) -> ChatResponse:
         "query_logs": _handle_query_logs,
         "help": _handle_help,
         "greeting": _handle_greeting,
+        "dashboard_summary": _handle_dashboard_summary,
+        "traffic_live": _handle_traffic_live,
+        "traffic_large": _handle_traffic_large,
+        "device_traffic": _handle_device_traffic,
+        "ddos_status": _handle_ddos_status,
+        "dhcp_leases": _handle_dhcp_leases,
+        "dhcp_reserve": _handle_dhcp_reserve,
+        "dhcp_delete_reservation": _handle_dhcp_delete_reservation,
+        "create_profile": _handle_create_profile,
+        "update_profile": _handle_update_profile,
+        "delete_profile": _handle_delete_profile,
+        "list_categories": _handle_list_categories,
+        "device_dns_queries": _handle_device_dns_queries,
+        "system_reboot": _handle_system_reboot,
+        "service_usage": _handle_service_usage,
+        "service_block": _handle_service_block,
+        "service_unblock": _handle_service_unblock,
     }
 
     handler = handlers.get(intent)
@@ -1560,6 +1577,614 @@ async def _handle_unblock_ip(entities: list[Entity], db: AsyncSession) -> ChatRe
             action_result={"ip": ip, "unblocked": True},
         )
     return ChatResponse(reply=fmt.result_badge(False, f"`{ip}` engeli kaldirilamadi veya zaten engelli degil"))
+
+
+# =====================================================================
+# Yeni Telegram-Uyumlu Handler'lar (Faz 4)
+# =====================================================================
+
+async def _handle_dashboard_summary(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """Dashboard ozet bilgileri: cihaz, DNS, bandwidth."""
+    # Cihaz sayilari
+    total = await db.scalar(select(func.count(Device.id))) or 0
+    online = await db.scalar(select(func.count(Device.id)).where(Device.is_online == True)) or 0  # noqa
+    blocked = await db.scalar(select(func.count(Device.id)).where(Device.is_blocked == True)) or 0  # noqa
+
+    # DNS son 24 saat
+    from datetime import timedelta
+    now = datetime.utcnow()
+    day_ago = now - timedelta(hours=24)
+    dns_total = await db.scalar(
+        select(func.count(DnsQueryLog.id)).where(DnsQueryLog.timestamp >= day_ago)
+    ) or 0
+    dns_blocked = await db.scalar(
+        select(func.count(DnsQueryLog.id)).where(
+            DnsQueryLog.timestamp >= day_ago, DnsQueryLog.blocked == True  # noqa
+        )
+    ) or 0
+
+    # Bandwidth (Redis)
+    bw_down = 0
+    bw_up = 0
+    try:
+        redis_client = await get_redis()
+        bw_data = await redis_client.hgetall("bw:total")
+        bw_down = float(bw_data.get("rx_bps", 0))
+        bw_up = float(bw_data.get("tx_bps", 0))
+    except Exception:
+        pass
+
+    # Top 5 domain (son 24 saat)
+    top_q = await db.execute(
+        select(DnsQueryLog.domain, func.count(DnsQueryLog.id).label("cnt"))
+        .where(DnsQueryLog.timestamp >= day_ago)
+        .group_by(DnsQueryLog.domain)
+        .order_by(desc("cnt"))
+        .limit(5)
+    )
+    top_domains = [{"domain": row[0], "count": row[1]} for row in top_q.all()]
+
+    data = {
+        "total_devices": total, "online_devices": online, "blocked_devices": blocked,
+        "dns_queries_24h": dns_total, "dns_blocked_24h": dns_blocked,
+        "bandwidth_download": bw_down, "bandwidth_upload": bw_up,
+        "top_domains": top_domains,
+    }
+    return ChatResponse(
+        reply=fmt.format_dashboard_summary(data),
+        action_type="dashboard_summary",
+        action_result=data,
+    )
+
+
+async def _handle_traffic_live(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """Canli trafik akislari (Redis flow verisi)."""
+    flows = []
+    total = 0
+    try:
+        redis_client = await get_redis()
+        active_ids = await redis_client.smembers("flow:active_ids")
+        total = len(active_ids)
+        for fid in list(active_ids)[:15]:
+            fdata = await redis_client.hgetall(f"flow:live:{fid}")
+            if fdata:
+                flows.append({
+                    "direction": fdata.get("direction", "outbound"),
+                    "device_name": fdata.get("device_name", fdata.get("src_ip", "?")),
+                    "dest_ip": fdata.get("dest_ip", "?"),
+                    "dest_port": fdata.get("dest_port", ""),
+                    "bytes_total": int(fdata.get("bytes_total", 0)),
+                    "service_name": fdata.get("service_name", ""),
+                    "app_name": fdata.get("app_name", ""),
+                    "state": fdata.get("state", ""),
+                })
+    except Exception as e:
+        logger.error(f"Traffic live hatasi: {e}")
+
+    return ChatResponse(
+        reply=fmt.format_live_flows(flows, total),
+        action_type="traffic_live",
+        action_result={"total": total, "shown": len(flows)},
+    )
+
+
+async def _handle_traffic_large(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """Buyuk transferler (>1MB, Redis ZSET)."""
+    flows = []
+    try:
+        redis_client = await get_redis()
+        large_ids = await redis_client.zrevrange("flow:large", 0, 9, withscores=True)
+        for fid, score in large_ids:
+            fdata = await redis_client.hgetall(f"flow:live:{fid}")
+            if fdata:
+                flows.append({
+                    "device_name": fdata.get("device_name", fdata.get("src_ip", "?")),
+                    "dest_ip": fdata.get("dest_ip", "?"),
+                    "dest_port": fdata.get("dest_port", ""),
+                    "bytes_total": int(score),
+                    "app_name": fdata.get("app_name", ""),
+                    "service_name": fdata.get("service_name", ""),
+                })
+    except Exception as e:
+        logger.error(f"Traffic large hatasi: {e}")
+
+    return ChatResponse(
+        reply=fmt.format_large_transfers(flows),
+        action_type="traffic_large",
+        action_result={"count": len(flows)},
+    )
+
+
+async def _handle_device_traffic(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """Tek cihaz trafik ozeti."""
+    device, suggestion = await _resolve_device_smart(entities, db)
+    if not device:
+        if suggestion:
+            return ChatResponse(reply=suggestion)
+        return ChatResponse(reply="Hangi cihazin trafigini gormek istiyorsun? Cihaz adi veya IP yaz.")
+
+    flows = []
+    total_bytes = 0
+    try:
+        redis_client = await get_redis()
+        device_flow_ids = await redis_client.smembers(f"flow:device:{device.id}")
+        for fid in device_flow_ids:
+            fdata = await redis_client.hgetall(f"flow:live:{fid}")
+            if fdata:
+                b = int(fdata.get("bytes_total", 0))
+                total_bytes += b
+                flows.append({
+                    "dest_ip": fdata.get("dest_ip", "?"),
+                    "bytes_total": b,
+                    "app_name": fdata.get("app_name", ""),
+                })
+    except Exception as e:
+        logger.error(f"Device traffic hatasi: {e}")
+
+    # Top destinations by bytes
+    flows.sort(key=lambda x: x["bytes_total"], reverse=True)
+
+    data = {
+        "device_name": device.hostname or device.ip_address,
+        "active_flows": len(flows),
+        "total_bytes": total_bytes,
+        "top_destinations": flows[:5],
+    }
+    return ChatResponse(
+        reply=fmt.format_device_traffic_summary(data),
+        action_type="device_traffic",
+        action_result=data,
+    )
+
+
+async def _handle_ddos_status(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """DDoS koruma durumu."""
+    data = {"enabled": False, "total_drops": 0, "active_blocks": 0,
+            "last_attack_time": None, "blocked_ips": []}
+    try:
+        redis_client = await get_redis()
+        ddos_stats = await redis_client.hgetall("ddos:stats")
+        if ddos_stats:
+            data["enabled"] = ddos_stats.get("enabled", "0") == "1"
+            data["total_drops"] = int(ddos_stats.get("total_drops", 0))
+            data["active_blocks"] = int(ddos_stats.get("active_blocks", 0))
+            data["last_attack_time"] = ddos_stats.get("last_attack_time")
+
+        # Engellenen IP'ler
+        blocked_keys = await redis_client.keys("ddos:blocked:*")
+        for key in blocked_keys[:5]:
+            ip = key.split(":")[-1] if isinstance(key, str) else key.decode().split(":")[-1]
+            info = await redis_client.hgetall(key)
+            data["blocked_ips"].append({
+                "ip": ip,
+                "reason": info.get("reason", "?"),
+                "drops": int(info.get("drops", 0)),
+            })
+    except Exception as e:
+        logger.error(f"DDoS status hatasi: {e}")
+
+    return ChatResponse(
+        reply=fmt.format_ddos_status(data),
+        action_type="ddos_status",
+        action_result=data,
+    )
+
+
+async def _handle_dhcp_leases(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """DHCP kiralama listesi."""
+    result = await db.execute(
+        select(DhcpLease).order_by(DhcpLease.ip_address).limit(30)
+    )
+    leases_db = result.scalars().all()
+
+    total = await db.scalar(select(func.count(DhcpLease.id))) or 0
+    static_count = await db.scalar(
+        select(func.count(DhcpLease.id)).where(DhcpLease.is_static == True)  # noqa
+    ) or 0
+
+    leases = []
+    for l in leases_db:
+        leases.append({
+            "ip": l.ip_address,
+            "mac": l.mac_address,
+            "hostname": l.hostname,
+            "is_static": l.is_static,
+            "expires": str(l.expires_at) if hasattr(l, "expires_at") and l.expires_at else None,
+        })
+
+    return ChatResponse(
+        reply=fmt.format_dhcp_leases_list(leases, static_count, total),
+        action_type="dhcp_leases",
+        action_result={"total": total, "static": static_count},
+    )
+
+
+async def _handle_dhcp_reserve(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """DHCP IP rezervasyonu olustur."""
+    ip_ent = next((e for e in entities if e.type == "ip"), None)
+    mac_ent = next((e for e in entities if e.type == "mac"), None)
+
+    # Cihazdan IP/MAC bul
+    if not ip_ent or not mac_ent:
+        device, _ = await _resolve_device_smart(entities, db)
+        if device:
+            if not ip_ent:
+                ip_ent = Entity(type="ip", value=device.ip_address, original=device.ip_address)
+            if not mac_ent and device.mac_address:
+                mac_ent = Entity(type="mac", value=device.mac_address, original=device.mac_address)
+
+    if not ip_ent or not mac_ent:
+        return ChatResponse(
+            reply="IP rezervasyonu için IP adresi ve MAC adresi gerekli.\n\n"
+                  "Ornek: `192.168.1.40 için AA:BB:CC:DD:EE:FF mac ile ip rezervasyonu yap`\n"
+                  "Veya bir cihaz adi belirtin (MAC ve IP otomatik alinir)."
+        )
+
+    # Mevcut lease kontrol
+    existing = await db.scalar(
+        select(DhcpLease).where(
+            DhcpLease.ip_address == ip_ent.value,
+            DhcpLease.is_static == True  # noqa
+        )
+    )
+    if existing:
+        return ChatResponse(reply=fmt.result_badge(False, f"`{ip_ent.value}` zaten statik olarak atanmis"))
+
+    lease = DhcpLease(
+        ip_address=ip_ent.value,
+        mac_address=mac_ent.value,
+        is_static=True,
+        hostname=None,
+    )
+    db.add(lease)
+    await db.flush()
+
+    return ChatResponse(
+        reply=fmt.result_badge(True, f"IP rezervasyonu olusturuldu: `{ip_ent.value}` → `{mac_ent.value}`"),
+        action_type="dhcp_reserve",
+        action_result={"ip": ip_ent.value, "mac": mac_ent.value},
+    )
+
+
+async def _handle_dhcp_delete_reservation(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """DHCP rezervasyonu sil."""
+    ip_ent = next((e for e in entities if e.type == "ip"), None)
+    mac_ent = next((e for e in entities if e.type == "mac"), None)
+
+    if not ip_ent and not mac_ent:
+        return ChatResponse(reply="Silinecek rezervasyonun IP veya MAC adresini belirt.")
+
+    query = select(DhcpLease).where(DhcpLease.is_static == True)  # noqa
+    if ip_ent:
+        query = query.where(DhcpLease.ip_address == ip_ent.value)
+    elif mac_ent:
+        query = query.where(DhcpLease.mac_address == mac_ent.value)
+
+    lease = await db.scalar(query)
+    if not lease:
+        target = ip_ent.value if ip_ent else mac_ent.value
+        return ChatResponse(reply=fmt.result_badge(False, f"`{target}` için statik rezervasyon bulunamadi"))
+
+    ip_val = lease.ip_address
+    await db.delete(lease)
+    await db.flush()
+
+    return ChatResponse(
+        reply=fmt.result_badge(True, f"Rezervasyon silindi: `{ip_val}`"),
+        action_type="dhcp_delete_reservation",
+        action_result={"ip": ip_val},
+    )
+
+
+async def _handle_create_profile(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """Yeni profil olustur."""
+    name_ent = next((e for e in entities if e.type == "profile_name"), None)
+    bw_ent = next((e for e in entities if e.type == "bandwidth"), None)
+
+    # Profil adi entity yoksa profile entity'den al
+    if not name_ent:
+        name_ent = next((e for e in entities if e.type == "profile"), None)
+
+    if not name_ent:
+        return ChatResponse(
+            reply="Profil adi belirtmelisin.\nOrnek: `cocuk profili olustur` veya `misafir profili yap`"
+        )
+
+    profile_name = name_ent.value.strip()
+
+    # Mevcut profil kontrolu
+    existing = await db.scalar(
+        select(Profile).where(func.lower(Profile.name) == profile_name.lower())
+    )
+    if existing:
+        return ChatResponse(reply=fmt.result_badge(False, f"**{profile_name}** adinda bir profil zaten var"))
+
+    bw_limit = float(bw_ent.value) if bw_ent else None
+    profile = Profile(
+        name=profile_name,
+        profile_type="custom",
+        bandwidth_limit_mbps=bw_limit,
+        content_filters="[]",
+    )
+    db.add(profile)
+    await db.flush()
+
+    return ChatResponse(
+        reply=fmt.format_profile_detail(profile_name, "oluşturuldu", bw_limit),
+        action_type="create_profile",
+        action_result={"id": profile.id, "name": profile_name},
+    )
+
+
+async def _handle_update_profile(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """Profil guncelle (bandwidth vb.)."""
+    profile_ent = next((e for e in entities if e.type == "profile"), None)
+    bw_ent = next((e for e in entities if e.type == "bandwidth"), None)
+
+    if not profile_ent:
+        return ChatResponse(reply="Hangi profili guncellemek istiyorsun? Profil adini belirt.")
+
+    # Profil bul
+    profile = await db.scalar(
+        select(Profile).where(func.lower(Profile.name) == profile_ent.value.lower())
+    )
+    if not profile:
+        # Fuzzy match
+        all_profiles = (await db.execute(select(Profile))).scalars().all()
+        match, score = fuzzy_match_best(
+            normalize_turkish(profile_ent.value),
+            [normalize_turkish(p.name) for p in all_profiles],
+            threshold=0.6
+        )
+        if match:
+            profile = next((p for p in all_profiles if normalize_turkish(p.name) == match), None)
+
+    if not profile:
+        return ChatResponse(reply=fmt.result_badge(False, f"**{profile_ent.value}** adinda profil bulunamadi"))
+
+    if bw_ent:
+        profile.bandwidth_limit_mbps = float(bw_ent.value)
+
+    await db.flush()
+
+    return ChatResponse(
+        reply=fmt.format_profile_detail(profile.name, "güncellendi", profile.bandwidth_limit_mbps),
+        action_type="update_profile",
+        action_result={"id": profile.id, "name": profile.name},
+    )
+
+
+async def _handle_delete_profile(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """Profil sil."""
+    profile_ent = next((e for e in entities if e.type == "profile"), None)
+    if not profile_ent:
+        profile_ent = next((e for e in entities if e.type == "profile_name"), None)
+
+    if not profile_ent:
+        return ChatResponse(reply="Hangi profili silmek istiyorsun? Profil adini belirt.")
+
+    profile = await db.scalar(
+        select(Profile).where(func.lower(Profile.name) == profile_ent.value.lower())
+    )
+    if not profile:
+        return ChatResponse(reply=fmt.result_badge(False, f"**{profile_ent.value}** adinda profil bulunamadi"))
+
+    # Bagli cihazlari temizle
+    await db.execute(
+        update(Device).where(Device.profile_id == profile.id).values(profile_id=None)
+    )
+
+    name = profile.name
+    await db.delete(profile)
+    await db.flush()
+
+    return ChatResponse(
+        reply=fmt.format_profile_detail(name, "silindi"),
+        action_type="delete_profile",
+        action_result={"name": name},
+    )
+
+
+async def _handle_list_categories(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """Icerik kategorileri listele."""
+    result = await db.execute(select(ContentCategory).order_by(ContentCategory.name))
+    cats = result.scalars().all()
+
+    categories = []
+    for c in cats:
+        categories.append({
+            "key": c.key,
+            "name": c.name,
+            "domain_count": c.domain_count or 0,
+            "enabled": c.enabled,
+        })
+
+    return ChatResponse(
+        reply=fmt.format_category_list(categories),
+        action_type="list_categories",
+        action_result={"count": len(categories)},
+    )
+
+
+async def _handle_device_dns_queries(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """Cihazin son DNS sorgulari."""
+    device, suggestion = await _resolve_device_smart(entities, db)
+    if not device:
+        if suggestion:
+            return ChatResponse(reply=suggestion)
+        return ChatResponse(reply="Hangi cihazin DNS sorgularini gormek istiyorsun?")
+
+    result = await db.execute(
+        select(DnsQueryLog)
+        .where(DnsQueryLog.client_ip == device.ip_address)
+        .order_by(desc(DnsQueryLog.timestamp))
+        .limit(20)
+    )
+    logs = result.scalars().all()
+
+    queries = []
+    for l in logs:
+        queries.append({
+            "domain": l.domain,
+            "timestamp": l.timestamp.strftime("%H:%M:%S") if l.timestamp else "",
+            "blocked": l.blocked,
+            "reason": l.block_reason if hasattr(l, "block_reason") else None,
+        })
+
+    device_name = device.hostname or device.ip_address
+    return ChatResponse(
+        reply=fmt.format_device_dns_queries(queries, device_name),
+        action_type="device_dns_queries",
+        action_result={"device": device_name, "count": len(queries)},
+    )
+
+
+async def _handle_system_reboot(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """Sistem yeniden baslatma — dogrudan calistirmaz, onay mesaji dondurur."""
+    return ChatResponse(
+        reply=fmt.format_reboot_confirmation(),
+        action_type="system_reboot",
+        action_result={"needs_confirmation": True},
+    )
+
+
+async def _handle_service_usage(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """Servisi kullanan cihazlari listele (Redis flow verisi)."""
+    service_ent = next((e for e in entities if e.type == "service"), None)
+    service_name = service_ent.value if service_ent else ""
+
+    if not service_name:
+        return ChatResponse(reply="Hangi servisin kullanımını görmek istiyorsun? Örnek: `youtube kullanan cihazlar`")
+
+    # Redis'ten aktif flow'lari tara
+    device_map: dict[str, dict] = {}  # device_name -> {flows, bytes_up, bytes_down}
+    try:
+        redis_client = await get_redis()
+        active_ids = await redis_client.smembers("flow:active_ids")
+        search = service_name.lower()
+        for fid in active_ids:
+            fdata = await redis_client.hgetall(f"flow:live:{fid}")
+            if not fdata:
+                continue
+            app = (fdata.get("app_name") or "").lower()
+            svc = (fdata.get("service_name") or "").lower()
+            if search not in app and search not in svc:
+                continue
+            dname = fdata.get("device_name") or fdata.get("src_ip") or "?"
+            if dname not in device_map:
+                device_map[dname] = {"flows": 0, "bytes_up": 0, "bytes_down": 0}
+            device_map[dname]["flows"] += 1
+            bytes_up = int(fdata.get("bytes_orig", 0))
+            bytes_down = int(fdata.get("bytes_reply", 0))
+            if bytes_up == 0 and bytes_down == 0:
+                bt = int(fdata.get("bytes_total", 0))
+                bytes_down = bt
+            device_map[dname]["bytes_up"] += bytes_up
+            device_map[dname]["bytes_down"] += bytes_down
+    except Exception as e:
+        logger.error(f"Service usage hatasi: {e}")
+
+    if not device_map:
+        return ChatResponse(
+            reply=fmt.format_service_not_found(service_name),
+            action_type="service_usage",
+            action_result={"service": service_name, "devices": []},
+        )
+
+    return ChatResponse(
+        reply=fmt.format_service_usage(service_name, device_map),
+        action_type="service_usage",
+        action_result={"service": service_name, "device_count": len(device_map)},
+    )
+
+
+async def _handle_service_block(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """Cihazda servis engelle."""
+    device, suggestion = await _resolve_device_smart(entities, db)
+    if not device:
+        if suggestion:
+            return ChatResponse(reply=suggestion)
+        return ChatResponse(reply="Hangi cihazda servis engellemek istiyorsun?")
+
+    service_ent = next((e for e in entities if e.type == "service"), None)
+    if not service_ent:
+        return ChatResponse(reply="Hangi servisi engellemek istiyorsun? Ornek: `youtube servisi engelle`")
+
+    svc = await _find_service_by_name(service_ent.value, db)
+    if not svc:
+        return ChatResponse(reply=fmt.result_badge(False, f"**{service_ent.value}** servisi bulunamadi"))
+
+    # Mevcut engel kontrolu
+    existing = await db.scalar(
+        select(DeviceBlockedService).where(
+            DeviceBlockedService.device_id == device.id,
+            DeviceBlockedService.service_id == svc.id,
+        )
+    )
+    if existing and existing.blocked:
+        return ChatResponse(reply=fmt.result_badge(False, f"**{svc.name}** zaten engelli"))
+
+    if existing:
+        existing.blocked = True
+    else:
+        dbs = DeviceBlockedService(device_id=device.id, service_id=svc.id, blocked=True)
+        db.add(dbs)
+    await db.flush()
+
+    # Redis sync
+    try:
+        await sync_device_services_to_redis(device.id, db)
+    except Exception as e:
+        logger.error(f"Service block Redis sync hatasi: {e}")
+
+    device_name = device.hostname or device.ip_address
+    return ChatResponse(
+        reply=fmt.format_device_action(device_name, "engellendi", svc.name),
+        action_type="service_block",
+        action_result={"device_id": device.id, "service": svc.name},
+    )
+
+
+async def _handle_service_unblock(entities: list[Entity], db: AsyncSession) -> ChatResponse:
+    """Cihazda servis engelini kaldir."""
+    device, suggestion = await _resolve_device_smart(entities, db)
+    if not device:
+        if suggestion:
+            return ChatResponse(reply=suggestion)
+        return ChatResponse(reply="Hangi cihazda servis engelini kaldirmak istiyorsun?")
+
+    service_ent = next((e for e in entities if e.type == "service"), None)
+    if not service_ent:
+        return ChatResponse(reply="Hangi servisin engelini kaldirmak istiyorsun?")
+
+    svc = await _find_service_by_name(service_ent.value, db)
+    if not svc:
+        return ChatResponse(reply=fmt.result_badge(False, f"**{service_ent.value}** servisi bulunamadi"))
+
+    existing = await db.scalar(
+        select(DeviceBlockedService).where(
+            DeviceBlockedService.device_id == device.id,
+            DeviceBlockedService.service_id == svc.id,
+        )
+    )
+    if not existing or not existing.blocked:
+        return ChatResponse(reply=fmt.result_badge(False, f"**{svc.name}** zaten engelli degil"))
+
+    existing.blocked = False
+    await db.flush()
+
+    # Redis sync
+    try:
+        await sync_device_services_to_redis(device.id, db)
+    except Exception as e:
+        logger.error(f"Service unblock Redis sync hatasi: {e}")
+
+    device_name = device.hostname or device.ip_address
+    return ChatResponse(
+        reply=fmt.format_device_action(device_name, "engeli kaldırıldı", svc.name),
+        action_type="service_unblock",
+        action_result={"device_id": device.id, "service": svc.name},
+    )
 
 
 # =====================================================================

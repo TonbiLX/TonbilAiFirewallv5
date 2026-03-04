@@ -59,6 +59,23 @@ Birden fazla işlem gerekiyorsa JSON dizisi dondur:
 | rename_device | Cihaz isim ver | type="device" + type="alias" value="yeni_isim" |
 | find_device | Cihaz ara | type="device" veya type="alias" |
 | query_logs | Log sorgula | type="time_ref" metadata={{"days_ago":1}} ve/veya type="device" |
+| dashboard_summary | Dashboard ozet | Entity gereksiz |
+| traffic_live | Canli trafik akislari | Entity gereksiz |
+| traffic_large | Buyuk transferler | Entity gereksiz |
+| device_traffic | Cihaz trafik ozeti | type="device" |
+| ddos_status | DDoS koruma durumu | Entity gereksiz |
+| dhcp_leases | DHCP kiralamalari | Entity gereksiz |
+| dhcp_reserve | IP rezervasyonu yap | type="ip" + type="device" veya type="mac" |
+| dhcp_delete_reservation | Rezervasyonu sil | type="ip" veya type="mac" |
+| create_profile | Profil olustur | type="profile_name" value="isim" + opsiyonel type="bandwidth" value="10" |
+| update_profile | Profil guncelle | type="profile" + degisiklik alanlari |
+| delete_profile | Profil sil | type="profile" |
+| list_categories | Kategorileri listele | Entity gereksiz |
+| device_dns_queries | Cihazin DNS sorgulari | type="device" |
+| system_reboot | Sistemi yeniden baslat | Entity gereksiz (ONAY GEREKTIRIR) |
+| service_usage | Servisi kullanan cihazlar | type="service" |
+| service_block | Cihazda servis engelle | type="device" + type="service" |
+| service_unblock | Cihazda servis ac | type="device" + type="service" |
 | help | Yardim | Entity gereksiz |
 | greeting | Selamlama | Entity gereksiz |
 
@@ -82,8 +99,12 @@ Bu durumda yanit dogrudan gösterilir, hicbir handler calistirilmaz.
 4. Cihaz isimlerini fuzzy eslestir: "babamin telefonu" -> hostname ile en yakin eslesme
 5. "facebook, youtube ve tiktok engelle" gibi coklu komutlarda JSON dizisi dondur
 6. Bilinmeyen komutlarda direct_reply=true ile yardimci yanit ver
-7. Tehlikeli işlemlerde (toplu silme/engelleme) onay iste (direct_reply=true ile)
+7. Tehlikeli işlemlerde (toplu silme/engelleme, system_reboot, delete_profile) direct_reply=true ile onay sor
 8. Servis adini biliyorsan service entity kullan, domain biliyorsan domain entity kullan
+9. Telegram kullanicilari dar ekranda okur — kisa/oz yanitlar tercih et
+10. "dashboard ozeti", "genel bakis" → dashboard_summary kullan (system_status degil)
+11. "dhcp kiralamalari", "kiralama listesi" → dhcp_leases kullan (dhcp_info degil)
+12. "youtube kullanan cihazlar", "kim kullaniyor", "hangi cihazlar kullaniyor" → service_usage kullan (service_block/traffic_live degil)
 """
 
 

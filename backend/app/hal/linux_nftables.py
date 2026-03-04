@@ -791,7 +791,7 @@ async def read_device_counters() -> Dict[str, Dict[str, int]]:
     try:
         # nft reset: oku VE atomik sifirla — her cagri delta dondurur
         out_up = await run_nft(
-            ["-a", "reset", "chain", "bridge", "accounting", BRIDGE_CHAIN_UPLOAD],
+            ["-a", "reset", "rules", "bridge", "accounting", BRIDGE_CHAIN_UPLOAD],
             check=True,
         )
     except Exception as e:
@@ -800,7 +800,7 @@ async def read_device_counters() -> Dict[str, Dict[str, int]]:
 
     try:
         out_down = await run_nft(
-            ["-a", "reset", "chain", "bridge", "accounting", BRIDGE_CHAIN_DOWNLOAD],
+            ["-a", "reset", "rules", "bridge", "accounting", BRIDGE_CHAIN_DOWNLOAD],
             check=True,
         )
     except Exception as e:

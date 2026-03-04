@@ -227,12 +227,22 @@ async def chat(
     if parsed:
         return {"commands": parsed, "raw_response": response}
 
-    # JSON parse başarısız - direct_reply olarak dondur
+    # JSON parse başarısız - reply alanini cikarmayi dene, yoksa temiz hata
+    clean_reply = response
+    # Ham JSON'dan reply alanini regex ile cikar
+    reply_match = re.search(r'"reply"\s*:\s*"((?:[^"\\]|\\.)*)"', response)
+    if reply_match:
+        clean_reply = reply_match.group(1).replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
+    elif response.strip().startswith(("{", "[", "```")):
+        # Ham JSON gozukuyor ama reply alani yok — kullaniciya gosterme
+        clean_reply = "Yanit islenemedi. Lutfen tekrar deneyin."
+        logger.warning(f"LLM ham JSON reply temizlendi: {response[:200]}")
+
     return {
         "commands": [{
             "intent": "direct_reply",
             "entities": [],
-            "reply": response,
+            "reply": clean_reply,
             "direct_reply": True,
         }],
         "raw_response": response,
