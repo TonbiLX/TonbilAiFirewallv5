@@ -134,7 +134,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Bandwidth accounting bridge→inet forward hook gecisi tamamlandi. Trafik tablolarina zaman sutunu ve tiklanabilir siralama eklendi. Tum deploy'lar yapildi. Commit: 804195d.
+Stopped at: VPN client outbound routing fix — rp_filter gevsetme. Tum ev agi trafigi Avusturya VPN sunucusu uzerinden geciriliyor. Commit: 37a841a.
 Resume file: None
 
 ## Post-Milestone Work (GSD disi)
@@ -147,3 +147,4 @@ Resume file: None
 | 4 | Guvenlik Ayarlari → Firewall tab + toggle fix | 1ddd12b | 2026-03-04 | TAMAMLANDI + DEPLOY |
 | 5 | Bandwidth: bridge→inet forward hook + 3s poll | 804195d | 2026-03-05 | TAMAMLANDI + DEPLOY |
 | 6 | Trafik tablolari: zaman sutunu + tiklanabilir siralama | 804195d | 2026-03-05 | TAMAMLANDI + DEPLOY |
+| 7 | VPN client outbound: rp_filter fix (LAN→VPN tunel) | 37a841a | 2026-03-05 | TAMAMLANDI + DEPLOY |
