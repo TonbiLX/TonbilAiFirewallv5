@@ -1680,10 +1680,20 @@ add rule inet tonbilai forward ip6 daddr != ::1 ip6 daddr != fe80::/10 ip6 daddr
     else:
         logger.info("IPv6 internet trafiği engellendi (leak onleme)")
 
-    # 8. nftables persist
+    # 8. rp_filter gevset — VPN tunelinden donen paketler icin gerekli
+    # strict rp_filter (1) donus paketlerini duser cunku kaynak IP
+    # wg-client uzerinden gelir ama rp_filter farkli interface bekler
+    for iface in ["all", "br0", "eth0", "eth1", vpn_interface]:
+        await _run_system_cmd(
+            ["sudo", "sysctl", "-w", f"net.ipv4.conf.{iface}.rp_filter=0"],
+            check=False,
+        )
+    logger.info("rp_filter gevsetildi (VPN client donus trafigi icin)")
+
+    # 9. nftables persist
     await persist_nftables()
 
-    logger.info(f"VPN client bridge routing kuruldu: {vpn_interface} (kill switch + DNS redirect + IPv6 block)")
+    logger.info(f"VPN client bridge routing kuruldu: {vpn_interface} (kill switch + DNS redirect + IPv6 block + rp_filter)")
 
 
 async def teardown_vpn_client_routing(vpn_interface: str = "wg-client"):
@@ -1720,7 +1730,18 @@ async def teardown_vpn_client_routing(vpn_interface: str = "wg-client"):
                         check=False,
                     )
 
-    # 5. nftables persist
+    # 5. rp_filter geri yukle (bridge isolation varsayilan degerleri)
+    await _run_system_cmd(
+        ["sudo", "sysctl", "-w", "net.ipv4.conf.all.rp_filter=1"], check=False
+    )
+    for iface in ["br0", "eth0", "eth1"]:
+        await _run_system_cmd(
+            ["sudo", "sysctl", "-w", f"net.ipv4.conf.{iface}.rp_filter=2"],
+            check=False,
+        )
+    logger.info("rp_filter varsayilan degerlere geri yuklendi")
+
+    # 6. nftables persist
     await persist_nftables()
 
     logger.info(f"VPN client bridge routing temizlendi: {vpn_interface}")
