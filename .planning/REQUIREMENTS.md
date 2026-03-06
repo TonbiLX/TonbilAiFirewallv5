@@ -138,17 +138,73 @@ Deferred to future release.
 
 ## Traceability
 
-Updated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated by roadmapper) | | |
+| SETUP-01 | Phase 6 | Pending |
+| SETUP-02 | Phase 6 | Pending |
+| SETUP-03 | Phase 6 | Pending |
+| SETUP-04 | Phase 6 | Pending |
+| SETUP-05 | Phase 6 | Pending |
+| AUTH-01 | Phase 7 | Pending |
+| AUTH-02 | Phase 7 | Pending |
+| AUTH-03 | Phase 7 | Pending |
+| AUTH-04 | Phase 7 | Pending |
+| AUTH-05 | Phase 7 | Pending |
+| AUTH-06 | Phase 7 | Pending |
+| DASH-01 | Phase 8 | Pending |
+| DASH-02 | Phase 8 | Pending |
+| DASH-03 | Phase 8 | Pending |
+| DASH-04 | Phase 8 | Pending |
+| DASH-05 | Phase 14 | Pending |
+| DASH-06 | Phase 14 | Pending |
+| DEV-01 | Phase 9 | Pending |
+| DEV-02 | Phase 9 | Pending |
+| DEV-03 | Phase 9 | Pending |
+| DEV-04 | Phase 9 | Pending |
+| DEV-05 | Phase 9 | Pending |
+| DNS-01 | Phase 10 | Pending |
+| DNS-02 | Phase 10 | Pending |
+| DNS-03 | Phase 10 | Pending |
+| DNS-04 | Phase 10 | Pending |
+| FW-01 | Phase 11 | Pending |
+| FW-02 | Phase 11 | Pending |
+| FW-03 | Phase 11 | Pending |
+| VPN-01 | Phase 11 | Pending |
+| VPN-02 | Phase 11 | Pending |
+| VPN-03 | Phase 11 | Pending |
+| VPN-04 | Phase 11 | Pending |
+| DDOS-01 | Phase 11 | Pending |
+| DDOS-02 | Phase 11 | Pending |
+| DDOS-03 | Phase 11 | Pending |
+| TRAF-01 | Phase 12 | Pending |
+| TRAF-02 | Phase 12 | Pending |
+| TRAF-03 | Phase 12 | Pending |
+| TRAF-04 | Phase 12 | Pending |
+| NOTIF-01 | Phase 13 | Pending |
+| NOTIF-02 | Phase 13 | Pending |
+| NOTIF-03 | Phase 13 | Pending |
+| NOTIF-04 | Phase 13 | Pending |
+| CHAT-01 | Phase 13 | Pending |
+| CHAT-02 | Phase 13 | Pending |
+| CHAT-03 | Phase 13 | Pending |
+| TELE-01 | Phase 13 | Pending |
+| TELE-02 | Phase 13 | Pending |
+| WIFI-01 | Phase 13 | Pending |
+| WIFI-02 | Phase 13 | Pending |
+| WIFI-03 | Phase 13 | Pending |
+| DHCP-01 | Phase 13 | Pending |
+| DHCP-02 | Phase 13 | Pending |
+| SEC-01 | Phase 13 | Pending |
+| SEC-02 | Phase 13 | Pending |
+| UX-01 | Phase 14 | Pending |
+| UX-02 | Phase 14 | Pending |
+| UX-03 | Phase 15 | Pending |
 
 **Coverage:**
-- v1 requirements: 55 total
-- Mapped to phases: 0 (awaiting roadmap)
-- Unmapped: 55
+- v1 requirements: 59 total
+- Mapped to phases: 59
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-06*
-*Last updated: 2026-03-06 after initial definition*
+*Last updated: 2026-03-06 after roadmap creation*

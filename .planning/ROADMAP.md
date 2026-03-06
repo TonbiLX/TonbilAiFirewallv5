@@ -1,110 +1,201 @@
-# Roadmap: TonbilAiOS Bridge Isolation
+# Roadmap: TonbilAiOS
 
-## Overview
+## Milestones
 
-TonbilAiOS is being migrated from transparent bridge mode (modem sees all LAN device MACs) to proper router mode (modem sees only Pi's MAC). The transition modifies `linux_nftables.py`, `linux_tc.py`, `main.py`, dnsmasq config, and kernel persistence files across 5 strictly ordered phases. Ordering is non-negotiable: each phase is a hard prerequisite for the next. The NAT and IP forwarding foundation must exist before isolation drop rules are applied; accounting and TC mark chains must be migrated before the lifespan swap activates them on every restart; DHCP gateway is changed last so clients never route through Pi before routing is proven working.
+- ✅ **v1.0 Bridge Isolation** - Phases 1-5 (shipped 2026-03-03)
+- 🚧 **v2.0 TonbilAiOS Android App** - Phases 6-15 (in progress)
 
 ## Phases
 
-**Phase Numbering:**
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+<details>
+<summary>✅ v1.0 Bridge Isolation (Phases 1-5) - SHIPPED 2026-03-03</summary>
 
-Decimal phases appear between their surrounding integers in numeric order.
-
-- [x] **Phase 1: Bridge Isolation Core** - HAL functions for L2 isolation, NAT MASQUERADE, masquerade_fix removal, and software rollback
+- [x] **Phase 1: Bridge Isolation Core** - HAL functions for L2 isolation, NAT MASQUERADE, rollback
 - [x] **Phase 2: Accounting Chain Migration** - Rewrite bridge accounting from forward hook to input/output hooks
 - [x] **Phase 3: TC Mark Chain Migration** - Rewrite TC mark chains from forward hook to input/output hooks
-- [x] **Phase 4: Startup and Persistence** - Lifespan swap, sysctl persistence, module persistence, nftables persistence
-- [x] **Phase 5: DHCP Gateway and Validation** - Gateway change from .1 to .2 and 7-step transition validation (completed 2026-03-03)
+- [x] **Phase 4: Startup and Persistence** - Lifespan swap, sysctl persistence, module persistence
+- [x] **Phase 5: DHCP Gateway and Validation** - Gateway change from .1 to .2 and transition validation
+
+</details>
+
+### 🚧 v2.0 TonbilAiOS Android App
+
+**Milestone Goal:** Samsung S24 Ultra icin Kotlin Native Android uygulamasi — TonbilAiOS v5'in tum ozelliklerini mobil platformdan yonetme ve izleme
+
+**Phase Numbering:**
+- Integer phases (6, 7, 8...): Planned milestone work
+- Decimal phases (7.1, 7.2): Urgent insertions (marked with INSERTED)
+
+- [ ] **Phase 6: Project Skeleton** - Gelistirme ortami, proje iskeleti, tema, navigasyon, API client
+- [ ] **Phase 7: Authentication** - JWT giris, biyometrik auth, token yonetimi, auto-discovery
+- [ ] **Phase 8: Dashboard** - Ana dashboard ekrani, WebSocket canli veri, grafikler
+- [ ] **Phase 9: Device Management** - Cihaz listesi, detay, engelleme, profil atama
+- [ ] **Phase 10: DNS Filtering** - DNS ozet, filtreleme toggle, kategoriler, profil yonetimi
+- [ ] **Phase 11: Network Security** - Firewall kurallari, VPN peer yonetimi, DDoS koruma izleme
+- [ ] **Phase 12: Traffic Monitoring** - Canli akislar, buyuk transferler, gecmis, grafikler
+- [ ] **Phase 13: Communication & Config** - Push notifications, AI Chat, Telegram, WiFi AP, DHCP, Guvenlik ayarlari
+- [ ] **Phase 14: Android Enhancements** - Home widget, Quick Settings tile, haptic feedback, app shortcuts
+- [ ] **Phase 15: Release Build** - Imzali APK build ve S24 Ultra'ya yukleme
 
 ## Phase Details
 
-### Phase 1: Bridge Isolation Core
-**Goal**: The HAL contains tested functions to apply and safely reverse bridge isolation — isolation can be activated and rolled back without SSH lockout
-**Depends on**: Nothing (first phase)
-**Requirements**: ISOL-01, ISOL-02, ISOL-03, ISOL-04, ISOL-05, ISOL-06, ISOL-07, ROLL-01, ROLL-02, ROLL-03
-**Success Criteria** (what must be TRUE):
-  1. `ensure_bridge_isolation()` applies L2 forward drop rules atomically via `nft -f -` and can be called idempotently without error
-  2. Running `ensure_bridge_isolation()` followed by `curl` from a Pi shell confirms internet access (NAT MASQUERADE and ip_forward are working)
-  3. `remove_bridge_isolation()` removes all isolation rules by handle and restores ICMP redirects, returning the system to transparent bridge mode
-  4. The `bridge_masquerade_fix` table is absent from the nftables ruleset after isolation is applied
-  5. All six sysctl values (ip_forward, send_redirects on all interfaces, bridge-nf-call-iptables) are set correctly and verified before drop rules are applied
-**Plans**: 1 plan
+<details>
+<summary>✅ v1.0 Bridge Isolation (Phases 1-5) - SHIPPED 2026-03-03</summary>
 
-Plans:
-- [x] 01-01-PLAN.md — Add ensure_bridge_isolation() and remove_bridge_isolation() to linux_nftables.py
+### Phase 1: Bridge Isolation Core
+**Goal**: HAL contains tested functions to apply and safely reverse bridge isolation
+**Plans**: 1/1 Complete
 
 ### Phase 2: Accounting Chain Migration
-**Goal**: Bridge bandwidth counters correctly accumulate on the input/output hooks so device traffic accounting works after L2 forwarding is disabled
-**Depends on**: Phase 1
-**Requirements**: ACCT-01, ACCT-02, ACCT-03, ACCT-04, ACCT-05, ACCT-06, ACCT-07
-**Success Criteria** (what must be TRUE):
-  1. `ensure_bridge_accounting_chain()` creates `upload` (input hook, iifname eth1, ether saddr) and `download` (output hook, oifname eth1, ether daddr) chains in the bridge accounting table
-  2. `add_device_counter(mac)` adds counter rules to both upload and download chains for the given MAC
-  3. `remove_device_counter(mac)` removes counter rules from both chains without affecting other devices
-  4. `read_device_counters()` returns merged upload and download byte totals per MAC from both chains
-  5. Counter byte values increase when a device sends and receives traffic after isolation is active
-**Plans**: 1 plan
-
-Plans:
-- [x] 02-01-PLAN.md — Rewrite accounting chain functions in linux_nftables.py + update bandwidth_monitor.py for nft-reset semantics
+**Goal**: Bridge bandwidth counters correctly accumulate on input/output hooks
+**Plans**: 1/1 Complete
 
 ### Phase 3: TC Mark Chain Migration
-**Goal**: Per-device bandwidth limits remain enforced after isolation because TC mark chains operate on the input/output hooks where LAN traffic now flows
-**Depends on**: Phase 2
-**Requirements**: TCMK-01, TCMK-02, TCMK-03, TCMK-04, TCMK-05
-**Success Criteria** (what must be TRUE):
-  1. `tc_mark_up` chain exists on the input hook (iifname eth1, ether saddr MAC, meta mark set) and `tc_mark_down` chain exists on the output hook (oifname eth1, ether daddr MAC, meta mark set)
-  2. `add_device_limit(mac, rate, ceil)` adds mark rules to both tc_mark_up and tc_mark_down chains
-  3. `remove_device_limit(mac)` removes mark rules from both chains without affecting other devices
-  4. A device with a 5 Mbps limit cannot sustain above 5 Mbps download after isolation is active (live bandwidth test confirms HTB qdisc enforces the mark)
-**Plans**: 1 plan
-
-Plans:
-- [x] 03-01-PLAN.md — Rewrite _ensure_tc_mark_chain(), add_device_limit(), and _remove_nft_mark_rule() in linux_tc.py for split tc_mark_up/tc_mark_down chains on input/output hooks
+**Goal**: Per-device bandwidth limits remain enforced after isolation
+**Plans**: 1/1 Complete
 
 ### Phase 4: Startup and Persistence
-**Goal**: The router mode configuration survives backend restarts and Pi reboots — no manual intervention is needed to re-apply isolation after a restart
-**Depends on**: Phase 3
-**Requirements**: STRT-01, STRT-02, STRT-03, STRT-04
-**Success Criteria** (what must be TRUE):
-  1. `main.py` lifespan calls `ensure_bridge_isolation()` instead of `ensure_bridge_masquerade()` on backend startup
-  2. After `sudo reboot`, the nftables ruleset contains the bridge_isolation forward drop rules (verified via `nft list ruleset`)
-  3. After reboot, `sysctl net.ipv4.ip_forward` returns 1 and `sysctl net.bridge.bridge-nf-call-iptables` returns 1
-  4. `lsmod | grep br_netfilter` shows the module loaded immediately after boot without manual modprobe
-**Plans**: 1 plan
-
-Plans:
-- [x] 04-01-PLAN.md — Add ensure_bridge_isolation_persistence() to linux_nftables.py and swap main.py lifespan to ensure_bridge_isolation + persistence
+**Goal**: Router mode configuration survives reboots
+**Plans**: 1/1 Complete
 
 ### Phase 5: DHCP Gateway and Validation
-**Goal**: All LAN devices use Pi as their default gateway and the complete transition is verified end-to-end — the modem ARP table shows only Pi's MAC
-**Depends on**: Phase 4
-**Requirements**: DHCP-01, DHCP-02, VALD-01, VALD-02, VALD-03, VALD-04, VALD-05, VALD-06, VALD-07
-**Success Criteria** (what must be TRUE):
-  1. dnsmasq config contains `dhcp-option=3,192.168.1.2` and dhcp_pools.gateway in MariaDB is `192.168.1.2`
-  2. `tcpdump -i eth0 arp` on the Pi shows only Pi's own MAC in ARP replies toward the modem
-  3. A test device connected to the LAN can reach the internet (curl https://example.com succeeds) after receiving a new DHCP lease with gateway .2
-  4. DNS resolution works from a LAN device (dig @192.168.1.2 example.com returns a valid answer)
-  5. Bridge accounting upload/download counters increment for the test device during the internet test
-  6. `nft list chain bridge filter forward` shows the eth1→eth0 and eth0→eth1 drop rules
-  7. A veth namespace test device using gateway 192.168.1.2 can reach the internet, confirming routing works for new clients
-**Plans**: 2 plans
+**Goal**: All LAN devices use Pi as default gateway, end-to-end verified
+**Plans**: 2/2 Complete
 
-Plans:
-- [ ] 05-01-PLAN.md — Update DHCP gateway/DNS defaults from 192.168.1.1 to 192.168.1.2 in seed data, model, and schema + deployment procedure
-- [ ] 05-02-PLAN.md — Write validation script covering DHCP-01, DHCP-02, VALD-01 through VALD-07
+</details>
+
+### Phase 6: Project Skeleton
+**Goal**: Gelistirme ortami hazir, bos Compose uygulamasi cihazda baslatilabiliyor, cyberpunk tema uygulanmis, navigasyon calisiyor, API client backend'e baglanabiliyor
+**Depends on**: Nothing (first phase of v2.0 milestone)
+**Requirements**: SETUP-01, SETUP-02, SETUP-03, SETUP-04, SETUP-05
+**Success Criteria** (what must be TRUE):
+  1. Komut satirindan `./gradlew assembleDebug` basarili APK uretiyor ve S24 Ultra'da aciliyor
+  2. Uygulama acildiginda cyberpunk koyu tema gorунuyor (neon cyan/magenta vurgu renkleri, koyu arka plan)
+  3. Bottom navigation ile en az 4 ana ekran arasinda gecis yapilabiliyor
+  4. API client wall.tonbilx.com adresine test istegi gonderebiliyor ve JSON yanit aliyor
+**Plans**: TBD
+
+### Phase 7: Authentication
+**Goal**: Kullanici guvenli bir sekilde hesabina erisebiliyor — sifre, biyometrik veya otomatik token ile
+**Depends on**: Phase 6
+**Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04, AUTH-05, AUTH-06
+**Success Criteria** (what must be TRUE):
+  1. Kullanici email/sifre ile giris yapabiliyor ve korunmus ekranlara erisebiliyor
+  2. Giris sonrasi parmak izi veya yuz tanima ile sonraki girislerde hizli erisim saglaniyor
+  3. Uygulama kapatilip acildiginda token gecerli ise tekrar giris istenmiyor
+  4. Yerel agda (192.168.1.2) ve disaridan (wall.tonbilx.com) otomatik gecis yapiliyor, baglanti kopuklugunda diger adres deneniyor
+  5. Sunucu ayarlari ekranindan manuel URL girilip baglanti testi yapilabiliyor
+**Plans**: TBD
+
+### Phase 8: Dashboard
+**Goal**: Kullanici tek bakista ag durumunu gorebiliyor — canli bant genisligi, cihaz sayisi, DNS ozet, tehdit bilgisi
+**Depends on**: Phase 7
+**Requirements**: DASH-01, DASH-02, DASH-03, DASH-04
+**Success Criteria** (what must be TRUE):
+  1. Dashboard ekraninda baglanti durumu, toplam trafik, engellenen sorgu sayisi ve aktif cihaz sayisi gorunuyor
+  2. Bant genisligi grafigi canli olarak guncelleniyor (WebSocket uzerinden veri akisi)
+  3. Uygulama arka plana gidip geri geldiginde WebSocket baglantisi otomatik yeniden kuruluyor
+  4. Istatistik kartlarina dokunulunca ilgili detay ekranina yonlendirme yapiliyor
+**Plans**: TBD
+
+### Phase 9: Device Management
+**Goal**: Kullanici tum ag cihazlarini gorebiliyor, yonetebiliyor ve tek dokunusla internet erisimlerini kontrol edebiliyor
+**Depends on**: Phase 8
+**Requirements**: DEV-01, DEV-02, DEV-03, DEV-04, DEV-05
+**Success Criteria** (what must be TRUE):
+  1. Cihaz listesinde her cihazin ismi, IP'si, durumu ve anlik bant genisligi gorunuyor
+  2. Cihaz detay ekraninda trafik gecmisi, DNS sorgulari ve profil bilgisi goruntulenebiliyor
+  3. Tek dokunusla bir cihazin interneti durduruluyor/geri aciliyor ve durum aninda guncelleniyor
+  4. Cihaza profil atanabiliyor/degistirilebiliyor
+  5. Tum cihaz ekranlarinda asagiya cekerek yenileme (pull-to-refresh) calisiyor
+**Plans**: TBD
+
+### Phase 10: DNS Filtering
+**Goal**: Kullanici DNS filtreleme sistemini mobil uzerinden gorebiliyor ve yonetebiliyor — kategoriler, profiller, hizli toggle
+**Depends on**: Phase 9
+**Requirements**: DNS-01, DNS-02, DNS-03, DNS-04
+**Success Criteria** (what must be TRUE):
+  1. DNS ozet ekraninda toplam sorgu, engelleme sayisi, en cok sorgulanan ve engellenen domainler listeleniyor
+  2. Tek dokunusla DNS filtreleme acilip kapatilabiliyor
+  3. Icerik kategorileri goruntulenebiliyor ve blocklist baglama yonetimi yapilabiliyor
+  4. Profil olusturulabiliyor/duzenlenebiliyor — kategori secimi ve bandwidth limiti ayarlanabiliyor
+**Plans**: TBD
+
+### Phase 11: Network Security
+**Goal**: Kullanici firewall kurallarini, VPN peer'larini ve DDoS koruma durumunu mobil uzerinden yonetebiliyor
+**Depends on**: Phase 8
+**Requirements**: FW-01, FW-02, FW-03, VPN-01, VPN-02, VPN-03, VPN-04, DDOS-01, DDOS-02, DDOS-03
+**Success Criteria** (what must be TRUE):
+  1. Firewall kural listesi goruntulenebiliyor, yeni kural eklenebiliyor/duzenlenebiliyor/silinebiliyor ve oncelik siralamasi degistirilebiliyor
+  2. VPN peer listesi goruntulenebiliyor, yeni peer eklenebiliyor/silinebiliyor ve peer QR kodu goruntulenip paylasılabiliyor
+  3. VPN durumu (aktif/pasif) goruntulenebiliyor
+  4. DDoS koruma durumu, basitlestirilmis saldiri haritasi ve canli saldiri akisi goruntulenebiliyor
+**Plans**: TBD
+
+### Phase 12: Traffic Monitoring
+**Goal**: Kullanici ag trafigini detayli izleyebiliyor — canli akislar, buyuk transferler, gecmis ve per-device grafikler
+**Depends on**: Phase 8
+**Requirements**: TRAF-01, TRAF-02, TRAF-03, TRAF-04
+**Success Criteria** (what must be TRUE):
+  1. Canli akislar ekraninda per-flow baglanti listesi 5 saniyede bir otomatik yenileniyor
+  2. Buyuk transferler listesinde >1MB flow'lar ayri goruntulenebiliyor
+  3. Trafik gecmisi ekraninda sayfalama ile eski kayitlar goruntulenebiliyor
+  4. Per-device bant genisligi zaman serisi grafigi goruntulenebiliyor
+**Plans**: TBD
+
+### Phase 13: Communication & Config
+**Goal**: Push bildirimler calisiyor, AI sohbet mobilde kullanilabiliyor, Telegram/WiFi/DHCP/Guvenlik ayarlari yonetilebiliyor
+**Depends on**: Phase 7
+**Requirements**: NOTIF-01, NOTIF-02, NOTIF-03, NOTIF-04, CHAT-01, CHAT-02, CHAT-03, TELE-01, TELE-02, WIFI-01, WIFI-02, WIFI-03, DHCP-01, DHCP-02, SEC-01, SEC-02
+**Success Criteria** (what must be TRUE):
+  1. Yeni cihaz baglantisi veya DDoS alarmi geldiginde telefona push bildirim geliyor ve bildirim kanallari (Guvenlik, Cihaz, Trafik, Sistem) ayri ayri acilip kapatilabiliyor
+  2. AI sohbet ekraninda mesaj gonderilip yanitlar goruntulenebiliyor (gecmis + yapilandirilmis format)
+  3. Telegram bot token/chat ID yapilandirilabiliyor ve bildirim ayarlari degistirilebiliyor
+  4. WiFi AP durumu gorulup SSID/sifre/kanal degistirilebiliyor ve AP acilip kapatilabiliyor
+  5. DHCP havuz bilgileri ve statik IP atamalari goruntulenip yonetilebiliyor, guvenlik esik degerleri ayarlanip kaydedilebiliyor
+**Plans**: TBD
+
+### Phase 14: Android Enhancements
+**Goal**: Uygulama native Android ozelliklerini kullaniyor — ana ekran widget'i, Quick Settings, dokunsal geri bildirim, hizli erisim
+**Depends on**: Phase 8, Phase 13
+**Requirements**: DASH-05, DASH-06, UX-01, UX-02
+**Success Criteria** (what must be TRUE):
+  1. Ana ekrana eklenen Glance widget'inda bant genisligi, cihaz sayisi ve son tehdit bilgisi gorunuyor
+  2. Quick Settings panelinde DNS filtreleme toggle ve cihaz engelleme toggle tile'lari calisiyor
+  3. Kritik uyarilarda (DDoS, engellenen cihaz) telefon titriyor
+  4. Uygulama ikonuna uzun basinca durum kontrol, cihaz engelle ve AI chat kisayollari gorunuyor
+**Plans**: TBD
+
+### Phase 15: Release Build
+**Goal**: Imzali APK uretilip S24 Ultra'ya basariyla yuklenmis — uygulama production-ready
+**Depends on**: Phase 6-14 (tum ozellikler tamamlanmis olmali)
+**Requirements**: UX-03
+**Success Criteria** (what must be TRUE):
+  1. Imzali release APK uretilmis ve S24 Ultra'ya sideload ile basariyla yuklenmis
+  2. Uygulama ilk acilista giris ekranini gosteriyor, giris sonrasi tum ekranlar erisilebilir
+  3. Arka planda push bildirimler calisiyor, uygulama kapatilsa bile bildirim geliyor
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in strict numeric order: 1 → 2 → 3 → 4 → 5
+Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15
+(Phase 11 and 12 can run in parallel after Phase 8)
 
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Bridge Isolation Core | 1/1 | Complete | 2026-02-25 |
-| 2. Accounting Chain Migration | 1/1 | Complete | 2026-02-25 |
-| 3. TC Mark Chain Migration | 1/1 | Complete | 2026-02-25 |
-| 4. Startup and Persistence | 1/1 | Complete | 2026-03-03 |
-| 5. DHCP Gateway and Validation | 2/2 | Complete   | 2026-03-03 |
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. Bridge Isolation Core | v1.0 | 1/1 | Complete | 2026-02-25 |
+| 2. Accounting Chain Migration | v1.0 | 1/1 | Complete | 2026-02-25 |
+| 3. TC Mark Chain Migration | v1.0 | 1/1 | Complete | 2026-02-25 |
+| 4. Startup and Persistence | v1.0 | 1/1 | Complete | 2026-03-03 |
+| 5. DHCP Gateway and Validation | v1.0 | 2/2 | Complete | 2026-03-03 |
+| 6. Project Skeleton | v2.0 | 0/? | Not started | - |
+| 7. Authentication | v2.0 | 0/? | Not started | - |
+| 8. Dashboard | v2.0 | 0/? | Not started | - |
+| 9. Device Management | v2.0 | 0/? | Not started | - |
+| 10. DNS Filtering | v2.0 | 0/? | Not started | - |
+| 11. Network Security | v2.0 | 0/? | Not started | - |
+| 12. Traffic Monitoring | v2.0 | 0/? | Not started | - |
+| 13. Communication & Config | v2.0 | 0/? | Not started | - |
+| 14. Android Enhancements | v2.0 | 0/? | Not started | - |
+| 15. Release Build | v2.0 | 0/? | Not started | - |
