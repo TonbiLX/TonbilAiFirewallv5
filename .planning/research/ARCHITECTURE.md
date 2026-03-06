@@ -1,458 +1,635 @@
-# Architecture Research
+# Architecture Research: TonbilAiOS Android App
 
-**Domain:** Raspberry Pi Router — Bridge-to-Router Mode Transition
-**Researched:** 2026-02-25
-**Confidence:** HIGH (analysis based on actual codebase, BRIDGE_ISOLATION_PLAN.md, and nftables/Linux kernel documented behavior)
+**Domain:** Android mobil uygulama — mevcut FastAPI router yonetim backend'ine istemci
+**Researched:** 2026-03-06
+**Confidence:** HIGH
 
----
-
-## Standard Architecture
-
-### System Overview: Before vs After
-
-#### BEFORE — Transparent Bridge Mode (Current)
+## System Overview
 
 ```
-Internet
-    |
-[ZTE Modem .1]
-    |
-  eth0
-    |
-  br0 (bridge)  <─── L2 forwarding active, modem sees all MACs
-    |
-  eth1
-    |
-[LAN Devices .10, .39, .57, ...]
+┌─────────────────────────────────────────────────────────────────┐
+│                     ANDROID APP (Kotlin)                        │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │                    UI Layer (Compose)                      │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐     │  │
+│  │  │Dashboard │ │ Devices  │ │   DNS    │ │ Traffic  │ ... │  │
+│  │  │ Screen   │ │ Screen   │ │ Screen   │ │ Screen   │     │  │
+│  │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘     │  │
+│  └───────┼─────────────┼───────────┼───────────┼─────────────┘  │
+│          │             │           │           │                │
+│  ┌───────┴─────────────┴───────────┴───────────┴─────────────┐  │
+│  │               ViewModel Layer (per screen)                 │  │
+│  │  StateFlow<UiState> + sealed class Events                  │  │
+│  └──────────────────────────┬────────────────────────────────┘  │
+│                             │                                   │
+│  ┌──────────────────────────┴────────────────────────────────┐  │
+│  │                    Domain Layer                            │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐   │  │
+│  │  │  UseCases    │  │  Models      │  │  Repository    │   │  │
+│  │  │  (optional)  │  │  (domain)    │  │  Interfaces    │   │  │
+│  │  └──────────────┘  └──────────────┘  └────────────────┘   │  │
+│  └──────────────────────────┬────────────────────────────────┘  │
+│                             │                                   │
+│  ┌──────────────────────────┴────────────────────────────────┐  │
+│  │                     Data Layer                             │  │
+│  │  ┌──────────┐  ┌──────────────┐  ┌─────────────────────┐  │  │
+│  │  │Repository│  │  API Service │  │  Local Storage      │  │  │
+│  │  │  Impls   │  │  (Ktor/OkHttp│  │  (DataStore +       │  │  │
+│  │  │          │  │   + WebSocket│  │   Android Keystore) │  │  │
+│  │  └──────────┘  └──────┬───────┘  └─────────────────────┘  │  │
+│  └───────────────────────┼───────────────────────────────────┘  │
+│                          │                                      │
+│  ┌───────────────────────┴───────────────────────────────────┐  │
+│  │                  Network Layer                             │  │
+│  │  ┌─────────────────┐  ┌──────────────┐  ┌──────────────┐  │  │
+│  │  │ NetworkManager  │  │ AuthInter-   │  │ WebSocket    │  │  │
+│  │  │ (local/remote   │  │ ceptor (JWT) │  │ Client       │  │  │
+│  │  │  base URL)      │  │              │  │              │  │  │
+│  │  └─────────────────┘  └──────────────┘  └──────────────┘  │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │                Platform Services                          │  │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │  │
+│  │  │Biometric │  │  FCM     │  │  Theme   │  │Connecti- │  │  │
+│  │  │  Auth    │  │  Service │  │  Engine  │  │vity Mon. │  │  │
+│  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │  │
+│  └───────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                          │
+                    HTTPS / WSS
+                          │
+┌─────────────────────────┴───────────────────────────────────────┐
+│                  EXISTING BACKEND (Raspberry Pi)                │
+│  FastAPI + SQLAlchemy + Redis + nftables                        │
+│  22 REST endpoint grubu + WebSocket                             │
+│  wall.tonbilx.com (remote) / 192.168.1.2 (local)               │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-nftables table layout (current):
+## Component Responsibilities
+
+| Component | Responsibility | Communicates With |
+|-----------|----------------|-------------------|
+| **UI Layer (Compose Screens)** | Kullanici arayuzu render, kullanici etkilesimi | ViewModel (state observe + event dispatch) |
+| **ViewModel Layer** | Ekran state yonetimi, UI event isleme, UseCase/Repository cagrisi | Domain/Data layer, StateFlow ile UI'a state yayma |
+| **Domain Layer** | Is mantigi (ince — cogu is mantigi backend'de), domain modeller, repository arayuzleri | Repository arayuzleri uzerinden Data layer |
+| **Data Layer (Repository)** | Veri kaynaklari arasinda koordinasyon, cache stratejisi | API Service, Local Storage |
+| **API Service** | HTTP istekleri (REST), WebSocket baglantisi | Backend (Ktor HttpClient + OkHttp WebSocket) |
+| **Local Storage** | JWT token, kullanici tercihleri, son gorulen veriler | DataStore + Android Keystore |
+| **NetworkManager** | Yerel/uzak ag secimi, base URL yonetimi | ConnectivityManager, API Service |
+| **AuthInterceptor** | JWT token ekleme, 401 yakalama, token yenileme | TokenStorage, API Service |
+| **BiometricAuth** | Parmak izi / yuz tanima ile oturum acma | BiometricPrompt API, TokenStorage |
+| **FCM Service** | Push bildirim alma, token yonetimi | Firebase, Backend (token kayit) |
+| **ConnectivityMonitor** | Ag durumu izleme, yerel/uzak gecis | Android ConnectivityManager |
+
+## Recommended Project Structure
 
 ```
-table inet tonbilai      (filter: input, forward, output)
-table inet nat           (prerouting DNS redirect, postrouting MASQUERADE)
-table bridge accounting  (chain per_device: hook forward -2)  ← bandwidth counters
-table bridge masquerade_fix  (chain mac_rewrite: hook postrouting 300)  ← MAC rewrite
-table bridge accounting  (chain tc_mark: hook forward -1)    ← TC shaping marks
+com.tonbil.aios/
+├── app/                           # Application sinifi, Hilt entry point
+│   └── TonbilApp.kt
+│
+├── di/                            # Dependency Injection modulleri
+│   ├── NetworkModule.kt           # Ktor client, OkHttp, WebSocket
+│   ├── RepositoryModule.kt        # Repository binding'leri
+│   └── StorageModule.kt           # DataStore, Keystore
+│
+├── data/                          # Data Layer
+│   ├── remote/                    # API servisleri
+│   │   ├── api/                   # Endpoint tanimlari
+│   │   │   ├── AuthApi.kt         # POST /auth/login, /auth/register
+│   │   │   ├── DashboardApi.kt    # GET /dashboard/*
+│   │   │   ├── DeviceApi.kt       # GET/POST/PUT /devices/*
+│   │   │   ├── DnsApi.kt          # GET/POST /dns/*
+│   │   │   ├── FirewallApi.kt     # GET/POST /firewall/*
+│   │   │   ├── VpnApi.kt          # GET/POST /vpn/*
+│   │   │   ├── TrafficApi.kt      # GET /traffic/*
+│   │   │   ├── DdosApi.kt         # GET /ddos/*
+│   │   │   ├── TelegramApi.kt     # GET/POST /telegram/*
+│   │   │   ├── ChatApi.kt         # POST /chat/*
+│   │   │   ├── WifiApi.kt         # GET/POST /wifi/*
+│   │   │   ├── SecurityApi.kt     # GET/PUT /security/*
+│   │   │   ├── ProfileApi.kt      # GET/POST /profiles/*
+│   │   │   ├── ContentCategoryApi.kt
+│   │   │   └── SystemApi.kt       # system-monitor, system-management
+│   │   ├── dto/                   # Data Transfer Objects (API response/request)
+│   │   │   ├── DashboardDto.kt
+│   │   │   ├── DeviceDto.kt
+│   │   │   └── ...
+│   │   └── WebSocketClient.kt    # OkHttp WebSocket wrapper
+│   │
+│   ├── local/                     # Yerel depolama
+│   │   ├── TokenStorage.kt        # JWT token (encrypted DataStore)
+│   │   ├── PreferencesStorage.kt  # Kullanici tercihleri (base URL, tema)
+│   │   └── CacheStorage.kt        # Son dashboard verisi (offline gorunum)
+│   │
+│   ├── repository/                # Repository uygulamalari
+│   │   ├── AuthRepositoryImpl.kt
+│   │   ├── DashboardRepositoryImpl.kt
+│   │   ├── DeviceRepositoryImpl.kt
+│   │   └── ...
+│   │
+│   └── network/                   # Ag altyapisi
+│       ├── NetworkManager.kt      # Base URL secimi (local vs remote)
+│       ├── AuthInterceptor.kt     # JWT header ekleme
+│       ├── ConnectivityMonitor.kt # Ag durumu izleme
+│       └── ApiResult.kt           # sealed class: Success/Error/Loading
+│
+├── domain/                        # Domain Layer (ince)
+│   ├── model/                     # Domain modeller
+│   │   ├── Device.kt
+│   │   ├── DnsStats.kt
+│   │   ├── FirewallRule.kt
+│   │   └── ...
+│   ├── repository/                # Repository arayuzleri
+│   │   ├── AuthRepository.kt
+│   │   ├── DashboardRepository.kt
+│   │   └── ...
+│   └── usecase/                   # Karmasik is mantigi (gerektiginde)
+│       ├── BiometricLoginUseCase.kt
+│       └── SwitchNetworkModeUseCase.kt
+│
+├── ui/                            # UI Layer (Jetpack Compose)
+│   ├── theme/                     # Cyberpunk tema
+│   │   ├── Color.kt              # Neon cyan, magenta, green, amber, red
+│   │   ├── Type.kt               # Tipografi
+│   │   ├── Shape.kt              # Glassmorphism kartlar
+│   │   └── Theme.kt              # TonbilTheme composable
+│   │
+│   ├── navigation/                # Navigasyon
+│   │   ├── NavGraph.kt           # Ana navigasyon grafigi
+│   │   ├── Screen.kt             # @Serializable route tanimlari
+│   │   └── BottomNavBar.kt       # Alt navigasyon cubugu
+│   │
+│   ├── common/                    # Paylasilan UI bilesenleri
+│   │   ├── GlassCard.kt          # Glassmorphism kart (web ile tutarli)
+│   │   ├── NeonBadge.kt
+│   │   ├── StatCard.kt
+│   │   ├── LoadingState.kt
+│   │   └── ErrorState.kt
+│   │
+│   ├── screens/                   # Ekranlar (her biri ViewModel ile)
+│   │   ├── login/
+│   │   │   ├── LoginScreen.kt
+│   │   │   └── LoginViewModel.kt
+│   │   ├── dashboard/
+│   │   │   ├── DashboardScreen.kt
+│   │   │   └── DashboardViewModel.kt
+│   │   ├── devices/
+│   │   │   ├── DeviceListScreen.kt
+│   │   │   ├── DeviceDetailScreen.kt
+│   │   │   └── DevicesViewModel.kt
+│   │   ├── dns/
+│   │   ├── firewall/
+│   │   ├── vpn/
+│   │   ├── traffic/
+│   │   ├── ddos/
+│   │   ├── chat/
+│   │   ├── telegram/
+│   │   ├── wifi/
+│   │   ├── security/
+│   │   ├── profiles/
+│   │   └── settings/             # Uygulama ayarlari (ag modu, tema)
+│   │       ├── SettingsScreen.kt
+│   │       └── SettingsViewModel.kt
+│   │
+│   └── widgets/                   # Dashboard widget'lari
+│       ├── BandwidthGauge.kt
+│       ├── ConnectionStatus.kt
+│       ├── DnsSummaryCard.kt
+│       └── ...
+│
+├── service/                       # Android servisleri
+│   ├── FCMService.kt             # FirebaseMessagingService
+│   └── BiometricHelper.kt        # BiometricPrompt wrapper
+│
+└── util/                          # Yardimci fonksiyonlar
+    ├── DateFormatter.kt
+    ├── ByteFormatter.kt           # Bandwidth formatlamasi
+    └── Extensions.kt
 ```
 
-Packet path for a LAN device reaching the internet (bridge mode):
+### Structure Rationale
 
-```
-[Device frame] → eth1 ingress
-    → bridge forward (L2, no IP stack) → eth0 egress
-        ├─ bridge accounting.per_device (-2): count bytes by MAC
-        ├─ bridge accounting.tc_mark (-1): set SKB mark for shaping
-        └─ bridge masquerade_fix.mac_rewrite (+300): rewrite src MAC to br0 MAC
-    → modem sees Pi's MAC, forwards packet
-```
-
-The `inet tonbilai forward` chain only fires when `br_netfilter` is loaded and
-`net.bridge.bridge-nf-call-iptables=1`, which makes bridge-forwarded frames also
-traverse the inet layer. This is the current mechanism for MAC-based blocking.
-
-#### AFTER — Isolated Router Mode (Target)
-
-```
-Internet
-    |
-[ZTE Modem .1]  ← sees only Pi's MAC
-    |
-  eth0
-    |
-  br0 (Pi IP stack — routing enabled)
-    |
-  eth1
-    |
-[LAN Devices .10, .39, .57, ...]
-```
-
-nftables table layout (target):
-
-```
-table bridge filter      (chain forward: DROP eth1↔eth0 L2 forwarding)
-table bridge accounting  (chain upload: hook input -2, chain download: hook output -2)
-table bridge accounting  (chain tc_mark_up: hook input -1, chain tc_mark_down: hook output -1)
-table inet tonbilai      (filter: input, forward, output — now handles routed packets)
-table inet nat           (prerouting DNS redirect, postrouting MASQUERADE for LAN)
-```
-
-Packet path after isolation:
-
-```
-[Device frame] → eth1 ingress
-    → bridge forward chain: DROP (L2 path killed)
-    → packet passes up to Pi IP stack
-        → bridge accounting.upload (-2): count bytes (iifname eth1, ether saddr MAC)
-        → bridge accounting.tc_mark_up (-1): set SKB mark (iifname eth1, ether saddr MAC)
-    → Pi routes packet: routing table decision
-    → inet tonbilai forward: MAC block, IP block, VPN forward rules
-    → inet nat postrouting: MASQUERADE (LAN subnet → modem)
-    → eth0 egress (Pi's MAC on the wire — modem unaware of LAN devices)
-```
-
-Return path (download):
-
-```
-[Internet response] → eth0 ingress → Pi IP stack
-    → inet tonbilai forward (if applicable)
-    → routed to br0/eth1
-    → bridge accounting.download (-2): count bytes (oifname eth1, ether daddr MAC)
-    → bridge accounting.tc_mark_down (-1): set SKB mark (oifname eth1, ether daddr MAC)
-    → [Device frame] delivered via eth1
-```
-
----
-
-## Component Boundaries
-
-### Kernel-Level Components
-
-| Component | Family | Hook | Priority | Responsibility | Changes |
-|-----------|--------|------|----------|----------------|---------|
-| `bridge filter forward` | bridge | forward | 0 | DROP eth1↔eth0 L2 forwarding | NEW (2 drop rules) |
-| `bridge accounting upload` | bridge | input | -2 | Count bytes from LAN devices (saddr) | RENAMED from per_device |
-| `bridge accounting download` | bridge | output | -2 | Count bytes to LAN devices (daddr) | NEW chain |
-| `bridge accounting tc_mark_up` | bridge | input | -1 | Set SKB mark for upload shaping | RENAMED from tc_mark |
-| `bridge accounting tc_mark_down` | bridge | output | -1 | Set SKB mark for download shaping | NEW chain |
-| `inet tonbilai forward` | inet | forward | 0 | Device block, IP block, VPN permit | UNCHANGED |
-| `inet nat postrouting` | inet | postrouting | 100 | MASQUERADE LAN traffic to modem | UNCHANGED (already present) |
-| `bridge masquerade_fix mac_rewrite` | bridge | postrouting | 300 | MAC rewrite (old mode) | REMOVED |
-
-### Software-Level Components
-
-| Component | File | Responsibility | Changes in Transition |
-|-----------|------|----------------|----------------------|
-| `ensure_bridge_isolation()` | `hal/linux_nftables.py` | Set ip_forward, load br_netfilter, add bridge forward DROP rules, ensure MASQUERADE, remove masquerade_fix table | NEW FUNCTION (replaces ensure_bridge_masquerade) |
-| `remove_bridge_isolation()` | `hal/linux_nftables.py` | Remove bridge forward DROP rules, restore send_redirects | NEW FUNCTION (rollback path) |
-| `ensure_bridge_accounting_chain()` | `hal/linux_nftables.py` | Create upload+download chains with input/output hooks | REWRITE (was single forward-hook per_device chain) |
-| `add_device_counter(mac)` | `hal/linux_nftables.py` | Add counter rules to upload and download chains separately | REWRITE (chain name + iifname/oifname filter) |
-| `remove_device_counter(mac)` | `hal/linux_nftables.py` | Remove counter rules from both chains | REWRITE (two chains) |
-| `read_device_counters()` | `hal/linux_nftables.py` | Read and merge upload+download chain output | REWRITE (two chain reads, merge) |
-| `sync_device_counters(macs)` | `hal/linux_nftables.py` | Sync counter rules across both chains | REWRITE (reference both chains) |
-| `_ensure_tc_mark_chain()` | `hal/linux_tc.py` | Create tc_mark_up and tc_mark_down chains | REWRITE (was single forward-hook tc_mark) |
-| `add_device_limit(mac, rate, ceil)` | `hal/linux_tc.py` | Add mark rules to tc_mark_up and tc_mark_down | REWRITE (chain names + iifname/oifname) |
-| `remove_device_limit(mac)` | `hal/linux_tc.py` | Remove mark rules from both tc_mark chains | REWRITE |
-| `_remove_nft_mark_rule(mac)` | `hal/linux_tc.py` | Handle cleanup for both up/down chains | REWRITE |
-| `lifespan()` startup | `main.py` | Replace ensure_bridge_masquerade call with ensure_bridge_isolation | ONE-LINE SWAP |
-| DHCP pool config | `hal/linux_dhcp_driver.py` + dnsmasq conf | Gateway option changes from 192.168.1.1 to 192.168.1.2 | DHCP config file on Pi + DB update |
-
----
+- **`data/remote/api/`**: Her backend endpoint grubu icin ayri Api sinifi. Backend'deki 22 route grubuna birebir eslesir — tutarlilik ve bulunabilirlik saglar.
+- **`data/remote/dto/`**: API cevaplarinin Kotlin data class karsiliklari. Domain modellerinden ayri tutulur cunku backend sema degisiklikleri sadece bu katmani etkiler.
+- **`domain/`**: Ince katman. Cogu is mantigi backend'de. Repository arayuzleri ve domain modeller burada. UseCase sadece karmasik senaryolar icin (biyometrik login akisi gibi).
+- **`ui/screens/`**: Feature-based organizasyon. Her ekran kendi ViewModel'ini icerir. Web frontend'deki `pages/` + `hooks/` yapisinin Compose karsiligi.
+- **`data/network/`**: Ag altyapisi. NetworkManager yerel/uzak gecisi yonetir. AuthInterceptor tum isteklere JWT ekler.
 
 ## Architectural Patterns
 
-### Pattern 1: Hook Family Boundary — Bridge vs Inet
+### Pattern 1: MVVM with UDF (Unidirectional Data Flow)
 
-**What:** nftables has two separate processing pipelines: `bridge` family and `inet` (IP) family. When `br_netfilter` is active, bridge-forwarded frames can also traverse inet hooks — but the converse is not true. After isolation, L2 forwarding is killed at the bridge forward hook, so all traffic reaches the inet layer exclusively through the Pi's routing stack.
+**What:** ViewModel StateFlow uzerinden UI state yayar, UI event'leri ViewModel'e gonderir. State tek yonlu akar.
+**When to use:** Tum ekranlar icin standart pattern.
+**Trade-offs:** Biraz boilerplate ama testability ve predictability cok yuksek.
 
-**When to use:** Any packet classification that must happen before the IP stack routes the packet (MAC-layer counters, MAC-layer TC marking) must stay in the bridge family. Any IP-level filtering (DDoS protection, VPN forwarding, IP blocklists) stays in the inet family. After isolation, both families remain active — bridge hooks process the physical ingress/egress on eth1, inet hooks process the routed forwarding between LAN and WAN.
+```kotlin
+// UiState sealed interface
+sealed interface DashboardUiState {
+    data object Loading : DashboardUiState
+    data class Success(
+        val bandwidth: BandwidthData,
+        val deviceCount: Int,
+        val dnsStats: DnsStats,
+        val isLocalNetwork: Boolean
+    ) : DashboardUiState
+    data class Error(val message: String) : DashboardUiState
+}
 
-**Critical implication for accounting:** In bridge mode, the `forward` hook fires once for L2-forwarded packets traversing the bridge. After isolation, bridge L2 forwarding is killed, so the `forward` hook no longer sees LAN-to-WAN traffic. Instead:
-- `input` hook fires when a packet arrives on an interface and is destined for the local IP stack (LAN devices sending through Pi).
-- `output` hook fires when the IP stack sends a packet out through an interface (Pi delivering to LAN devices).
+// ViewModel
+@HiltViewModel
+class DashboardViewModel @Inject constructor(
+    private val dashboardRepo: DashboardRepository,
+    private val connectivityMonitor: ConnectivityMonitor
+) : ViewModel() {
 
-This is why all accounting and TC marking chains must migrate from `hook forward` to `hook input` (upload) and `hook output` (download).
+    private val _uiState = MutableStateFlow<DashboardUiState>(DashboardUiState.Loading)
+    val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
-### Pattern 2: Comment-Anchored Rule Identification
+    init { loadDashboard() }
 
-**What:** Every nftables rule added by the software carries a unique `comment` field (e.g., `"bw_aa:bb:cc:dd:ee:ff_up"`, `"tc_mark_{mac}_down"`, `"bridge_isolation_lan_wan"`). Deletion is done by listing chains with `-a` flag to get handle numbers, searching for the comment string, then deleting by handle.
+    fun onRefresh() { loadDashboard() }
 
-**When to use:** Mandatory for all dynamically added rules. This is the existing pattern throughout linux_nftables.py and must be preserved for isolation rules. The two new drop rules must use comments `"bridge_isolation_lan_wan"` and `"bridge_isolation_wan_lan"` so `remove_bridge_isolation()` can find and delete them precisely.
+    private fun loadDashboard() {
+        viewModelScope.launch {
+            _uiState.value = DashboardUiState.Loading
+            dashboardRepo.getSummary()
+                .onSuccess { data -> _uiState.value = DashboardUiState.Success(...) }
+                .onFailure { e -> _uiState.value = DashboardUiState.Error(e.message) }
+        }
+    }
+}
 
-**Example:**
-```python
-# Add with comment
-await run_nft([
-    "add", "rule", "bridge", "filter", "forward",
-    "iifname", "eth1", "oifname", "eth0", "drop",
-    "comment", '"bridge_isolation_lan_wan"',
-])
+// Screen (Compose)
+@Composable
+fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-# Remove by handle lookup
-out = await run_nft(["-a", "list", "chain", "bridge", "filter", "forward"], check=False)
-for line in out.splitlines():
-    if "bridge_isolation_lan_wan" in line:
-        handle_match = re.search(r"handle\s+(\d+)", line)
-        if handle_match:
-            await run_nft(["delete", "rule", "bridge", "filter", "forward",
-                           "handle", handle_match.group(1)], check=False)
+    when (val state = uiState) {
+        is DashboardUiState.Loading -> LoadingState()
+        is DashboardUiState.Success -> DashboardContent(state)
+        is DashboardUiState.Error -> ErrorState(state.message, onRetry = viewModel::onRefresh)
+    }
+}
 ```
 
-### Pattern 3: Idempotent Setup Functions
+### Pattern 2: Dual-Mode Network Manager
 
-**What:** All `ensure_*()` functions check whether the target state already exists before applying it. They check chain presence or comment presence before adding rules. This allows safe repeated calls (startup restarts, hot-reload).
+**What:** Yerel ag (192.168.1.2) ve uzak erisim (wall.tonbilx.com) arasinda otomatik gecis.
+**When to use:** Her API cagrisi oncesinde base URL belirleme.
+**Trade-offs:** Otomatik gecis kullanici deneyimini iyilestirir ama ag degisikliklerinde kisa sureli hatalar olabilir.
 
-**When to use:** `ensure_bridge_isolation()` must follow this pattern: check whether bridge forward DROP rules exist by searching for `"bridge_isolation_lan_wan"` in the ruleset before adding them. Likewise for the MASQUERADE rule (`"bridge_lan_masq"`).
+```kotlin
+class NetworkManager @Inject constructor(
+    private val connectivityMonitor: ConnectivityMonitor,
+    private val preferencesStorage: PreferencesStorage
+) {
+    sealed interface NetworkMode {
+        data object Local : NetworkMode    // 192.168.1.2
+        data object Remote : NetworkMode   // wall.tonbilx.com
+        data object Auto : NetworkMode     // Otomatik secim
+    }
 
-### Pattern 4: TC Marks Survive the Bridge-to-Inet Transition
+    private val _currentMode = MutableStateFlow<NetworkMode>(NetworkMode.Auto)
 
-**What:** SKB (socket buffer) marks set in bridge nftables rules persist as packets travel through the routing stack. The `tc fw filter` on eth0 and eth1 matches these marks to route packets into the correct HTB class. This mechanism works in both bridge mode and router mode — marks are on the SKB, not the frame header.
+    fun getBaseUrl(): String {
+        return when (_currentMode.value) {
+            NetworkMode.Local -> "http://192.168.1.2:8000"
+            NetworkMode.Remote -> "https://wall.tonbilx.com"
+            NetworkMode.Auto -> {
+                if (connectivityMonitor.isOnLocalNetwork()) {
+                    "http://192.168.1.2:8000"
+                } else {
+                    "https://wall.tonbilx.com"
+                }
+            }
+        }
+    }
 
-**When to use:** No change needed to the HTB qdisc setup on eth0 and eth1. The `setup_htb_root()` and `fw filter` application in `linux_tc.py` remain unchanged. Only the nftables chains that set the marks need to be migrated from the forward hook to input/output hooks.
+    // Yerel ag tespiti: WiFi bagli + 192.168.1.x subnet kontrolu
+    // ConnectivityManager + LinkProperties ile
+}
+```
 
----
+### Pattern 3: ApiResult Wrapper
+
+**What:** Tum API cevaplarini Success/Error/NetworkError sealed class ile sarmalar. HTTP hata kodlarini ve ag hatalarini tutarli sekilde isler.
+**When to use:** Tum Repository uygulamalarinda.
+**Trade-offs:** Her API cagrisi try-catch gerektirmez, hata isleme merkezilesti.
+
+```kotlin
+sealed class ApiResult<out T> {
+    data class Success<T>(val data: T) : ApiResult<T>()
+    data class Error(val code: Int, val message: String) : ApiResult<Nothing>()
+    data class NetworkError(val exception: Throwable) : ApiResult<Nothing>()
+}
+
+suspend fun <T> safeApiCall(call: suspend () -> T): ApiResult<T> {
+    return try {
+        ApiResult.Success(call())
+    } catch (e: ClientRequestException) {
+        ApiResult.Error(e.response.status.value, e.message)
+    } catch (e: IOException) {
+        ApiResult.NetworkError(e)
+    }
+}
+```
+
+### Pattern 4: WebSocket ile Canli Veri Akisi
+
+**What:** OkHttp WebSocket client ile backend'den canli dashboard verisi alma. Kotlin Flow olarak sarmalanir.
+**When to use:** Dashboard canli guncelleme, trafik izleme.
+**Trade-offs:** Pil tuketimi artabilir — arka planda WebSocket kapatilmali.
+
+```kotlin
+class WebSocketClient @Inject constructor(
+    private val okHttpClient: OkHttpClient,
+    private val networkManager: NetworkManager,
+    private val tokenStorage: TokenStorage
+) {
+    fun connect(): Flow<WebSocketMessage> = callbackFlow {
+        val token = tokenStorage.getToken()
+        val baseUrl = networkManager.getBaseUrl()
+            .replace("http", "ws")  // ws:// veya wss://
+        val url = "$baseUrl/ws?token=$token"
+
+        val request = Request.Builder().url(url).build()
+        val ws = okHttpClient.newWebSocket(request, object : WebSocketListener() {
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                trySend(parseMessage(text))
+            }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                close(t)
+            }
+        })
+
+        awaitClose { ws.close(1000, "Screen closed") }
+    }.flowOn(Dispatchers.IO)
+}
+```
+
+### Pattern 5: Type-Safe Navigation (Jetpack Navigation 2.8+)
+
+**What:** @Serializable data class'lar ile rota tanimlama. Compile-time tip guvenligi.
+**When to use:** Tum ekranlar arasi gecisler.
+**Trade-offs:** Kotlin Serialization plugin gerektirir ama string-based route'lardan cok daha guvenli.
+
+```kotlin
+// Route tanimlari
+@Serializable data object DashboardRoute
+@Serializable data object DeviceListRoute
+@Serializable data class DeviceDetailRoute(val deviceId: String)
+@Serializable data object DnsRoute
+@Serializable data object FirewallRoute
+
+// NavGraph
+NavHost(navController, startDestination = DashboardRoute) {
+    composable<DashboardRoute> { DashboardScreen() }
+    composable<DeviceListRoute> { DeviceListScreen(onDeviceClick = { id ->
+        navController.navigate(DeviceDetailRoute(id))
+    })}
+    composable<DeviceDetailRoute> { backStackEntry ->
+        val route = backStackEntry.toRoute<DeviceDetailRoute>()
+        DeviceDetailScreen(deviceId = route.deviceId)
+    }
+}
+```
 
 ## Data Flow
 
-### Upload Path (LAN Device → Internet) After Isolation
+### Authentication Flow
 
 ```
-Device (e.g. 192.168.1.57)
-    ↓  sends IP packet
-eth1 ingress
-    ↓
-bridge filter forward chain
-    → iifname eth1 oifname eth0 DROP  ← L2 path killed
-    ↓  (packet not forwarded at L2, passes to IP stack)
-bridge accounting.upload (hook input, prio -2)
-    → iifname "eth1" ether saddr {MAC} counter "bw_{mac}_up"
-    ↓
-bridge accounting.tc_mark_up (hook input, prio -1)
-    → iifname "eth1" ether saddr {MAC} meta mark set {N}
-    ↓
-Pi IP stack — routing decision
-    ↓
-inet tonbilai forward (hook forward, prio 0)
-    → blocked MAC/IP check → drop if blocked
-    → VPN accept rules
-    ↓
-inet nat postrouting (hook postrouting, prio 100)
-    → MASQUERADE (src 192.168.1.x → Pi's external IP on eth0)
-    ↓
-eth0 egress
-    → TC HTB on eth0 (fw filter matches mark → class → rate limit)
-    ↓
-Modem (sees only Pi's MAC/IP)
-    ↓ Internet
+[Uygulama acilis]
+    |
+[TokenStorage] --> Token var mi?
+    |-- EVET --> Token gecerli mi? (exp kontrolu)
+    |     |-- EVET --> [BiometricPrompt] --> Onay --> Ana ekran
+    |     +-- HAYIR --> Login ekrani
+    +-- HAYIR --> Login ekrani
+
+[Login ekrani]
+    |
+Kullanici adi + sifre giris
+    |
+POST /api/v1/auth/login
+    |
+JWT token alindi
+    |
+[TokenStorage] --> Encrypted DataStore'a kaydet
+    |
+[BiometricHelper] --> "Biyometrik kaydet?" --> Evet --> Keystore'a kriptografik bag
+    |
+Ana ekran
 ```
 
-### Download Path (Internet → LAN Device) After Isolation
+### Dashboard Real-time Data Flow
 
 ```
-Internet response
-    ↓
-eth0 ingress
-    → TC HTB on eth0 (fw filter — classifies returning traffic if marked)
-    ↓
-Pi IP stack — conntrack reversal (MASQUERADE inverse)
-    ↓
-inet tonbilai forward
-    ↓
-Routing decision → br0/eth1
-    ↓
-bridge accounting.download (hook output, prio -2)
-    → oifname "eth1" ether daddr {MAC} counter "bw_{mac}_down"
-    ↓
-bridge accounting.tc_mark_down (hook output, prio -1)
-    → oifname "eth1" ether daddr {MAC} meta mark set {N}
-    ↓
-eth1 egress
-    → TC HTB on eth1 (fw filter matches mark → class → rate limit)
-    ↓
-Device receives packet
+[DashboardScreen]
+    | observe
+[DashboardViewModel]
+    |-- StateFlow<DashboardUiState>  <-- REST: GET /dashboard/summary (ilk yuklenme)
+    +-- SharedFlow<LiveUpdate>       <-- WebSocket /ws (canli guncelleme)
+        |
+[DashboardRepository]
+    |-- dashboardApi.getSummary()    --> HTTP GET --> Backend
+    +-- webSocketClient.connect()    --> WSS --> Backend
+        |
+[Backend Response]
+    | parse (DTO --> Domain Model)
+[ViewModel] --> _uiState.value = Success(...)
+    | collectAsStateWithLifecycle()
+[DashboardScreen] --> recompose
 ```
 
-### DNS Query Path (Unchanged)
+### Network Mode Selection Flow
 
 ```
-Device DNS query → eth1 → Pi → inet nat prerouting
-    → redirect to port 5353 (dns_proxy.py)
-    → profile/blocklist lookup (Redis)
-    → ALLOW: forward to upstream DNS
-    → BLOCK: return NXDOMAIN or block page IP
+[Uygulama baslarken]
+    |
+[ConnectivityMonitor] --> Ag durumu dinle
+    |
+WiFi bagli mi? --> EVET --> WiFi IP 192.168.1.x mi?
+    |-- EVET --> NetworkMode.Local (http://192.168.1.2:8000)
+    |          Daha dusuk latency, sifresiz HTTP (yerel ag)
+    +-- HAYIR --> NetworkMode.Remote (https://wall.tonbilx.com)
+               HTTPS zorunlu, internet uzerinden
+
+[Ag degistiginde] --> ConnectivityMonitor callback
+    |
+[NetworkManager] --> Base URL guncelle
+    |
+[Aktif API cagrilari] --> Yeni base URL ile devam
+[Aktif WebSocket] --> Yeniden baglan
 ```
 
-DNS is entirely within Pi's IP stack and is unaffected by bridge isolation. The dns_proxy worker binds to port 53/5353 on Pi's address.
-
-### DHCP Gateway Change Impact
+### Push Notification Flow
 
 ```
-Before: dnsmasq sends dhcp-option=3,192.168.1.1 (modem as gateway)
-After:  dnsmasq sends dhcp-option=3,192.168.1.2 (Pi as gateway)
-
-Client ARP for .2 → Pi responds → Pi routes packet
-Existing leases: clients keep .1 as gateway until DHCP renew
-    → short-term: some clients route via modem directly → modem blocks (no Pi NAT)
-    → fix: send DHCP FORCERENEW or wait lease expiry (24h default)
-    → immediate fix: restart dnsmasq (clients re-request) or reduce lease time temporarily
+[Backend olay meydana geldi] (DDoS saldirisi, yeni cihaz, vb.)
+    |
+Backend --> Firebase Admin SDK --> FCM sunucusu
+    |
+FCM --> Android cihaz
+    |
+[FCMService.onMessageReceived()]
+    |
+|-- Uygulama on planda --> Bildirim gosterme, UI guncelle
++-- Uygulama arka planda --> Android Notification Channel ile bildirim goster
+    | kullanici tikladi
+    Deep link ile ilgili ekrana git
 ```
 
----
+### Key Data Flows Summary
 
-## Build Order (Required Sequence)
-
-The transition has hard dependencies. Building out of order causes connectivity loss or broken accounting.
-
-### Phase 1: nftables HAL — Bridge Isolation Function (FIRST)
-
-**Must happen before anything else.** Without `ensure_bridge_isolation()`, there is no router mode to validate against.
-
-Files to change:
-- `backend/app/hal/linux_nftables.py`: Add `ensure_bridge_isolation()` and `remove_bridge_isolation()`
-- Keep `ensure_bridge_masquerade()` in place during development (remove after Phase 3)
-
-Rationale: This function is the single source of truth for the new network topology. All other components depend on the IP stack receiving packets that previously bypassed it.
-
-### Phase 2: Bridge Accounting Chain Migration (SECOND)
-
-**Depends on Phase 1** because the accounting chains must match the hook that now receives traffic. After Phase 1 drops L2 forwarding, the old `per_device forward` chain sees zero traffic. The new `upload (input)` and `download (output)` chains must exist before bandwidth data becomes meaningful.
-
-Files to change:
-- `backend/app/hal/linux_nftables.py`:
-  - Rewrite `ensure_bridge_accounting_chain()` (two chains, input/output hooks)
-  - Rewrite `add_device_counter(mac)` (upload chain with iifname filter, download chain with oifname filter)
-  - Rewrite `remove_device_counter(mac)` (delete from both chains)
-  - Rewrite `read_device_counters()` (read both chains, merge results)
-  - Rewrite `sync_device_counters(macs)` (reference both chain names)
-  - Update `BRIDGE_CHAIN` constant or remove it (replace with `"upload"` and `"download"`)
-
-### Phase 3: TC Marking Chain Migration (THIRD)
-
-**Depends on Phase 2** conceptually (same hook migration pattern) but technically independent of Phase 2. Must happen after Phase 1 for the same reason — the old `tc_mark forward` chain is dead after isolation.
-
-Files to change:
-- `backend/app/hal/linux_tc.py`:
-  - Rewrite `_ensure_tc_mark_chain()` (two chains: tc_mark_up input, tc_mark_down output)
-  - Rewrite `add_device_limit(mac, rate, ceil)` mark rules (tc_mark_up with iifname, tc_mark_down with oifname)
-  - Rewrite `remove_device_limit(mac)` (both chains)
-  - Rewrite `_remove_nft_mark_rule(mac)` (both chains)
-  - `setup_htb_root()`, `get_device_stats()`: UNCHANGED (HTB on slave interfaces stays identical)
-
-### Phase 4: main.py Startup Swap (FOURTH)
-
-**Depends on Phases 1-3** being implemented. The one-line swap from `ensure_bridge_masquerade` to `ensure_bridge_isolation` is the deployment trigger. All HAL functions must be correct before this is activated.
-
-File to change:
-- `backend/app/main.py` lifespan(): replace `ensure_bridge_masquerade` import and call with `ensure_bridge_isolation`
-- Retain `_restore_bandwidth_limits()` call — it calls `tc.add_device_limit()` which will now use the migrated marking chains
-
-### Phase 5: DHCP Gateway Update (FIFTH — LAST, separate from code)
-
-**Independent of Phases 1-4** in terms of code changes, but must happen after the router mode is live on the Pi. Changing the gateway before bridge isolation is active would route LAN traffic to Pi without NAT, breaking connectivity.
-
-Actions (on Pi via SSH, not code files):
-1. Update `/etc/dnsmasq.d/pool-1.conf`: `dhcp-option=3,192.168.1.2`
-2. Update `tonbilaios.dhcp_pools` table: `UPDATE dhcp_pools SET gateway='192.168.1.2'`
-3. Reload dnsmasq: `sudo systemctl reload dnsmasq`
-4. Persist sysctl: add `net.ipv4.conf.all.send_redirects=0` to `/etc/sysctl.d/99-bridge-isolation.conf`
-
----
+1. **REST API (tek seferlik veri):** Screen acilir --> ViewModel init --> Repository.fetch() --> ApiService.get() --> HTTP GET --> JSON parse --> Domain Model --> StateFlow --> UI recompose
+2. **WebSocket (canli veri):** ViewModel init --> WebSocketClient.connect() --> Flow<Message> --> ViewModel collect --> StateFlow update --> UI recompose
+3. **Biyometrik auth:** Uygulama acilis --> Token var --> BiometricPrompt goster --> CryptoObject ile token decrypt --> API isteklerine JWT ekleme basla
+4. **FCM push:** Backend olay --> FCM gonder --> FCMService aldi --> NotificationManager ile goster veya UI guncelle
 
 ## Integration Points
 
-### Components Unaffected by Isolation
+### External Services
 
-| Component | Reason Unaffected |
-|-----------|-------------------|
-| `inet tonbilai` (DDoS, device block, VPN forward) | Already on IP stack, isolation brings more traffic here, not less |
-| `inet nat` prerouting (DNS redirect) | Operates on Pi's local traffic, unchanged |
-| `wg0` VPN server | Independent interface, routing through Pi's stack already |
-| `dns_proxy.py` | Binds to Pi's IP port 53/5353, no L2 dependency |
-| `flow_tracker.py` (conntrack) | conntrack tracks IP flows; in bridge mode with br_netfilter these were visible; in router mode they are natively visible without br_netfilter dependency |
-| `traffic_monitor.py` | Same as flow_tracker |
-| `device_discovery.py` | ARP-based, works on br0 interface regardless of mode |
-| TC HTB qdiscs on eth0/eth1 | Slave interface qdiscs are unchanged; marks on SKBs survive routing |
-| Fail2ban | SSH protection on Pi's inet input chain |
-| Telegram, AI workers | Application-level, no network topology dependency |
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| **TonbilAiOS Backend (REST)** | Ktor HttpClient, JSON serialization (kotlinx.serialization) | 22 endpoint grubu, JWT auth header |
+| **TonbilAiOS Backend (WS)** | OkHttp WebSocket | Token query param ile auth, auto-reconnect gerekli |
+| **Firebase Cloud Messaging** | firebase-messaging SDK, FirebaseMessagingService | Backend'e FCM token gondermek icin yeni endpoint gerekli |
+| **Android Biometric** | androidx.biometric:biometric, BiometricPrompt | BIOMETRIC_STRONG + DEVICE_CREDENTIAL fallback |
+| **Android Keystore** | java.security.KeyStore | JWT token sifreleme anahtari burada saklanir |
 
-### Critical Internal Boundary: Bridge Family vs Inet Family
+### Internal Boundaries
 
-```
-bridge family (L2):
-    ├─ bridge filter forward    → DROP rules (isolation boundary)
-    ├─ bridge accounting upload → MAC counter, hook input
-    ├─ bridge accounting download → MAC counter, hook output
-    ├─ bridge accounting tc_mark_up → SKB mark, hook input
-    └─ bridge accounting tc_mark_down → SKB mark, hook output
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| UI <-> ViewModel | StateFlow (down), method calls / events (up) | Lifecycle-aware collection (collectAsStateWithLifecycle) |
+| ViewModel <-> Repository | suspend fun calls, Flow returns | Coroutine scope ViewModel'de, IO dispatcher Repository'de |
+| Repository <-> API | suspend fun HTTP calls | ApiResult wrapper, AuthInterceptor otomatik JWT ekler |
+| Repository <-> LocalStorage | suspend fun DataStore read/write | Sifrelenmis token, kullanici tercihleri |
+| App <-> FCM | FirebaseMessagingService callback | Token degisince backend'e bildir |
 
-inet family (L3):
-    ├─ inet tonbilai input      → rate limiting, SSH protection
-    ├─ inet tonbilai forward    → device block, VPN accept, IP block
-    ├─ inet nat prerouting      → DNS redirect (port 53 → 5353)
-    └─ inet nat postrouting     → MASQUERADE (LAN → WAN)
-```
+### Backend Integration: Required New Endpoints
 
-After isolation, bridge family sees traffic only on eth1 physical ingress/egress. The inet family sees all routed traffic. These two domains do not overlap for LAN↔WAN flows — bridge hooks classify and mark, inet hooks filter and NAT.
+Mevcut 22 endpoint grubuna ek olarak backend'de asagidaki endpoint'ler eklenmeli:
 
-### HAL Layer Coupling
-
-```
-linux_tc.py
-    └─ calls linux_nftables.run_nft() for bridge mark chains
-    └─ has its own run_nft() wrapper (local, not shared)
-    └─ uses BRIDGE_TABLE = "accounting" (matches linux_nftables.py BRIDGE_TABLE)
-
-linux_nftables.py
-    └─ creates and owns "bridge accounting" table
-    └─ linux_tc.py adds chains and rules to this shared table
-    → RISK: both files must agree on table name and chain names
-    → RECOMMENDATION: define chain name constants in ONE place and import
-```
-
-The current codebase duplicates the `BRIDGE_TABLE = "accounting"` constant and `run_nft()` function between files. After the migration adds `tc_mark_up` and `tc_mark_down` chains to this shared table, the naming must remain consistent.
-
----
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/v1/auth/fcm-token` | POST | Mobil cihaz FCM token kaydi |
+| `/api/v1/auth/fcm-token` | DELETE | FCM token silme (cikis yapinca) |
+| `/api/v1/notifications/subscribe` | POST | Bildirim kategorileri secimi (DDoS, yeni cihaz, vb.) |
+| `/api/v1/notifications/subscribe` | GET | Mevcut abonelik durumu |
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Migrating Accounting/TC Before Isolation Drop Rules
+### Anti-Pattern 1: Fat ViewModel
 
-**What people do:** Change the accounting chains from `forward` to `input`/`output` hooks first, then add the isolation drop rules later.
+**What people do:** Tum is mantigi, ag cagrisi, veri donusumu ViewModel'de yapmak.
+**Why it's wrong:** Test edilemez, okunmaz, 500+ satir ViewModel'ler olusur.
+**Do this instead:** Repository pattern kullan. ViewModel sadece UI state yonetir, veri operasyonlari Repository'de.
 
-**Why it's wrong:** Before the bridge forward DROP rules are in place, `hook input` and `hook output` in the bridge family only see traffic explicitly addressed to/from the bridge device itself (Pi's own traffic). LAN-to-WAN bridge-forwarded frames do NOT traverse bridge input/output hooks — they only use the forward hook. Adding input/output accounting chains before isolation would count zero bytes for LAN device traffic.
+### Anti-Pattern 2: Composable Icinde Dogrudan API Cagrisi
 
-**Do this instead:** Add bridge forward DROP rules first (Phase 1 `ensure_bridge_isolation()`). This forces all LAN traffic up to the IP stack, which then means all delivery back to eth1 goes through bridge output. Only after this is the input/output hook approach correct.
+**What people do:** LaunchedEffect icinde dogrudan API cagrisi yapmak.
+**Why it's wrong:** Recomposition'da tekrar calisir, lifecycle sorunlari, bellek sizintisi.
+**Do this instead:** ViewModel.init{} veya event-driven API cagrilari. Composable sadece state gosterir.
 
-### Anti-Pattern 2: Removing the masquerade_fix Table Without MASQUERADE in Inet
+### Anti-Pattern 3: Her Ekran Icin Ayri Network Instance
 
-**What people do:** Delete `bridge masquerade_fix` table (MAC rewrite) as part of cleanup without verifying the `inet nat postrouting` MASQUERADE rule is in place.
+**What people do:** Her ViewModel'de yeni HttpClient olusturmak.
+**Why it's wrong:** Bellek israfi, connection pool paylasimi yok, auth interceptor tekrari.
+**Do this instead:** Hilt ile singleton HttpClient, tum Repository'ler ayni instance'i kullanir.
 
-**Why it's wrong:** Without either MAC rewrite (old mode) or MASQUERADE (new mode), the Pi sends packets with LAN device source IPs to the modem. The modem discards or does not route return traffic, breaking internet access for all devices.
+### Anti-Pattern 4: WebSocket'i Arka Planda Acik Birakma
 
-**Do this instead:** `ensure_bridge_isolation()` must verify and add the `bridge_lan_masq` MASQUERADE rule to `inet nat postrouting` before or simultaneously with removing the masquerade_fix table. The function in BRIDGE_ISOLATION_PLAN.md does this correctly — steps 5 and 6 are: add MASQUERADE → remove masquerade_fix. Never reverse this order.
+**What people do:** App arka plana gecince WebSocket'i kapatmamak.
+**Why it's wrong:** Pil tuketimi, gereksiz ag trafigi, backend'de zombie connection.
+**Do this instead:** Lifecycle-aware WebSocket yonetimi. ON_STOP'da kapat, ON_START'da yeniden baglan. Dashboard ekranindayken acik, baska ekranda kapatilabilir.
 
-### Anti-Pattern 3: Hardcoding Chain Names in Both linux_nftables.py and linux_tc.py
+### Anti-Pattern 5: Plaintext Token Storage
 
-**What people do:** Keep `BRIDGE_CHAIN = "per_device"` in linux_nftables.py and `TC_MARK_CHAIN = "tc_mark"` in linux_tc.py as separate constants with no cross-reference.
+**What people do:** JWT token'i SharedPreferences'a sifresiz kaydetmek.
+**Why it's wrong:** Root cihazlarda veya backup extraction ile token calinabilir.
+**Do this instead:** DataStore + Android Keystore tabanli AES-GCM sifreleme kullan.
 
-**Why it's wrong:** After migration, linux_tc.py adds `tc_mark_up` and `tc_mark_down` chains to the same `bridge accounting` table owned by linux_nftables.py. If linux_nftables.py's `ensure_bridge_accounting_chain()` creates the table but doesn't create the TC chains, and linux_tc.py's `_ensure_tc_mark_chain()` adds them, the shared table has mixed ownership. Any call to `nft flush table bridge accounting` (which could happen in error recovery) would destroy TC chains that linux_tc.py expects to exist.
+## Build Order (Dependency Chain)
 
-**Do this instead:** Make `ensure_bridge_accounting_chain()` in linux_nftables.py responsible for creating ALL chains in the `bridge accounting` table, including `upload`, `download`, `tc_mark_up`, and `tc_mark_down`. linux_tc.py's `_ensure_tc_mark_chain()` should call `ensure_bridge_accounting_chain()` from linux_nftables.py, or at minimum call it first and only add rules into pre-existing chains.
+Asagidaki siralama, bilesenlerin birbirine bagimliligina gore olusturulmustur:
 
-### Anti-Pattern 4: DHCP Gateway Change Before Router Mode is Active
+```
+Phase 1: TEMEL ALTYAPI (hicbir seye bagimli degil)
+|-- Proje kurulumu (Gradle, Hilt, tema)
+|-- NetworkManager + AuthInterceptor + ApiResult
+|-- TokenStorage (encrypted DataStore + Keystore)
++-- Login ekrani + AuthRepository
+    --> Sonuc: Uygulamaya giris yapilabiliyor, API'ye baglanti var
 
-**What people do:** Update `/etc/dnsmasq.d/pool-1.conf` to `dhcp-option=3,192.168.1.2` and reload dnsmasq before the bridge isolation drop rules are in effect.
+Phase 2: CEKIRDEK UI (Phase 1'e bagimli)
+|-- Navigasyon grafigi + BottomNavBar
+|-- GlassCard + ortak UI bilesenleri (NeonBadge, StatCard)
+|-- Dashboard ekrani + DashboardRepository
++-- WebSocket client (canli veri)
+    --> Sonuc: Dashboard calisiyor, canli veri akiyor
 
-**Why it's wrong:** Clients that receive new DHCP leases will ARP for 192.168.1.2 as their gateway. Pi responds. Clients send traffic to Pi. But without NAT (the masquerade_fix table is gone, bridge_lan_masq may not be in place yet), Pi either routes packets without masquerading (modem rejects non-Pi source IPs) or drops them. Result: internet outage for all devices that renew leases.
+Phase 3: OZELLIK EKRANLARI (Phase 2'ye bagimli)
+|-- Cihaz listesi + detay
+|-- DNS filtreleme + kategoriler + profiller
+|-- Guvenlik duvari
+|-- VPN yonetimi
+|-- Trafik izleme
++-- Diger ekranlar (DDoS, WiFi, Telegram, Chat, Security)
+    --> Sonuc: Tum web ozelliklerin mobil karsiligi hazir
 
-**Do this instead:** Activate bridge isolation fully (Phases 1-4 deployed and backend restarted) before changing DHCP gateway. Phase 5 is explicitly last for this reason.
+Phase 4: PLATFORM ENTEGRASYONU (Phase 1'e bagimli, Phase 3 ile paralel olabilir)
+|-- Biyometrik auth (BiometricPrompt + Keystore)
+|-- FCM push notification + backend endpoint'leri
+|-- ConnectivityMonitor (yerel/uzak otomatik gecis)
++-- Deep linking (bildirimden ekrana)
+    --> Sonuc: Mobil-ozel ozellikler hazir
 
----
+Phase 5: CILALAMA + DAGITIM
+|-- Offline/hata durumlari iyilestirme
+|-- Pull-to-refresh tum ekranlarda
+|-- Neon glow animasyonlari
++-- APK build + imzalama + dagitim
+    --> Sonuc: Uretim kalitesinde uygulama
+```
 
-## Scalability Considerations
+**Build order rationale:**
+- Phase 1 olmadan hicbir sey calismaz — ag, auth ve token altyapisi her seyin temeli.
+- Phase 2 (navigasyon + dashboard) uygulamanin iskeleti — diger ekranlar buna eklenir.
+- Phase 3 ekranlari birbirinden bagimsiz, paralel gelistirilebilir.
+- Phase 4 platform servisleri Phase 1 uzerine kurulur ama Phase 3 ile paralel ilerleyebilir.
+- Phase 5 en sona kalir cunku tum fonksiyonellik hazir olmali.
 
-This is a single Raspberry Pi router. Traditional scale axes do not apply. Instead, the relevant scalability dimension is "number of tracked devices."
+## Scaling Considerations
 
-| Tracked Devices | nftables Chain Concern |
-|-----------------|------------------------|
-| 1-20 devices | No concern; each device has 2 counter rules + 2 TC mark rules |
-| 20-100 devices | Each device adds 4 bridge chain rules (2 in accounting, 2 in tc_mark). At 100 devices = 400 bridge rules. nftables handles this without issue. |
-| 100+ devices | Rule lookup is linear per chain. Consider nftables `set` + `map` approach for O(1) lookup. Not required for a home/SMB router scenario. |
+| Concern | Bu Proje (tek kullanici) | Gelecek (coklu cihaz) |
+|---------|--------------------------|----------------------|
+| API istekleri | Tek cihaz, minimal yuk | Rate limiting zaten backend'de var |
+| WebSocket | Tek baglanti | Backend MAX_WS_CONNECTIONS=100, sorun yok |
+| Push notification | Tek FCM token | Coklu token destegi backend'e eklenmeli |
+| Ag gecisi | Manuel/otomatik | Sorunsuz, ConnectivityManager callback |
 
-The hook migration from one forward chain to two input/output chains does not change performance characteristics. Bridge hooks are identical in evaluation cost to forward hooks.
-
----
+Bu proje esasen tek kullanici (ev aglari icin router yonetimi). Olceklendirme kritik degil. Performans odagi: dusuk latency, dusuk pil tuketimi, hizli UI yaniti.
 
 ## Sources
 
-- `backend/app/hal/linux_nftables.py` — actual implementation (read and analyzed)
-- `backend/app/hal/linux_tc.py` — actual implementation (read and analyzed)
-- `backend/app/main.py` lifespan() — startup sequence (read and analyzed)
-- `BRIDGE_ISOLATION_PLAN.md` — migration design document (read in full)
-- `.planning/PROJECT.md` — milestone context and constraints
-- nftables bridge family hook documentation: hook input/output fire for bridge device's own traffic and bridge-local delivery; hook forward fires for L2-forwarded frames. This is the fundamental reason the chain migration is necessary. (HIGH confidence — standard Linux kernel/nftables documented behavior)
-- br_netfilter module: when loaded with `bridge-nf-call-iptables=1`, bridge-forwarded frames additionally traverse inet hooks. After isolation, this is no longer needed for forwarding (packets reach inet via routing), but it must remain loaded for the `inet tonbilai forward` MAC-block rules to see bridge-originated connections. (MEDIUM confidence — validate on target Pi that `inet tonbilai forward` MAC block still fires for LAN devices after isolation)
+- [Android Biometric Auth - Official Docs](https://developer.android.com/identity/sign-in/biometric-auth) - HIGH confidence
+- [Jetpack Compose Architecture - Official](https://developer.android.com/develop/ui/compose/architecture) - HIGH confidence
+- [Type-safe Navigation in Compose](https://developer.android.com/guide/navigation/design/type-safety) - HIGH confidence
+- [Firebase Cloud Messaging Setup](https://firebase.google.com/docs/cloud-messaging/android/get-started) - HIGH confidence
+- [Ktor vs Retrofit Comparison](https://proandroiddev.com/when-to-use-retrofit-and-when-to-use-ktor-a-guide-for-android-developers-918491dcf69a) - MEDIUM confidence
+- [Hilt vs Koin - Compile-time vs Runtime DI](https://www.droidcon.com/2025/11/26/hilt-vs-koin-the-hidden-cost-of-runtime-injection-and-why-compile-time-di-wins/) - MEDIUM confidence
+- [Secure JWT Storage with DataStore + Keystore](https://medium.com/@mohammad.hasan.mahdavi81/securely-storing-jwt-tokens-in-android-with-datastore-and-manual-encryption-741b104a93d3) - MEDIUM confidence
+- [EncryptedSharedPreferences Deprecation Status](https://medium.com/@n20/encryptedsharedpreferences-is-deprecated-what-should-android-developers-use-now-7476140e8347) - MEDIUM confidence
+- Backend kaynak kodu analizi: `backend/app/api/v1/router.py`, `auth.py`, `ws.py` - HIGH confidence (dogrudan okuma)
 
 ---
-*Architecture research for: TonbilAiOS Bridge-to-Router Isolation Transition*
-*Researched: 2026-02-25*
+*Architecture research for: TonbilAiOS Android App*
+*Researched: 2026-03-06*
