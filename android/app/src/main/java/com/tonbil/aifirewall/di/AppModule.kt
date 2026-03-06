@@ -8,6 +8,8 @@ import com.tonbil.aifirewall.data.remote.WebSocketManager
 import com.tonbil.aifirewall.data.remote.createTestHttpClient
 import com.tonbil.aifirewall.data.repository.AuthRepository
 import com.tonbil.aifirewall.data.repository.DashboardRepository
+import com.tonbil.aifirewall.data.repository.DeviceRepository
+import com.tonbil.aifirewall.data.repository.ProfileRepository
 import com.tonbil.aifirewall.feature.auth.LoginViewModel
 import com.tonbil.aifirewall.feature.auth.ServerSettingsViewModel
 import com.tonbil.aifirewall.feature.dashboard.DashboardViewModel
@@ -29,6 +31,8 @@ val appModule = module {
     single { AuthRepository(get(), get<TokenManager>()) }
     single { WebSocketManager(get(), get<ServerDiscovery>(), get<TokenManager>()) }
     single { DashboardRepository(get()) }
+    single { DeviceRepository(get()) }
+    single { ProfileRepository(get()) }
 }
 
 val featureModules = module {
