@@ -12,8 +12,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **SETUP-01**: Gelistirme ortami kurulumu — JDK 21, Android SDK, Gradle, komut satirindan APK build
 - [x] **SETUP-02**: Kotlin + Jetpack Compose proje iskeleti (AGP 9.0, Compose BOM, Koin DI, Navigation)
 - [x] **SETUP-03**: Cyberpunk tema — neon cyan/magenta/green/amber/red renk paleti + koyu arka plan
-- [ ] **SETUP-04**: Navigasyon yapisi — bottom navigation + ekranlar arasi gecis (type-safe routes)
-- [ ] **SETUP-05**: Ktor API client — base URL, JSON serialization, hata yonetimi
+- [x] **SETUP-04**: Navigasyon yapisi — bottom navigation + ekranlar arasi gecis (type-safe routes)
+- [x] **SETUP-05**: Ktor API client — base URL, JSON serialization, hata yonetimi
 
 ### Authentication
 
@@ -143,8 +143,8 @@ Deferred to future release.
 | SETUP-01 | Phase 6 | Complete |
 | SETUP-02 | Phase 6 | Complete |
 | SETUP-03 | Phase 6 | Complete |
-| SETUP-04 | Phase 6 | Pending |
-| SETUP-05 | Phase 6 | Pending |
+| SETUP-04 | Phase 6 | Complete |
+| SETUP-05 | Phase 6 | Complete |
 | AUTH-01 | Phase 7 | Pending |
 | AUTH-02 | Phase 7 | Pending |
 | AUTH-03 | Phase 7 | Pending |
