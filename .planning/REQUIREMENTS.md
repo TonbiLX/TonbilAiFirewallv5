@@ -1,136 +1,154 @@
-# Requirements: TonbilAiOS Bridge Isolation
+# Requirements: TonbilAiOS Android App v2.0
 
-**Defined:** 2026-02-25
-**Core Value:** Modem sadece Pi'yi gorsun, tum LAN cihazlari modemden gizlensin — trafik Pi'nin IP stack'i uzerinden route edilsin.
+**Defined:** 2026-03-06
+**Core Value:** TonbilAiOS v5'in tum ozelliklerini Samsung S24 Ultra uzerinden yonetme ve izleme
 
 ## v1 Requirements
 
-Requirements for bridge isolation transition. Each maps to roadmap phases.
+Requirements for initial release. Each maps to roadmap phases.
 
-### Bridge Isolation Core
+### Project Setup
 
-- [x] **ISOL-01**: Pi, bridge forward chain'inde eth0↔eth1 arasi L2 iletimi drop kurallari ile engelleyebilmeli
-- [x] **ISOL-02**: Pi, inet nat postrouting'de LAN subnet icin MASQUERADE kurali uygulayabilmeli
-- [x] **ISOL-03**: ip_forward=1 sysctl ayari aktif ve kalici olmali
-- [x] **ISOL-04**: br_netfilter modulu yuklu ve bridge-nf-call-iptables=1 aktif olmali
-- [x] **ISOL-05**: ICMP redirect (send_redirects) tum interface'lerde devre disi olmali
-- [x] **ISOL-06**: Eski bridge masquerade_fix tablosu kaldirilmali (MAC rewrite artik gereksiz)
-- [x] **ISOL-07**: Izolasyon kurallari atomik olarak uygulanmali (nft -f ile tek transaction)
+- [ ] **SETUP-01**: Gelistirme ortami kurulumu — JDK 21, Android SDK, Gradle, komut satirindan APK build
+- [ ] **SETUP-02**: Kotlin + Jetpack Compose proje iskeleti (AGP 9.0, Compose BOM, Koin DI, Navigation)
+- [ ] **SETUP-03**: Cyberpunk tema — neon cyan/magenta/green/amber/red renk paleti + koyu arka plan
+- [ ] **SETUP-04**: Navigasyon yapisi — bottom navigation + ekranlar arasi gecis (type-safe routes)
+- [ ] **SETUP-05**: Ktor API client — base URL, JSON serialization, hata yonetimi
 
-### Rollback
+### Authentication
 
-- [x] **ROLL-01**: remove_bridge_isolation() fonksiyonu ile seffaf kopru moduna donulebilmeli
-- [x] **ROLL-02**: Rollback sirasinda izolasyon kurallari handle ile silinmeli
-- [x] **ROLL-03**: Rollback sirasinda ICMP redirect'ler geri acilmali
+- [ ] **AUTH-01**: Kullanici email/sifre ile giris yapabilir (mevcut JWT auth)
+- [ ] **AUTH-02**: Biyometrik kimlik dogrulama — parmak izi veya yuz tanima ile giris
+- [ ] **AUTH-03**: JWT token guvenli depolama (EncryptedSharedPreferences)
+- [ ] **AUTH-04**: Otomatik token yenileme (Mutex ile race condition onleme)
+- [ ] **AUTH-05**: Auto-discovery — yerel (192.168.1.2) / uzak (wall.tonbilx.com) otomatik gecis
+- [ ] **AUTH-06**: Sunucu ayarlari ekrani — manuel URL yapilandirma + baglanti testi
 
-### Accounting Migration
+### Dashboard
 
-- [x] **ACCT-01**: Bridge accounting per_device chain'i (forward hook) upload/download chain'lerine (input/output hook) tasinmali
-- [x] **ACCT-02**: Upload chain: iifname eth1, ether saddr MAC ile counter kurallar icermeli
-- [x] **ACCT-03**: Download chain: oifname eth1, ether daddr MAC ile counter kurallar icermeli
-- [x] **ACCT-04**: add_device_counter(mac) yeni chain'lere kural eklemeli
-- [x] **ACCT-05**: remove_device_counter(mac) her iki chain'den kural silmeli
-- [x] **ACCT-06**: read_device_counters() her iki chain'i okuyup birlestirmeli
-- [x] **ACCT-07**: sync_device_counters(macs) yeni chain isimlerini kullanmali
+- [ ] **DASH-01**: Ana dashboard ekrani — baglanti durumu, bant genisligi, cihaz sayisi, DNS ozet
+- [ ] **DASH-02**: WebSocket canli veri akisi — bandwidth, DNS, cihaz guncellemeleri (lifecycle-safe)
+- [ ] **DASH-03**: Istatistik kartlari — toplam trafik, engellenen sorgu, aktif cihaz, tehdit sayisi
+- [ ] **DASH-04**: Bant genisligi grafigi (Vico chart)
+- [ ] **DASH-05**: Home screen widget (Glance) — bant genisligi, cihaz sayisi, son tehdit
+- [ ] **DASH-06**: Quick Settings tile — DNS filtreleme toggle + cihaz engelleme toggle
 
-### TC Mark Migration
+### Device Management
 
-- [x] **TCMK-01**: TC mark chain (forward hook) tc_mark_up/tc_mark_down chain'lerine (input/output hook) tasinmali
-- [x] **TCMK-02**: tc_mark_up: iifname eth1, ether saddr MAC ile meta mark set kurallar icermeli
-- [x] **TCMK-03**: tc_mark_down: oifname eth1, ether daddr MAC ile meta mark set kurallar icermeli
-- [x] **TCMK-04**: add_device_limit(mac, rate, ceil) yeni chain'lere mark kurali eklemeli
-- [x] **TCMK-05**: remove_device_limit(mac) her iki chain'den mark kurallarini silmeli
+- [ ] **DEV-01**: Cihaz listesi — isim, IP, MAC, durum gostergesi, anlik bant genisligi
+- [ ] **DEV-02**: Cihaz detay ekrani — trafik gecmisi, DNS sorgulari, profil bilgisi
+- [ ] **DEV-03**: Tek dokunusla cihaz engelleme/engel kaldirma (internet durdurma)
+- [ ] **DEV-04**: Cihaza profil atama/degistirme
+- [ ] **DEV-05**: Pull-to-refresh tum cihaz ekranlarinda
 
-### Startup & Persistence
+### DNS Filtering
 
-- [x] **STRT-01**: main.py lifespan fonksiyonu ensure_bridge_masquerade() yerine ensure_bridge_isolation() cagirmali
-- [x] **STRT-02**: sysctl ayarlari /etc/sysctl.d/99-bridge-isolation.conf'a yazilmali
-- [x] **STRT-03**: nftables kurallari /etc/nftables.conf'a persist edilmeli
-- [x] **STRT-04**: br_netfilter modulu /etc/modules-load.d/ ile otomatik yuklenecek sekilde ayarlanmali
+- [ ] **DNS-01**: DNS ozet ekrani — toplam sorgu, engelleme sayisi, en cok sorgulanan/engellenen domainler
+- [ ] **DNS-02**: DNS filtreleme hizli toggle (tek dokunusla ac/kapa)
+- [ ] **DNS-03**: Icerik kategorileri goruntuleme + blocklist baglama yonetimi
+- [ ] **DNS-04**: Profil yonetimi — profil olusturma/duzenleme, kategori secimi, bandwidth limiti
 
-### DHCP Gateway
+### Firewall
 
-- [x] **DHCP-01**: dnsmasq konfigurasyonunda gateway .1'den .2'ye degistirilmeli
-- [x] **DHCP-02**: dhcp_pools veritabani tablosunda gateway guncellenmeli
+- [ ] **FW-01**: Firewall kural listesi goruntuleme
+- [ ] **FW-02**: Kural ekleme/duzenleme/silme
+- [ ] **FW-03**: Kural siralama (oncelik) yonetimi
 
-### Validation
+### VPN
 
-- [x] **VALD-01**: Modem ARP tablosunda sadece Pi MAC'i gorunmeli (tcpdump dogrulama)
-- [x] **VALD-02**: Mevcut cihazlarin conntrack ESTABLISHED baglantiları mevcut olmali
-- [x] **VALD-03**: Pi internet erisimi calismali (curl testi)
-- [x] **VALD-04**: DNS cozumlemesi calismali (dig testi)
-- [x] **VALD-05**: Bridge accounting counter'lari artmali (upload/download chain'ler)
-- [x] **VALD-06**: Bridge forward chain'de drop kurallari gorunmeli
-- [x] **VALD-07**: Yapay cihaz testi: veth namespace ile gateway .2 ve internet erisimi dogrulanmali
+- [ ] **VPN-01**: WireGuard peer listesi goruntuleme
+- [ ] **VPN-02**: Peer ekleme/silme
+- [ ] **VPN-03**: VPN durumu gostergesi (aktif/pasif)
+- [ ] **VPN-04**: Peer QR kodu goruntuleme/paylasma
+
+### DDoS Protection
+
+- [ ] **DDOS-01**: DDoS koruma durumu ekrani
+- [ ] **DDOS-02**: Basitlestirilmis saldiri haritasi (mobil optimized)
+- [ ] **DDOS-03**: Canli saldiri akisi (son tehditler)
+
+### Traffic Monitoring
+
+- [ ] **TRAF-01**: Canli akislar ekrani — per-flow baglanti listesi (5s yenileme)
+- [ ] **TRAF-02**: Buyuk transferler listesi (>1MB flowlar)
+- [ ] **TRAF-03**: Trafik gecmisi ekrani (sayfalama destegi)
+- [ ] **TRAF-04**: Per-device bant genisligi zaman serisi grafikleri (Vico)
+
+### Push Notifications
+
+- [ ] **NOTIF-01**: FCM push notification altyapisi — backend token kayit endpoint
+- [ ] **NOTIF-02**: Backend bildirim dispatch servisi (yeni cihaz, DDoS, DNS, VPN durum degisikligi)
+- [ ] **NOTIF-03**: Android bildirim kanallari (Guvenlik, Cihaz, Trafik, Sistem)
+- [ ] **NOTIF-04**: Bildirim ayarlari ekrani — kanal bazli ac/kapa
+
+### AI Chat
+
+- [ ] **CHAT-01**: Mobil AI sohbet ekrani — mevcut /api/v1/chat endpoint kullanimi
+- [ ] **CHAT-02**: Mesaj gecmisi goruntuleme
+- [ ] **CHAT-03**: Yapilandirilmis yanit goruntuleme (JSON/tablo formati)
+
+### Telegram
+
+- [ ] **TELE-01**: Telegram bot yapilandirma ekrani (token, chat ID)
+- [ ] **TELE-02**: Telegram bildirim ayarlari
+
+### WiFi AP
+
+- [ ] **WIFI-01**: WiFi erisim noktasi durumu goruntuleme
+- [ ] **WIFI-02**: SSID, sifre, kanal degistirme
+- [ ] **WIFI-03**: WiFi AP acma/kapatma
+
+### DHCP
+
+- [ ] **DHCP-01**: DHCP havuz bilgileri goruntuleme
+- [ ] **DHCP-02**: Statik IP atamalari yonetimi
+
+### Security Settings
+
+- [ ] **SEC-01**: Guvenlik ayarlari ekrani — tehdit/DNS/DDoS esik degerleri
+- [ ] **SEC-02**: Ayar degistirme ve kaydetme (hot-reload backend)
+
+### UX Polish
+
+- [ ] **UX-01**: Haptic feedback — kritik uyarilarda titresim
+- [ ] **UX-02**: App shortcuts — uzun basma menusu (durum kontrol, cihaz engelle, AI chat)
+- [ ] **UX-03**: APK build — imzali release APK olusturma ve S24 Ultra'ya yukleme
 
 ## v2 Requirements
 
-Deferred to future release. Tracked but not in current roadmap.
+Deferred to future release.
 
-### Enhanced Transition
+### Advanced Features
 
-- **ENHN-01**: Counter deger koruma (hook gecisi sirasinda sifirlanma onleme)
-- **ENHN-02**: DHCP lease force-renewal (kisa lease suresi gecici ayar)
-- **ENHN-03**: Conntrack flush (gateway degisikliginden sonra stale entry temizleme)
-- **ENHN-04**: Mode status API endpoint (bridge/router durumu sorgulama)
+- **ADV-01**: Live traffic monitor (floating overlay / PiP modu)
+- **ADV-02**: AMOLED dim tema varyanti
+- **ADV-03**: Tablet responsive layout optimizasyonu
+- **ADV-04**: iOS versiyonu (Kotlin Multiplatform ile)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| br0 bridge tamamen kaldirma | MAC tabanli accounting bridge layer'a bagli, 5+ alt sistem degisikligi gerektirir |
-| VLAN segmentasyon | Ayri milestone, switch desteyi gerektirir |
-| IPv6 NAT (NAT66) | Ev agi icin gereksiz, karmasiklik ekler |
-| dnsmasq'i baska DHCP ile degistirme | Gecis sirasinda iki sistem degisikligi debug'u zorlastirir |
-| TC qdisc degisiklikleri | Sadece nftables mark chain'leri gocuyor, HTB qdisc'ler degismiyor |
-| Frontend UI degisiklikleri | Bu milestone sadece backend/HAL |
-| Pi'ye SSH deploy | Kullanici manuel yapacak |
+| Google Play yayin | Kisisel kullanim — APK sideload yeterli |
+| Offline mod | Router yonetimi inherent olarak online; eski veri yaniltici |
+| SSH terminal | Guvenlik riski, mobilde pratik degil — JuiceSSH/Termius var |
+| Multi-router yonetimi | Tek Pi deployment — kapsam patlamasi |
+| Ozel tema editoru | Cyberpunk tema marka kimligi |
+| Bandwidth speed test | App phone-to-router olcer, internet degil — yaniltici |
 
 ## Traceability
 
+Updated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ISOL-01 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
-| ISOL-02 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
-| ISOL-03 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
-| ISOL-04 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
-| ISOL-05 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
-| ISOL-06 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
-| ISOL-07 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
-| ROLL-01 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
-| ROLL-02 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
-| ROLL-03 | Phase 1 — Bridge Isolation Core | Complete (2026-02-25) |
-| ACCT-01 | Phase 2 — Accounting Chain Migration | Complete |
-| ACCT-02 | Phase 2 — Accounting Chain Migration | Complete |
-| ACCT-03 | Phase 2 — Accounting Chain Migration | Complete |
-| ACCT-04 | Phase 2 — Accounting Chain Migration | Complete |
-| ACCT-05 | Phase 2 — Accounting Chain Migration | Complete |
-| ACCT-06 | Phase 2 — Accounting Chain Migration | Complete |
-| ACCT-07 | Phase 2 — Accounting Chain Migration | Complete |
-| TCMK-01 | Phase 3 — TC Mark Chain Migration | Complete (2026-02-25) |
-| TCMK-02 | Phase 3 — TC Mark Chain Migration | Complete (2026-02-25) |
-| TCMK-03 | Phase 3 — TC Mark Chain Migration | Complete (2026-02-25) |
-| TCMK-04 | Phase 3 — TC Mark Chain Migration | Complete (2026-02-25) |
-| TCMK-05 | Phase 3 — TC Mark Chain Migration | Complete (2026-02-25) |
-| STRT-01 | Phase 4 — Startup and Persistence | Complete (2026-03-03) |
-| STRT-02 | Phase 4 — Startup and Persistence | Complete (2026-03-03) |
-| STRT-03 | Phase 4 — Startup and Persistence | Complete (2026-03-03) |
-| STRT-04 | Phase 4 — Startup and Persistence | Complete (2026-03-03) |
-| DHCP-01 | Phase 5 — DHCP Gateway and Validation | Complete |
-| DHCP-02 | Phase 5 — DHCP Gateway and Validation | Complete |
-| VALD-01 | Phase 5 — DHCP Gateway and Validation | Complete |
-| VALD-02 | Phase 5 — DHCP Gateway and Validation | Complete |
-| VALD-03 | Phase 5 — DHCP Gateway and Validation | Complete |
-| VALD-04 | Phase 5 — DHCP Gateway and Validation | Complete |
-| VALD-05 | Phase 5 — DHCP Gateway and Validation | Complete |
-| VALD-06 | Phase 5 — DHCP Gateway and Validation | Complete |
-| VALD-07 | Phase 5 — DHCP Gateway and Validation | Complete |
+| (populated by roadmapper) | | |
 
 **Coverage:**
-- v1 requirements: 35 total
-- Mapped to phases: 35
-- Unmapped: 0
+- v1 requirements: 55 total
+- Mapped to phases: 0 (awaiting roadmap)
+- Unmapped: 55
 
 ---
-*Requirements defined: 2026-02-25*
-*Last updated: 2026-03-03 after plan 04-01 completion (STRT-01..04 marked complete, TCMK-01..05 traceability updated)*
+*Requirements defined: 2026-03-06*
+*Last updated: 2026-03-06 after initial definition*
