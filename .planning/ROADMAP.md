@@ -102,7 +102,10 @@ Plans:
   2. Bant genisligi grafigi canli olarak guncelleniyor (WebSocket uzerinden veri akisi)
   3. Uygulama arka plana gidip geri geldiginde WebSocket baglantisi otomatik yeniden kuruluyor
   4. Istatistik kartlarina dokunulunca ilgili detay ekranina yonlendirme yapiliyor
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 08-01-PLAN.md — Veri katmani: Dashboard/WebSocket DTOlari, WebSocketManager, DashboardRepository, Vico bagimliligi
+- [ ] 08-02-PLAN.md — UI katmani: DashboardScreen, istatistik kartlari, Vico bandwidth grafigi, kart navigasyonu
 
 ### Phase 9: Device Management
 **Goal**: Kullanici tum ag cihazlarini gorebiliyor, yonetebiliyor ve tek dokunusla internet erisimlerini kontrol edebiliyor
@@ -197,7 +200,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 5. DHCP Gateway and Validation | v1.0 | 2/2 | Complete | 2026-03-03 |
 | 6. Project Skeleton | v2.0 | 0/2 | Planning | - |
 | 7. Authentication | 1/2 | In Progress|  | - |
-| 8. Dashboard | v2.0 | 0/? | Not started | - |
+| 8. Dashboard | v2.0 | 0/2 | Planning | - |
 | 9. Device Management | v2.0 | 0/? | Not started | - |
 | 10. DNS Filtering | v2.0 | 0/? | Not started | - |
 | 11. Network Security | v2.0 | 0/? | Not started | - |
