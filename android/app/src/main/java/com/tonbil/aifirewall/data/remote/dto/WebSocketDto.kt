@@ -5,12 +5,12 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class RealtimeUpdateDto(
-    val type: String,
-    @SerialName("device_count") val deviceCount: Int,
-    val devices: List<WsDeviceDto>,
-    val dns: WsDnsDto,
-    val bandwidth: WsBandwidthDto,
-    val vpn: WsVpnDto,
+    val type: String = "",
+    @SerialName("device_count") val deviceCount: Int = 0,
+    val devices: List<WsDeviceDto> = emptyList(),
+    val dns: WsDnsDto = WsDnsDto(),
+    val bandwidth: WsBandwidthDto = WsBandwidthDto(),
+    val vpn: WsVpnDto = WsVpnDto(),
     @SerialName("vpn_client") val vpnClient: WsVpnClientDto? = null,
 )
 
@@ -26,16 +26,16 @@ data class WsDeviceDto(
 
 @Serializable
 data class WsDnsDto(
-    @SerialName("total_queries_24h") val totalQueries24h: Int,
-    @SerialName("blocked_queries_24h") val blockedQueries24h: Int,
-    @SerialName("block_percentage") val blockPercentage: Float,
-    @SerialName("queries_per_min") val queriesPerMin: Int,
+    @SerialName("total_queries_24h") val totalQueries24h: Int = 0,
+    @SerialName("blocked_queries_24h") val blockedQueries24h: Int = 0,
+    @SerialName("block_percentage") val blockPercentage: Float = 0f,
+    @SerialName("queries_per_min") val queriesPerMin: Int = 0,
 )
 
 @Serializable
 data class WsBandwidthDto(
-    @SerialName("total_upload_bps") val totalUploadBps: Long,
-    @SerialName("total_download_bps") val totalDownloadBps: Long,
+    @SerialName("total_upload_bps") val totalUploadBps: Long = 0,
+    @SerialName("total_download_bps") val totalDownloadBps: Long = 0,
     val devices: Map<String, WsDeviceBandwidthDto> = emptyMap(),
 )
 
@@ -49,9 +49,9 @@ data class WsDeviceBandwidthDto(
 
 @Serializable
 data class WsVpnDto(
-    val enabled: Boolean,
-    @SerialName("connected_peers") val connectedPeers: Int,
-    @SerialName("total_peers") val totalPeers: Int,
+    val enabled: Boolean = false,
+    @SerialName("connected_peers") val connectedPeers: Int = 0,
+    @SerialName("total_peers") val totalPeers: Int = 0,
 )
 
 @Serializable

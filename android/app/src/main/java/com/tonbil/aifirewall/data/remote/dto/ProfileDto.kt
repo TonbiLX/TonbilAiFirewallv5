@@ -10,5 +10,5 @@ data class ProfileResponseDto(
     @SerialName("profile_type") val profileType: String? = null,
     @SerialName("allowed_hours") val allowedHours: String? = null,
     @SerialName("content_filters") val contentFilters: List<String> = emptyList(),
-    @SerialName("bandwidth_limit_mbps") val bandwidthLimitMbps: Int? = null,
+    @SerialName("bandwidth_limit_mbps") val bandwidthLimitMbps: Float? = null,
 )

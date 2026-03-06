@@ -17,7 +17,7 @@ data class DeviceResponseDto(
     @SerialName("last_seen") val lastSeen: String? = null,
     @SerialName("total_online_seconds") val totalOnlineSeconds: Int = 0,
     @SerialName("last_online_start") val lastOnlineStart: String? = null,
-    @SerialName("bandwidth_limit_mbps") val bandwidthLimitMbps: Int? = null,
+    @SerialName("bandwidth_limit_mbps") val bandwidthLimitMbps: Float? = null,
 )
 
 @Serializable

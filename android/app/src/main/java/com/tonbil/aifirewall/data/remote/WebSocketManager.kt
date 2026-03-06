@@ -74,9 +74,11 @@ class WebSocketManager(
                 Log.d(TAG, "Network event: $event")
                 when (event) {
                     NetworkEvent.CONNECTED, NetworkEvent.NETWORK_CHANGED -> {
-                        // Network changed — rediscover server and reconnect
-                        Log.d(TAG, "Network changed, rediscovering server...")
-                        serverDiscovery.resetAndRediscover()
+                        // Network changed — rediscover only if not already discovered
+                        Log.d(TAG, "Network event: $event")
+                        if (serverDiscovery.activeUrl.isEmpty()) {
+                            serverDiscovery.discoverServer()
+                        }
                         forceReconnect()
                     }
                     NetworkEvent.DISCONNECTED -> {
