@@ -1,5 +1,6 @@
 package com.tonbil.aifirewall.data.remote
 
+import android.util.Log
 import com.tonbil.aifirewall.data.local.TokenManager
 import com.tonbil.aifirewall.data.remote.dto.RealtimeUpdateDto
 import io.ktor.client.HttpClient
@@ -24,6 +25,7 @@ class WebSocketManager(
     private val client: HttpClient,
     private val serverDiscovery: ServerDiscovery,
     private val tokenManager: TokenManager,
+    private val networkMonitor: NetworkMonitor,
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
@@ -38,17 +40,51 @@ class WebSocketManager(
     val connectionState: StateFlow<WebSocketState> = _connectionState.asStateFlow()
 
     private var wsJob: Job? = null
+    private var networkJob: Job? = null
     private var scope: CoroutineScope? = null
+    private var retryDelay = INITIAL_RETRY_DELAY
+    private var consecutiveFailures = 0
 
     fun connect(scope: CoroutineScope) {
         this.scope = scope
+        startNetworkObserver(scope)
         reconnect()
     }
 
     fun disconnect() {
         wsJob?.cancel()
         wsJob = null
+        networkJob?.cancel()
+        networkJob = null
         _connectionState.value = WebSocketState.DISCONNECTED
+        retryDelay = INITIAL_RETRY_DELAY
+        consecutiveFailures = 0
+    }
+
+    fun forceReconnect() {
+        retryDelay = INITIAL_RETRY_DELAY
+        consecutiveFailures = 0
+        reconnect()
+    }
+
+    private fun startNetworkObserver(scope: CoroutineScope) {
+        networkJob?.cancel()
+        networkJob = scope.launch {
+            networkMonitor.networkEvents.collect { event ->
+                Log.d(TAG, "Network event: $event")
+                when (event) {
+                    NetworkEvent.CONNECTED, NetworkEvent.NETWORK_CHANGED -> {
+                        // Network changed — rediscover server and reconnect
+                        Log.d(TAG, "Network changed, rediscovering server...")
+                        serverDiscovery.resetAndRediscover()
+                        forceReconnect()
+                    }
+                    NetworkEvent.DISCONNECTED -> {
+                        _connectionState.value = WebSocketState.DISCONNECTED
+                    }
+                }
+            }
+        }
     }
 
     private fun reconnect() {
@@ -58,11 +94,32 @@ class WebSocketManager(
 
         wsJob = currentScope.launch {
             while (isActive) {
+                // Wait for network to be available
+                if (!networkMonitor.isOnline.value) {
+                    _connectionState.value = WebSocketState.DISCONNECTED
+                    delay(1000)
+                    continue
+                }
+
                 try {
                     _connectionState.value = WebSocketState.CONNECTING
+
+                    // If no active URL, try to discover
+                    if (serverDiscovery.activeUrl.isEmpty()) {
+                        serverDiscovery.discoverServer() ?: run {
+                            delay(retryDelay)
+                            retryDelay = (retryDelay * 2).coerceAtMost(MAX_RETRY_DELAY)
+                            continue
+                        }
+                    }
+
                     val wsUrl = ApiRoutes.wsUrl(serverDiscovery, token)
                     client.webSocket(wsUrl) {
                         _connectionState.value = WebSocketState.CONNECTED
+                        retryDelay = INITIAL_RETRY_DELAY
+                        consecutiveFailures = 0
+                        Log.d(TAG, "WebSocket connected to $wsUrl")
+
                         for (frame in incoming) {
                             if (frame is Frame.Text) {
                                 try {
@@ -74,13 +131,29 @@ class WebSocketManager(
                             }
                         }
                     }
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    Log.d(TAG, "WebSocket error: ${e.message}")
                     _connectionState.value = WebSocketState.DISCONNECTED
+                    consecutiveFailures++
+
+                    // After several failures, try rediscovering
+                    if (consecutiveFailures >= 3) {
+                        Log.d(TAG, "Multiple failures, rediscovering server...")
+                        serverDiscovery.resetAndRediscover()
+                        consecutiveFailures = 0
+                    }
                 }
-                // Reconnect after 3 seconds on disconnect
-                delay(3000)
+
+                delay(retryDelay)
+                retryDelay = (retryDelay * 2).coerceAtMost(MAX_RETRY_DELAY)
             }
         }
+    }
+
+    companion object {
+        private const val TAG = "WebSocketManager"
+        private const val INITIAL_RETRY_DELAY = 2000L
+        private const val MAX_RETRY_DELAY = 30000L
     }
 }
 

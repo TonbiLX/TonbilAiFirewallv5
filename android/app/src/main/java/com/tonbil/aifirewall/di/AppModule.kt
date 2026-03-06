@@ -2,6 +2,7 @@ package com.tonbil.aifirewall.di
 
 import com.tonbil.aifirewall.data.local.ServerConfig
 import com.tonbil.aifirewall.data.local.TokenManager
+import com.tonbil.aifirewall.data.remote.NetworkMonitor
 import com.tonbil.aifirewall.data.remote.ServerDiscovery
 import com.tonbil.aifirewall.data.remote.createHttpClient
 import com.tonbil.aifirewall.data.remote.WebSocketManager
@@ -27,11 +28,12 @@ import org.koin.dsl.module
 val appModule = module {
     single { TokenManager(androidContext()) }
     single { ServerConfig(androidContext()) }
+    single { NetworkMonitor(androidContext()) }
     single(named("test")) { createTestHttpClient() }
     single { ServerDiscovery(get<ServerConfig>(), get<HttpClient>(named("test"))) }
     single { createHttpClient(get<ServerDiscovery>(), get<TokenManager>()) }
     single { AuthRepository(get(), get<TokenManager>()) }
-    single { WebSocketManager(get(), get<ServerDiscovery>(), get<TokenManager>()) }
+    single { WebSocketManager(get(), get<ServerDiscovery>(), get<TokenManager>(), get<NetworkMonitor>()) }
     single { DashboardRepository(get()) }
     single { DeviceRepository(get()) }
     single { ProfileRepository(get()) }

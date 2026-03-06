@@ -17,6 +17,7 @@ data class SecurityUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val error: String? = null,
+    val actionMessage: String? = null,
     // DNS
     val dnsStats: DnsStatsDto? = null,
     val blocklists: List<BlocklistDto> = emptyList(),
@@ -36,6 +37,14 @@ data class SecurityUiState(
     // AI Insights
     val insights: List<AiInsightDto> = emptyList(),
     val securityStats: SecurityStatsDto? = null,
+    // Dialog states
+    val showAddDnsRuleDialog: Boolean = false,
+    val showAddBlocklistDialog: Boolean = false,
+    val showAddFirewallRuleDialog: Boolean = false,
+    val showAddVpnPeerDialog: Boolean = false,
+    val showVpnPeerConfigDialog: String? = null, // peer name
+    val vpnPeerConfig: VpnPeerConfigDto? = null,
+    val isActionLoading: Boolean = false,
 )
 
 class SecurityViewModel(
@@ -108,4 +117,198 @@ class SecurityViewModel(
         _uiState.update { it.copy(isRefreshing = true) }
         loadAll()
     }
+
+    fun clearActionMessage() {
+        _uiState.update { it.copy(actionMessage = null) }
+    }
+
+    // ========== DNS Actions ==========
+
+    fun showAddDnsRuleDialog() = _uiState.update { it.copy(showAddDnsRuleDialog = true) }
+    fun hideAddDnsRuleDialog() = _uiState.update { it.copy(showAddDnsRuleDialog = false) }
+
+    fun createDnsRule(domain: String, action: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true, showAddDnsRuleDialog = false) }
+            securityRepository.createDnsRule(DnsRuleCreateDto(domain, action))
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "DNS kurali eklendi", isActionLoading = false) }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
+                }
+        }
+    }
+
+    fun deleteDnsRule(id: Int) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true) }
+            securityRepository.deleteDnsRule(id)
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "DNS kurali silindi", isActionLoading = false) }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
+                }
+        }
+    }
+
+    fun showAddBlocklistDialog() = _uiState.update { it.copy(showAddBlocklistDialog = true) }
+    fun hideAddBlocklistDialog() = _uiState.update { it.copy(showAddBlocklistDialog = false) }
+
+    fun createBlocklist(name: String, url: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true, showAddBlocklistDialog = false) }
+            securityRepository.createBlocklist(BlocklistCreateDto(name, url))
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "Blocklist eklendi", isActionLoading = false) }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
+                }
+        }
+    }
+
+    fun toggleBlocklist(id: Int) {
+        viewModelScope.launch {
+            securityRepository.toggleBlocklist(id)
+                .onSuccess { refresh() }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}") }
+                }
+        }
+    }
+
+    fun deleteBlocklist(id: Int) {
+        viewModelScope.launch {
+            securityRepository.deleteBlocklist(id)
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "Blocklist silindi") }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}") }
+                }
+        }
+    }
+
+    // ========== FIREWALL Actions ==========
+
+    fun showAddFirewallRuleDialog() = _uiState.update { it.copy(showAddFirewallRuleDialog = true) }
+    fun hideAddFirewallRuleDialog() = _uiState.update { it.copy(showAddFirewallRuleDialog = false) }
+
+    fun createFirewallRule(dto: FirewallRuleCreateDto) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true, showAddFirewallRuleDialog = false) }
+            securityRepository.createFirewallRule(dto)
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "Firewall kurali eklendi", isActionLoading = false) }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
+                }
+        }
+    }
+
+    fun toggleFirewallRule(id: Int) {
+        viewModelScope.launch {
+            securityRepository.toggleFirewallRule(id)
+                .onSuccess { refresh() }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}") }
+                }
+        }
+    }
+
+    fun deleteFirewallRule(id: Int) {
+        viewModelScope.launch {
+            securityRepository.deleteFirewallRule(id)
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "Firewall kurali silindi") }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}") }
+                }
+        }
+    }
+
+    // ========== VPN Actions ==========
+
+    fun showAddVpnPeerDialog() = _uiState.update { it.copy(showAddVpnPeerDialog = true) }
+    fun hideAddVpnPeerDialog() = _uiState.update { it.copy(showAddVpnPeerDialog = false) }
+
+    fun startVpn() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true) }
+            securityRepository.startVpn()
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "VPN baslatildi", isActionLoading = false) }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
+                }
+        }
+    }
+
+    fun stopVpn() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true) }
+            securityRepository.stopVpn()
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "VPN durduruldu", isActionLoading = false) }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
+                }
+        }
+    }
+
+    fun addVpnPeer(name: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true, showAddVpnPeerDialog = false) }
+            securityRepository.addVpnPeer(VpnPeerCreateDto(name))
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "VPN peer eklendi", isActionLoading = false) }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
+                }
+        }
+    }
+
+    fun deleteVpnPeer(name: String) {
+        viewModelScope.launch {
+            securityRepository.deleteVpnPeer(name)
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "VPN peer silindi") }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}") }
+                }
+        }
+    }
+
+    fun showVpnPeerConfig(name: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(showVpnPeerConfigDialog = name) }
+            securityRepository.getVpnPeerConfig(name)
+                .onSuccess { config ->
+                    _uiState.update { it.copy(vpnPeerConfig = config) }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(showVpnPeerConfigDialog = null, actionMessage = "Config alinamadi") }
+                }
+        }
+    }
+
+    fun hideVpnPeerConfig() = _uiState.update { it.copy(showVpnPeerConfigDialog = null, vpnPeerConfig = null) }
 }

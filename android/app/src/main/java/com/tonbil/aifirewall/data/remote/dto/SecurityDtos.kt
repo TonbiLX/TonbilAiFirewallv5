@@ -259,3 +259,89 @@ data class ChatMessageDto(
     val content: String = "",
     val timestamp: String? = null,
 )
+
+// ============ REQUEST DTOs ============
+
+// DNS Rule Create
+@Serializable
+data class DnsRuleCreateDto(
+    val domain: String,
+    val action: String, // "block" or "allow"
+)
+
+// Blocklist Create
+@Serializable
+data class BlocklistCreateDto(
+    val name: String,
+    val url: String,
+)
+
+// Firewall Rule Create/Update
+@Serializable
+data class FirewallRuleCreateDto(
+    val name: String,
+    val direction: String, // "inbound" or "outbound"
+    val protocol: String,
+    val port: String? = null,
+    @SerialName("source_ip") val sourceIp: String? = null,
+    @SerialName("dest_ip") val destIp: String? = null,
+    val action: String, // "accept", "drop", "reject"
+    val enabled: Boolean = true,
+)
+
+// VPN Peer Create
+@Serializable
+data class VpnPeerCreateDto(
+    val name: String,
+    val dns: String? = null,
+)
+
+// VPN Peer Config (for QR code display)
+@Serializable
+data class VpnPeerConfigDto(
+    @SerialName("config_text") val configText: String = "",
+    @SerialName("qr_code_base64") val qrCodeBase64: String? = null,
+)
+
+// DHCP Static Lease Create
+@Serializable
+data class DhcpStaticLeaseCreateDto(
+    @SerialName("mac_address") val macAddress: String,
+    @SerialName("ip_address") val ipAddress: String,
+    val hostname: String? = null,
+)
+
+// Profile Create/Update
+@Serializable
+data class ProfileCreateDto(
+    val name: String,
+    @SerialName("profile_type") val profileType: String? = null,
+    @SerialName("content_filters") val contentFilters: List<String> = emptyList(),
+    @SerialName("bandwidth_limit_mbps") val bandwidthLimitMbps: Float? = null,
+)
+
+// WiFi Config Update
+@Serializable
+data class WifiConfigUpdateDto(
+    val ssid: String? = null,
+    val password: String? = null,
+    val channel: Int? = null,
+)
+
+// Telegram Config Update
+@Serializable
+data class TelegramConfigUpdateDto(
+    @SerialName("bot_token") val botToken: String? = null,
+    @SerialName("chat_id") val chatId: String? = null,
+    val enabled: Boolean? = null,
+    @SerialName("notify_threats") val notifyThreats: Boolean? = null,
+    @SerialName("notify_devices") val notifyDevices: Boolean? = null,
+    @SerialName("notify_ddos") val notifyDdos: Boolean? = null,
+)
+
+// Generic message response
+@Serializable
+data class MessageResponseDto(
+    val message: String = "",
+    val status: String = "",
+)

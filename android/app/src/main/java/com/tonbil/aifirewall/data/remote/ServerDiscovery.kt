@@ -86,4 +86,10 @@ class ServerDiscovery(
         serverConfig.setServerUrl(url)
         serverConfig.setLastConnectedUrl(url)
     }
+
+    suspend fun resetAndRediscover(): String? {
+        activeUrl = ""
+        _isDiscovered.value = false
+        return discoverServer()
+    }
 }

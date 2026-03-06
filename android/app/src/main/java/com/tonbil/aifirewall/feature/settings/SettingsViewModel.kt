@@ -18,6 +18,8 @@ data class SettingsUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val error: String? = null,
+    val actionMessage: String? = null,
+    val isActionLoading: Boolean = false,
     // Profiles
     val profiles: List<ProfileResponseDto> = emptyList(),
     // DHCP
@@ -37,6 +39,11 @@ data class SettingsUiState(
     val chatLoading: Boolean = false,
     // Server info
     val serverUrl: String = "",
+    // Dialog states
+    val showAddProfileDialog: Boolean = false,
+    val showAddStaticLeaseDialog: Boolean = false,
+    val showEditTelegramDialog: Boolean = false,
+    val showEditWifiDialog: Boolean = false,
 )
 
 class SettingsViewModel(
@@ -104,6 +111,12 @@ class SettingsViewModel(
         loadAll()
     }
 
+    fun clearActionMessage() {
+        _uiState.update { it.copy(actionMessage = null) }
+    }
+
+    // ========== CHAT ==========
+
     fun updateChatInput(text: String) {
         _uiState.update { it.copy(chatInput = text) }
     }
@@ -135,6 +148,142 @@ class SettingsViewModel(
                             chatHistory = it.chatHistory + ChatMessageDto(role = "assistant", content = "Hata: ${e.message}"),
                         )
                     }
+                }
+        }
+    }
+
+    // ========== PROFILE Actions ==========
+
+    fun showAddProfileDialog() = _uiState.update { it.copy(showAddProfileDialog = true) }
+    fun hideAddProfileDialog() = _uiState.update { it.copy(showAddProfileDialog = false) }
+
+    fun createProfile(name: String, bandwidthLimit: Float?, contentFilters: List<String>) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true, showAddProfileDialog = false) }
+            securityRepository.createProfile(
+                ProfileCreateDto(name = name, bandwidthLimitMbps = bandwidthLimit, contentFilters = contentFilters)
+            ).onSuccess {
+                _uiState.update { it.copy(actionMessage = "Profil olusturuldu", isActionLoading = false) }
+                refresh()
+            }.onFailure { e ->
+                _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
+            }
+        }
+    }
+
+    fun deleteProfile(id: Int) {
+        viewModelScope.launch {
+            securityRepository.deleteProfile(id)
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "Profil silindi") }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}") }
+                }
+        }
+    }
+
+    // ========== DHCP Actions ==========
+
+    fun showAddStaticLeaseDialog() = _uiState.update { it.copy(showAddStaticLeaseDialog = true) }
+    fun hideAddStaticLeaseDialog() = _uiState.update { it.copy(showAddStaticLeaseDialog = false) }
+
+    fun createStaticLease(mac: String, ip: String, hostname: String?) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true, showAddStaticLeaseDialog = false) }
+            securityRepository.createStaticLease(DhcpStaticLeaseCreateDto(mac, ip, hostname))
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "Statik IP atandi", isActionLoading = false) }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
+                }
+        }
+    }
+
+    fun deleteStaticLease(mac: String) {
+        viewModelScope.launch {
+            securityRepository.deleteStaticLease(mac)
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "Statik IP silindi") }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}") }
+                }
+        }
+    }
+
+    // ========== WIFI Actions ==========
+
+    fun showEditWifiDialog() = _uiState.update { it.copy(showEditWifiDialog = true) }
+    fun hideEditWifiDialog() = _uiState.update { it.copy(showEditWifiDialog = false) }
+
+    fun toggleWifi() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true) }
+            val isRunning = _uiState.value.wifiStatus?.running == true
+            val result = if (isRunning) securityRepository.disableWifi() else securityRepository.enableWifi()
+            result
+                .onSuccess {
+                    _uiState.update {
+                        it.copy(
+                            actionMessage = if (isRunning) "WiFi AP kapatildi" else "WiFi AP acildi",
+                            isActionLoading = false,
+                        )
+                    }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
+                }
+        }
+    }
+
+    fun updateWifiConfig(ssid: String?, password: String?, channel: Int?) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true, showEditWifiDialog = false) }
+            securityRepository.updateWifiConfig(WifiConfigUpdateDto(ssid, password, channel))
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "WiFi ayarlari guncellendi", isActionLoading = false) }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
+                }
+        }
+    }
+
+    // ========== TELEGRAM Actions ==========
+
+    fun showEditTelegramDialog() = _uiState.update { it.copy(showEditTelegramDialog = true) }
+    fun hideEditTelegramDialog() = _uiState.update { it.copy(showEditTelegramDialog = false) }
+
+    fun updateTelegramConfig(dto: TelegramConfigUpdateDto) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true, showEditTelegramDialog = false) }
+            securityRepository.updateTelegramConfig(dto)
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "Telegram guncellendi", isActionLoading = false) }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
+                }
+        }
+    }
+
+    fun testTelegram() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true) }
+            securityRepository.testTelegram()
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "Test mesaji gonderildi", isActionLoading = false) }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
                 }
         }
     }

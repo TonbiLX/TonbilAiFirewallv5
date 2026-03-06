@@ -3,6 +3,7 @@ package com.tonbil.aifirewall.data.remote
 import com.tonbil.aifirewall.data.local.TokenManager
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
@@ -34,6 +35,13 @@ fun createHttpClient(
         install(HttpTimeout) {
             requestTimeoutMillis = 15_000
             connectTimeoutMillis = 10_000
+            socketTimeoutMillis = 15_000
+        }
+
+        install(HttpRequestRetry) {
+            retryOnServerErrors(maxRetries = 2)
+            retryOnException(maxRetries = 2, retryOnTimeout = true)
+            exponentialDelay()
         }
 
         install(WebSockets)
