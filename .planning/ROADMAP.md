@@ -117,7 +117,10 @@ Plans:
   3. Tek dokunusla bir cihazin interneti durduruluyor/geri aciliyor ve durum aninda guncelleniyor
   4. Cihaza profil atanabiliyor/degistirilebiliyor
   5. Tum cihaz ekranlarinda asagiya cekerek yenileme (pull-to-refresh) calisiyor
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 09-01-PLAN.md — Veri katmani: Device/Profile DTO'lari, DeviceRepository, ProfileRepository, Koin DI
+- [ ] 09-02-PLAN.md — UI katmani: DevicesScreen (liste + block toggle + WS bandwidth), DeviceDetailScreen (3 tab + profil atama), AppNavHost wiring
 
 ### Phase 10: DNS Filtering
 **Goal**: Kullanici DNS filtreleme sistemini mobil uzerinden gorebiliyor ve yonetebiliyor — kategoriler, profiller, hizli toggle
@@ -201,7 +204,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 6. Project Skeleton | v2.0 | 0/2 | Planning | - |
 | 7. Authentication | 1/2 | In Progress|  | - |
 | 8. Dashboard | 2/2 | Complete   | 2026-03-06 | - |
-| 9. Device Management | v2.0 | 0/? | Not started | - |
+| 9. Device Management | v2.0 | 0/2 | Planning | - |
 | 10. DNS Filtering | v2.0 | 0/? | Not started | - |
 | 11. Network Security | v2.0 | 0/? | Not started | - |
 | 12. Traffic Monitoring | v2.0 | 0/? | Not started | - |
