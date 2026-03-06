@@ -1,165 +1,183 @@
 # Pitfalls Research
 
-**Domain:** Bridge-to-Router Transition on Live Raspberry Pi (nftables)
-**Researched:** 2026-02-25
-**Confidence:** HIGH (nftables hook behavior from official wiki; bridge semantics from kernel docs and Netfilter engineers; SSH/DHCP lockout patterns from community post-mortems)
+**Domain:** Android Router Management App (Kotlin + Jetpack Compose)
+**Researched:** 2026-03-06
+**Confidence:** HIGH (Android developer docs, community post-mortems, well-documented Compose/OkHttp/FCM patterns)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Drop Verdict in Forward Chain Silently Kills Accounting Counters
+### Pitfall 1: WebSocket Baglantisi Lifecycle ile Senkronize Degil — Bellek Sizintisi ve Crash
 
 **What goes wrong:**
-The isolation rules use `drop` in `bridge filter forward` (priority -200). The accounting chains (`bridge accounting upload/download`) use `hook input`/`hook output` at priority -2. The plan assumes routed traffic arrives at these hooks after isolation drops L2 forwarding.
+WebSocket baglantisi Activity/Fragment lifecycle'ina baglanir, ama Compose'da lifecycle farklidir. ViewModel'de WebSocket acilir ama `onCleared()` sirasinda duzgun kapatilmaz. Veya daha kotu: Configuration change (ekran dondurme) sirasinda WebSocket yeniden acilir, eski baglanti kapanmaz — her dondurme yeni bir WebSocket yaratir, sunucu tarafinda baglanti sayisi patlar.
 
-However, there are two failure modes here. First: if the isolation drop fires *before* `br_netfilter` + `ip_forward` routes the packet through the IP stack, the packet never reaches the `input`/`output` hooks at all — counters stay at zero silently. Second: within the same forward hook, if the `bridge filter forward` chain (priority -200) drops the packet, no chain at a higher numerical priority on the same hook is evaluated — a drop verdict is **final** and immediate per nftables semantics.
-
-The plan's logic is sound IF the packet path after isolation is: bridge forward DROP → packet re-enters IP stack as routed → sees bridge input/output hooks. But if `br_netfilter` is not active, or if the kernel routes it differently, accounting sees nothing.
+TonbilAiOS backend'i WebSocket uzerinden bandwidth, DNS, cihaz verisi gonderiyor (5 saniyede bir). Samsung S24 Ultra'da ekran dondurme, split-screen, picture-in-picture gibi durumlar sik yasanir.
 
 **Why it happens:**
-The team migrates accounting from `hook forward` to `hook input/output` assuming the bridge isolation drop causes re-routing through the IP stack. This is true — but only when `br_netfilter` is loaded and `net.ipv4.ip_forward=1` is active. If either is missing at the moment of migration, traffic silently bypasses all counters.
+Compose'da ViewModel varsayilan olarak configuration change'lerde hayatta kalir, ama WebSocket baglantisini ViewModel constructor'inda acan gelistiriciler, `onCleared()` cagirilana kadar (Activity tamamen yok edilene kadar) baglantinin actik kaldigini varsayar. Sorun su: eger navigation graph degisirse veya composable scope degisirse, ViewModel yeniden yaratilabilir — eski WebSocket kapanmaz.
 
 **How to avoid:**
-1. Verify `br_netfilter` is loaded (`lsmod | grep br_netfilter`) BEFORE adding isolation drop rules.
-2. Verify `net.ipv4.ip_forward=1` is set BEFORE testing accounting.
-3. After migrating to input/output hooks, immediately run `sudo nft list chain bridge accounting upload` and watch counters increment within 5 seconds. If they stay at zero while devices are active on the network, accounting is broken — do NOT proceed.
-4. Run verification test: ping from a LAN device to internet, watch counter; if counter doesn't move, stop and diagnose before continuing.
+1. WebSocket baglantilarini `OkHttpClient` + `WebSocketListener` ile yonet, ViewModel icinde `viewModelScope` coroutine'i ile bagla.
+2. `onCleared()` icinde `webSocket.close(1000, "ViewModel cleared")` cagir — bu ZORUNLU.
+3. SharedFlow kullan (replay=0) — yeni subscriber geldiginde eski veriyi tekrar gondermez.
+4. Baglanti durumunu StateFlow olarak expose et (`Connecting`, `Connected`, `Disconnected`, `Error`).
+5. Network durumu degistiginde (WiFi -> mobil) WebSocket'i yeniden baglama mekanizmasi ekle — exponential backoff ile.
 
 **Warning signs:**
-- `nft list chain bridge accounting upload` shows counters frozen at 0 while devices are active
-- `bandwidth_monitor.py` logs show all devices at 0 bytes
-- Dashboard bandwidth widgets show zero for all devices
-- No error in backend logs (silent failure because `check=False` is used on counter read calls)
+- Backend loglarinda ayni cihazdan birden fazla WebSocket baglantisi gorulur
+- Uygulama bellek kullaniminin zaman icinde arttigi gorulur (LeakCanary ile)
+- Ekran dondurdukten sonra veri iki kez gelir
+- Backend WebSocket handler'inda connection count artip dusmez
 
-**Phase to address:** Phase covering Step 2 (accounting migration) — must include counter verification as an explicit success gate before marking the phase complete.
+**Phase to address:** WebSocket/real-time veri fazi — ViewModel lifecycle yonetimi ilk gun dogru kurulmali, sonradan duzeltmek cok zor.
 
 ---
 
-### Pitfall 2: nftables Ruleset Not Persisted Across Reboot — Isolation Rules Disappear
+### Pitfall 2: JWT Token Yenileme Yarisi (Race Condition) — Paralel Isteklerde 401 Cascading Failure
 
 **What goes wrong:**
-After adding bridge isolation rules via `nft add rule ...`, they exist in kernel memory. The `persist_nftables()` function writes them to `/etc/nftables.conf`. But if `systemd nftables.service` is not enabled, or if another process (e.g., fail2ban, Docker, firewalld) flushes the ruleset after boot, the isolation rules are gone on next restart — the system silently reverts to transparent bridge mode.
+Access token suresi dolmus, birden fazla API istegi ayni anda gonderilir (dashboard acildiginda 5-6 endpoint ayni anda cagirilir). Ilk istek 401 alir ve refresh token ile yenileme baslatir. Ama diger 4-5 istek de ayni anda 401 alir ve hepsi ayni anda refresh token ile yenileme denemesi yapar. Backend sadece ilk refresh'i kabul eder, digerlerini reddeder — kullanici login ekranina atilir.
 
-This is not just a cosmetic bug: the Pi reboots, modem can now see all LAN device MACs again, and the security guarantee of bridge isolation is gone — with no error, no alert, no log.
+TonbilAiOS dashboard'u acildiginda en az 6 paralel istek gider: summary, devices, dns-stats, bandwidth, vpn-status, firewall-rules. Hepsi ayni anda 401 alirsa kaos baslar.
 
 **Why it happens:**
-On Debian/Raspberry Pi OS, `nftables.service` may not be enabled by default. The Pi's backend (`tonbilaios-backend`) startup calls `ensure_bridge_isolation()` which re-adds rules — but only if the service starts successfully. If the service crashes on startup (e.g., DB not ready), the isolation rules are not restored.
+OkHttp Interceptor'da token yenileme kodu `synchronized` degil. Her 401 response kendi refresh istegiini baslatir. Backend tarafinda refresh token rotation aktifse (guvenlik icin olmali), ilk refresh sonrasi eski refresh token gecersiz olur — diger istekler basarisiz olur.
 
 **How to avoid:**
-1. Explicitly verify `systemctl is-enabled nftables` returns `enabled` as part of the migration checklist.
-2. After running `persist_nftables()`, reboot the Pi and check that rules survived: `sudo nft list chain bridge filter forward` should show both `bridge_isolation_lan_wan` and `bridge_isolation_wan_lan` rules.
-3. Add a boot-time verification in `main.py`: if isolation rules are not present at startup, `ensure_bridge_isolation()` re-applies them (already planned in Step 4) — confirm this works after a fresh reboot.
-4. Do NOT rely on `main.py` alone for persistence — systemd nftables.service must also be the fallback in case the FastAPI service itself doesn't start.
+1. OkHttp `Authenticator` interface'ini kullan (Interceptor degil) — OkHttp 401'de otomatik olarak Authenticator'u cagiriyor.
+2. Authenticator icinde `synchronized` blok veya `Mutex` (coroutine) kullan — ayni anda sadece bir refresh istegi yapilsin.
+3. Refresh sirasinda bekleyen diger istekler yeni token'i alsn ve tekrar denensin.
+4. Refresh basarisiz olursa (refresh token da gecersizse), kullaniciyi login'e yonlendir — ama sadece bir kez, cascading 401'lerin hepsi icin degil.
+5. Token'i EncryptedSharedPreferences'ta sakla (Android Keystore-backed AES256).
 
 **Warning signs:**
-- After reboot, `nft list ruleset` does not contain `bridge_isolation` comment strings
-- `sudo tcpdump -i eth0 arp -c 20` shows LAN device MACs in ARP traffic on the WAN port
-- modem ARP table shows more than one MAC address (visible via Pi's `ip neigh show` on eth0)
+- Kullanici dashboard'a girdiginde rastgele login ekranina atiliyor
+- Backend loglarinda ayni device'tan saniyeler icinde birden fazla refresh token istegi
+- "Token expired" hatasi uygulamayi kullanirken sik sik cikiyor
+- Race condition debug'u zor — "bazen calisiyor bazen calismiyor" semptomu
 
-**Phase to address:** Step 6 (Pi cleanup/apply) — add explicit post-reboot verification as a required step, not optional.
+**Phase to address:** Auth/networking altyapi fazi — bu ILKE cozulmeli, UI'dan once. Interceptor/Authenticator dogru yazilmazsa her sayfa etkilenir.
 
 ---
 
-### Pitfall 3: DHCP Gateway Change Causes Immediate Lockout for All Active Devices
+### Pitfall 3: FCM Token Yonetimi Eksik — Push Bildirimler Sessizce Calismaz Hale Gelir
 
 **What goes wrong:**
-Step 5 changes `dnsmasq` gateway option from `.1` to `.2`. Devices with existing DHCP leases keep their old gateway (`.1`) until lease renewal. If the isolation drop rules are already active, those devices can no longer route through `.1` (modem), and they cannot reach `.2` (Pi) as gateway because their route table points to `.1`. Result: all active devices lose internet until they renew their DHCP lease.
+FCM token uygulama ilk kurulumda alinir ve backend'e gonderilir. Ama FCM token'i degisebilir: uygulama yeniden kurulma, uygulama verileri silinme, cihaz restore, veya Google'in periyodik token yenileme yapmasindan dolayi. Token degistiginde backend eski token'a gondermeye devam eder — bildirimler sessizce kaybolur, hata donmez (FCM "basarili" der ama cihaza ulasmaz).
 
-Depending on dnsmasq lease time (typically 24 hours), this can mean a multi-hour internet outage for all LAN devices — with no indication in the Pi logs.
+Ayrica: Doze mode ve App Standby, normal oncelikli mesajlari geciktirir veya toplu gonderir. Kullanici "DDoS saldirisi var" bildirimini 2 saat sonra alir — bu bir router yonetim uygulamasi icin kabul edilemez.
 
 **Why it happens:**
-DHCP clients only update their gateway at lease renewal, not when the server changes the gateway option. `systemctl reload dnsmasq` changes what new leases get, but existing leases are unaffected until they expire or DHCP RENEW fires (at T1, 50% of lease time).
+- FCM token degisikligini dinleyen `onNewToken()` callback'i implement edilmez veya backend'e yeni token'i gondermez.
+- Backend eski token'lari temizlemez — `NotRegistered` hatasini ignore eder.
+- Mesaj onceligi `normal` olarak gonderilir (varsayilan) — `high` olmasi gereken guvenlik bildirimleri Doze'da gecikir.
 
 **How to avoid:**
-1. Before changing the gateway, shorten the DHCP lease time to a very short window (e.g., 5 minutes): `default-lease-time 300; max-lease-time 300;` in dnsmasq config.
-2. Reload dnsmasq and wait 5-10 minutes for all devices to renew.
-3. Then change gateway to `.2` and reload dnsmasq again.
-4. Wait another 5 minutes for all devices to pick up the new gateway.
-5. Restore normal lease time (e.g., 86400).
-6. Verify with: `ip netns exec ns_test ip route show` shows `default via 192.168.1.2`.
-
-Alternatively: force DHCP RELEASE on all devices (not feasible remotely), or schedule the change during a maintenance window.
+1. `FirebaseMessagingService.onNewToken()` override et — her token degisikliginde backend'e yeni token'i POST et.
+2. Uygulama her acildiginda `FirebaseMessaging.getInstance().token` ile guncel token'i al ve backend ile karsilastir.
+3. Backend'te FCM gonderim sonucunda `NotRegistered` veya `InvalidRegistration` hatasi gelirse, o token'i DB'den sil.
+4. DDoS, guvenlik alarmi gibi acil bildirimler icin `priority: "high"` kullan — Doze mode'da bile aninda teslim edilir.
+5. Backend'te `POST /api/v1/devices/fcm-token` endpoint'i ekle — token kayit ve guncelleme icin.
+6. Notification channel'lari dogru kur: `IMPORTANCE_HIGH` ile ses ve titresim, `IMPORTANCE_DEFAULT` ile normal bildirimler.
 
 **Warning signs:**
-- After applying isolation rules + gateway change simultaneously, all LAN devices report "no internet" on the network
-- `conntrack -L` shows no ESTABLISHED connections from LAN IPs
-- Gateway still shows `.1` in device route tables
+- Kullanici "bildirim gelmiyor" diyor ama backend "basariyla gonderildi" logluyor
+- FCM console'da token gecersiz hatalari birikiyor
+- Uygulama yeniden kurulduktan sonra bildirimler calismaz hale geliyor
+- Acil guvenlik bildirimleri dakikalarca gecikiyor
 
-**Phase to address:** Step 5 (DHCP gateway change) — must be split into: (a) shorten lease time, (b) wait for renewal, (c) change gateway, (d) verify, (e) restore lease time. Not a single atomic step.
+**Phase to address:** Push notification fazi — backend endpoint + Android service ayni fazda yapilmali. Token lifecycle ILKE dogru kurulmazsa sonradan duzeltmek cok zor.
 
 ---
 
-### Pitfall 4: SSH Access via Jump Host Lost During Transition Due to Conntrack Gap
+### Pitfall 4: Self-Signed veya Ozel Sertifika ile HTTPS Baglanti — CertPathValidatorException
 
 **What goes wrong:**
-The SSH jump host connects to Pi at `192.168.1.2` via the existing `br0` interface. During the transition — specifically between the moment bridge isolation drop rules are applied and MASQUERADE/NAT is confirmed working — there is a window where Pi's routing is undefined. If NAT is not yet in place, or `ip_forward` is not yet set, Pi cannot route return traffic from WAN back to the jump host's SSH session. The existing SSH connection may hang or drop.
+wall.tonbilx.com Let's Encrypt veya baska bir CA sertifikasi kullaniyorsa sorun yok. Ama eger self-signed veya ozel CA sertifikasi varsa, Android varsayilan olarak guvenmiyor — `SSLHandshakeException: CertPathValidatorException: Trust anchor for certification path not found` hatasi aliyor. Gelistirici "cozum" olarak TrustManager'i bypass eder (tum sertifikalari kabul et) — bu MITM saldirisi kapisi acar.
 
-More critically: once the SSH connection drops, there is NO recovery mechanism available remotely. The Pi can only be reached via `pi.tonbil.com:2323 → 192.168.1.2`. If that path is broken, there is no way to recover without physical access.
+Yerel agda 192.168.1.2'ye HTTP ile baglanmak da ayri bir sorun: Android 9+ varsayilan olarak cleartext HTTP'yi reddeder.
 
 **Why it happens:**
-The transition involves multiple sequential steps. If they are applied in the wrong order — isolation drop before MASQUERADE, or MASQUERADE before `ip_forward` — Pi's IP stack is briefly in an inconsistent state. The SSH session to the jump host is WAN-side traffic; it does not go through the bridge forward chain (it goes through `inet tonbilai input`), so the isolation rules themselves don't break it. However, if the outbound routing from Pi to the jump host fails (no default route, or NAT not working for Pi's own traffic), the session can die.
+- Test sirasinda "hizli cozum" olarak `X509TrustManager` override edilir, uretimde kalir.
+- Yerel ag icin HTTP kullanmak istenir ama `android:usesCleartextTraffic="true"` eklenir — bu TUM domainler icin cleartext'i acar, sadece yerel ag icin degil.
+- Certificate pinning yapilmaz — sertifika degistiginde uygulama kirilir.
 
 **How to avoid:**
-1. Apply steps in this strict order: (a) `ip_forward=1`, (b) `br_netfilter` + `bridge-nf-call-iptables=1`, (c) MASQUERADE rule, (d) VERIFY Pi can reach internet (`curl google.com`), (e) add bridge isolation drop rules.
-2. Never add the drop rules before verifying MASQUERADE is working.
-3. Use a `tmux` or `screen` session on the Pi so that SSH session drops are recoverable if the tunnel briefly bounces.
-4. Have `remove_bridge_isolation()` script pre-staged in `/tmp/rollback.sh` on the Pi before starting — so if something goes wrong, a new SSH session can run it immediately.
-5. Test the rollback script in advance to confirm it works.
+1. wall.tonbilx.com icin Let's Encrypt sertifikasi kullan (ucretsiz, otomatik yenileme) — Android buna varsayilan olarak guvenir, ek konfigurasyon gereksiz.
+2. Yerel ag icin `res/xml/network_security_config.xml` kullan — sadece 192.168.1.0/24 icin cleartext izni ver, diger domainler icin HTTPS zorunlu kalsin.
+3. ASLA `TrustManager` bypass etme — bunun yerine sertifikayi Android trust store'a ekle veya network security config ile pin'le.
+4. Certificate pinning'i dikkatlice kullan: pin yenileme stratejisi olmadan pinning yapmak, sertifika yenilendiginde uygulamanin tamamen calismaz hale gelmesine neden olur. Backup pin ekle.
 
 **Warning signs:**
-- SSH session hangs for >30 seconds during step application
-- `curl --connect-timeout 5 https://www.google.com` from Pi fails after adding drop rules
-- `ip route` from Pi shows no default route
+- Kodda `TrustAllCerts`, `ALLOW_ALL_HOSTNAME_VERIFIER`, veya `hostnameVerifier = { _, _ -> true }` gorulur
+- AndroidManifest'te global `usesCleartextTraffic="true"` var
+- Sertifika yenileme sonrasi uygulama aniden baglanamaz hale gelir (pinning sorunu)
 
-**Phase to address:** Step 6 (Pi manual apply) — define exact command ordering; rollback script must be pre-staged; tmux session required.
+**Phase to address:** Networking altyapi fazi (ilk faz) — OkHttp client konfigurasyonu projenin temeli, yanlis baslangic her seyi etkiler.
 
 ---
 
-### Pitfall 5: `br_netfilter` sysctl Silently Lost After Reboot
+### Pitfall 5: Compose Recomposition Patlamasi — Canli Veri Gosterimine Jank ve Battery Drain
 
 **What goes wrong:**
-`net.bridge.bridge-nf-call-iptables=1` is written to `/etc/sysctl.d/99-bridge-isolation.conf` (per Step 6). But `systemd-sysctl.service` runs at boot before `br_netfilter` is loaded by systemd. If `br_netfilter` is not in `/etc/modules-load.d/`, the sysctl setting silently has no effect — the module doesn't exist yet when sysctl tries to apply it. After reboot, bridge-nf is inactive, meaning nftables bridge rules and IP-level inspection don't interact correctly.
+Dashboard'da bandwidth grafigi, canli akislar, cihaz listesi gibi veriler 3-5 saniyede bir guncelleniyor. Her guncelleme tum ekranin recompose edilmesine neden olur — fps duser, ScrollState kaybolur, animasyonlar takilir. Samsung S24 Ultra'nin 120Hz ekraninda bu ozellikle goze carpar.
 
-This is a well-documented and commonly hit issue on Raspberry Pi / Debian systems (confirmed in multiple GitHub issues and the Kubernetes/Raspbian ecosystem).
+Daha kotu: LazyColumn icinde `items()` kullanirken `key` parametresi verilmez — her guncelleme tum listeyi sifirdan olusturur, scroll pozisyonu kaybolur.
 
 **Why it happens:**
-The `br_netfilter` kernel module creates `/proc/sys/net/bridge/` entries. If the module is not loaded, that path doesn't exist. `sysctl -w net.bridge.bridge-nf-call-iptables=1` at boot silently fails with "No such file or directory" if the module isn't loaded first.
+- State degisikligi root composable'da okunur — tum alt agac recompose olur.
+- `List<Flow>` gibi unstable tipler kullanilir — Compose bunlari her zaman "degismis" olarak isler.
+- WebSocket'ten gelen her mesaj yeni bir `List` objesi yaratir — referans esitligi (===) saglanamaz, icerik ayni olsa bile recompose tetiklenir.
+- `derivedStateOf` kullanilmaz — her state degisikligi UI'yi tetikler.
 
 **How to avoid:**
-1. Add `br_netfilter` to `/etc/modules-load.d/br_netfilter.conf` (one line: `br_netfilter`) so it loads at boot before systemd-sysctl runs.
-2. Verify persistence after reboot: `lsmod | grep br_netfilter` should show the module; `sysctl net.bridge.bridge-nf-call-iptables` should return `1`.
-3. Do NOT rely solely on `ensure_bridge_isolation()` calling `modprobe br_netfilter` at startup — that is the right defense, but systemd-managed sysctl must also be correct for the kernel to behave consistently from the very first boot second before FastAPI starts.
+1. State'i olabildigince dar scope'ta oku — `BandwidthChart` composable'i sadece bandwidth state'ini okusun, device listesi okumasi.
+2. LazyColumn/LazyRow'da HER ZAMAN `key = { it.id }` kullan.
+3. Data class'lari `@Immutable` veya `@Stable` ile annote et — Compose smart recomposition yapabilsin.
+4. Sik degisen veriler icin `derivedStateOf` kullan — sadece sonuc degistiginde recompose tetikle.
+5. `snapshotFlow` ile Flow -> Compose State donusumunu kontrol et.
+6. Compose compiler metrics'i aktif et (`composeCompiler { metricsDestination }`) — hangi composable'larin skip edilemedigini gor.
 
 **Warning signs:**
-- After reboot, `sysctl net.bridge.bridge-nf-call-iptables` returns `0` or "No such file"
-- `lsmod | grep br_netfilter` returns empty
-- Bridge accounting counters at zero immediately after reboot
+- Layout Inspector'da gereksiz recomposition sayilari gorulur
+- Canli veri gosterimi sirasinda UI kasmalari (jank)
+- ScrollState surekli sifirlaniyor (liste basina atlama)
+- Batarya tuketimi yuksek (surekli UI render)
+- Profiler'da Compose fase sureleri normalin 3-4 kati
 
-**Phase to address:** Step 6 (Pi cleanup) — add `/etc/modules-load.d/br_netfilter.conf` creation to the command checklist.
+**Phase to address:** UI/Dashboard fazi — ilk composable'lardan itibaren dogru pattern kullanilmali. Sonradan optimize etmek "her seyi refactor et" demek.
 
 ---
 
-### Pitfall 6: Removing `bridge masquerade_fix` Table Breaks Existing TCP Sessions
+### Pitfall 6: Yerel Ag vs Dis Ag Gecisi — Dual Endpoint Yonetimi Karmasikligi
 
 **What goes wrong:**
-Step 6a removes the `bridge masquerade_fix` table via `nft delete table 'bridge masquerade_fix'`. This table currently does MAC rewriting. Deleting it while active TCP sessions exist through that path will cause those sessions to immediately break — conntrack entries reference the old translation, which is now gone.
+Uygulama ev agindayken 192.168.1.2'ye dogrudan, disaridayken wall.tonbilx.com uzerinden baglanmali. Gelistirici base URL'i sabit yapar (birini secer) — ya evde ya disarida calismaz. Veya kullanici WiFi'dan mobil veriye gectiginde uygulama hala yerel IP'ye baglanmaya calisiyor — timeout, sonra crash.
 
-Under transparent bridge mode, the modem sees individual device MACs. If `masquerade_fix` was providing any active L2 rewriting for in-flight connections, those connections drop the moment the table is deleted.
+WebSocket icin bu daha da kritik: yerel agda `ws://192.168.1.2:8000/ws`, disarida `wss://wall.tonbilx.com/ws`. Baglanti kopunca yeniden baglanma hangi endpoint'e yapilacak?
 
 **Why it happens:**
-Network state transitions during live operation always risk disrupting in-flight connections. The team may not realize that deleting the MAC rewrite table is not a graceful operation — it is immediate and affects all active flows that depended on it.
+- Ag degisikligi dinlenmez — uygulama baslangicdaki ag durumunu varsayar.
+- ConnectivityManager callback'i kullanilmaz veya yanlis implement edilir.
+- Base URL degisikligi sirasinda aktif istekler basarisiz olur ve retry mekanizmasi yoktur.
 
 **How to avoid:**
-1. Delete `masquerade_fix` AFTER adding the isolation drop rules — once forward-path traffic is dropped, no new connections go through the MAC rewrite path.
-2. Accept that existing connections will briefly drop during the transition. Warn users before applying.
-3. The order should be: (a) add isolation drop rules, (b) verify new routing works via NAT (new connections succeed), (c) then delete `masquerade_fix`. By then, no active connections rely on it.
+1. `ConnectivityManager.registerDefaultNetworkCallback()` ile ag degisikliklerini dinle.
+2. Ag degistiginde, once yerel IP'ye ping at (timeout 2 saniye) — basariliysa yerel, degilse dis endpoint kullan.
+3. OkHttp Interceptor ile base URL'i dinamik olarak degistir — her istek icin gecerli endpoint'i sec.
+4. WebSocket kopunca, yeniden baglanmada once yerel sonra dis endpoint dene.
+5. Kullaniciya ag durumunu goster: "Yerel Ag" (yesil) vs "Dis Ag" (sari) badge.
+6. Her iki endpoint icin de ayni auth token gecerli olmali — backend ayni oldugu icin sorun yok.
 
 **Warning signs:**
-- Active SSH sessions from LAN to the internet drop immediately when `masquerade_fix` table is deleted
-- `conntrack -L` shows connections moving to `TIME_WAIT` or disappearing
+- Kullanici WiFi'dan cikinca uygulama 30 saniye takilip timeout veriyor
+- Evden ciktiktan sonra uygulama calismaz hale geliyor (yerel IP'ye takili kalmis)
+- WebSocket baglantisi WiFi degisikliginden sonra geri gelmiyor
+- "Baglanti hatasi" mesaji sik gorulur ama internet calisiyor
 
-**Phase to address:** Step 6a — reorder: delete `masquerade_fix` AFTER, not before, isolation rules are applied and NAT is verified working.
+**Phase to address:** Networking altyapi fazi — bu mimari karar ilk fazda dogru alinmali. Sonradan iki endpoint yonetimi eklemek tum API katmanini etkiler.
 
 ---
 
@@ -167,10 +185,12 @@ Network state transitions during live operation always risk disrupting in-flight
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Using `check=False` on accounting counter read calls | Silent failure instead of exception | Zero counters look like "no traffic" — impossible to distinguish from broken accounting | Never for accounting-critical paths; add explicit zero-counter alerting |
-| Hardcoding `eth0`/`eth1` interface names | Simple code | Fails if Pi kernel renames interfaces (e.g., `enp1s0`) due to udev rules; bridge isolation rules add to wrong interfaces | Only acceptable if Pi's `net.ifnames=0` / `biosdevname=0` is verified persistent |
-| Relying on `if "bridge_isolation" in ruleset` to detect existing rules | Avoids duplicate rules | Comment-based detection fails if nft rule was added manually without the exact comment string | Acceptable for now; document the dependency explicitly |
-| Single-step DHCP gateway change | Simpler to execute | Disconnects all active LAN devices until next lease renewal | Never on a live production network; always use short-lease pre-staging |
+| Tum API cagrilarini Activity/Fragment'ta yapmak, ViewModel kullanmamak | Hizli prototip | Configuration change'de veri kaybi, bellek sizintisi, test edilemez kod | Never — Compose ile ViewModel zorunlu |
+| Hardcoded base URL (`http://192.168.1.2:8000`) | Hizli gelistirme | Dis agdan erisim impossible, build variant gerektirir | Sadece ilk prototip icin, 1 hafta icinde refactor |
+| `TrustAllCerts` ile HTTPS bypass | Test sirasinda kolaylik | MITM saldiri kapisi, Play Store red riski | Never — network_security_config kullan |
+| WebSocket reconnect olmadan tek baglanti | Basit implementasyon | Ag degisikliginde kalici baglanti kopuklugu | Never — reconnect mekanizmasi ilk gunden olmali |
+| Tum notification'lari tek channel'da gostermek | Az kod | Kullanici onemli/onemsiz bildirimleri ayiramaz, ses/titresim kontrolu yok | Sadece ilk prototip, 2. fazda channel'lara bol |
+| Biometric auth'u sadece local gate olarak kullanmak (backend dogrulamasi yok) | Basit implementasyon | Cihaz rootlanmissa biometric bypass edilebilir, gercek guvenlik saglamaz | MVP icin kabul edilebilir, ama dokumante et |
 
 ---
 
@@ -178,10 +198,12 @@ Network state transitions during live operation always risk disrupting in-flight
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| nftables comment strings in Python `run_nft()` | Passing `'"bridge_isolation_lan_wan"'` (Python double-quoted inside single) as a list arg — shell expands quotes differently when using `create_subprocess_exec` vs `shell=True` | With `create_subprocess_exec`, pass the comment string WITHOUT the outer shell quotes — `run_nft` constructs the argv directly; nft receives the literal string correctly |
-| dnsmasq reload vs restart | `systemctl reload dnsmasq` does not flush existing leases — new gateway option applies only to new leases | Use `reload` for config update, but pre-shorten lease time so renewals happen quickly |
-| `persist_nftables()` write to `/etc/nftables.conf` | Overwrites file atomically but if nftables.service is not enabled, the file is never read at boot | Always verify `systemctl is-enabled nftables` returns `enabled` and reboot to confirm |
-| `conntrack -L` for post-transition verification | Shows entries from before the transition; ESTABLISHED counts may look healthy while NAT is actually broken for NEW connections | Test by initiating a NEW connection from a LAN device after the transition, not just checking existing conntrack entries |
+| FastAPI WebSocket + OkHttp | WebSocket mesaj formatini eslestirmemek — backend JSON gonderiyor ama Android parser farkli format bekliyor | Backend'in mevcut WebSocket formatini (useWebSocket.ts'ten) incele, ayni JSON schema'yi kullan |
+| FCM + FastAPI backend | Backend'te `firebase-admin` SDK yerine ham HTTP API kullanmak — token yonetimi ve hata isleme eksik kalir | `firebase-admin` Python SDK kullan: `messaging.send()` ile retry ve hata yonetimi otomatik |
+| Biometric + EncryptedSharedPreferences | BiometricPrompt sonucunu beklemeden token okumaya calismak — async callback zamanlama sorunu | `androidx.biometric:biometric-ktx` ile suspending coroutine API kullan — `authenticateWithBiometrics()` dogrudan result dondurur |
+| OkHttp + wall.tonbilx.com | Sertifika pinning yaparken backup pin eklememek — sertifika yenilenince uygulama tamamen kirilir | `CertificatePinner` ile hem mevcut hem bir sonraki sertifikanin pin'ini ekle, veya pinning yapma (Let's Encrypt yeterli) |
+| Retrofit + FastAPI pagination | FastAPI `skip/limit` pattern'ini Android'de `offset/limit` olarak yanlis map'lemek | Backend'in mevcut pagination yapisini (traffic.py: `skip`, `limit`, `sort_by`, `sort_order`) birebir kullan |
+| Android Notification Channel + Telegram | Telegram zaten bildirim gonderiyor — Android push ile cift bildirim | Kullaniciya "Bildirim kanali" secimi sun: sadece Push, sadece Telegram, veya her ikisi. Backend'te topic-based subscription |
 
 ---
 
@@ -189,9 +211,10 @@ Network state transitions during live operation always risk disrupting in-flight
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Bridge accounting on input/output hooks misses non-IP traffic (ARP, etc.) | ARP flood from many devices shows zero accounting; but this is expected | Not a performance issue — document that bridge accounting counts IP traffic only | Not a scale issue; behavior is correct |
-| Counter read scanning entire chain per call (`read_device_counters` parses full chain output) | Slow if many devices (>50 MACs) are tracked | Current approach is fine for home/SOHO scale (< 30 devices) | Will not break at Pi's expected device count |
-| `sync_device_counters` called frequently with many MACs creates many nft subprocesses | High CPU on Pi if called every few seconds for 30+ devices | Keep sync interval at 5s minimum; the Pi's ARM CPU handles this at SOHO scale | Tested up to ~50 devices without issues in similar setups |
+| WebSocket her mesajda tum listeyi gonderiyor, diff yok | Her 5 saniyede 50+ cihaz listesi parse ediliyor — gereksiz CPU ve batarya | Backend'te diff-based WebSocket mesajlari kullan veya client-side diff uygula | 30+ cihaz ile fark edilir |
+| Bitmap/image caching olmadan cihaz ikonlari | Her scroll'da ikon yeniden yukleniyor — LazyColumn kasma | Coil ile `ImageLoader` konfigur et, memory + disk cache | 20+ cihaz listesinde goze carpar |
+| Her ekran gecisinde API istegi — cache yok | Sayfa gecislerinde surekli loading spinner | Repository katmaninda in-memory cache + stale-while-revalidate pattern | Her navigasyonda fark edilir |
+| Foreground Service olmadan uzun sureli WebSocket | Android 10+ arka planda WebSocket'i ~10 dakikada oldurur | WorkManager ile periyodik check + Foreground Service ile canli baglanti | Uygulama arka plana alindiginda |
 
 ---
 
@@ -199,23 +222,38 @@ Network state transitions during live operation always risk disrupting in-flight
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Applying isolation rules without verifying MASQUERADE is in place first | All LAN devices lose internet access (no NAT for outbound traffic) | Strict step ordering: MASQUERADE → verify → drop rules |
-| Leaving `net.ipv4.conf.all.send_redirects=1` after adding isolation | Pi sends ICMP redirects telling LAN devices to route directly to modem, bypassing Pi — partial de-isolation | Disable redirects in Step 3 and persist via sysctl.d |
-| Rolling back by just deleting drop rules without also restoring DHCP gateway to `.1` | Devices use Pi as gateway but Pi is no longer doing NAT properly in transparent mode — intermittent routing failures | Full rollback checklist: (1) delete drop rules, (2) restore gateway `.1`, (3) restore `masquerade_fix` table, (4) re-enable send_redirects |
-| Skipping `remove_bridge_isolation()` pre-staging on Pi | If SSH lockout occurs, recovery requires physical access | Stage rollback script at `/tmp/rollback.sh` on Pi before starting any transition step |
+| JWT token'i logcat'e yazdirmak (debug sirasinda) | Token calinabitir — ozellikle USB debug aktifken | ProGuard/R8 ile debug loglarini release build'den cikar, `HttpLoggingInterceptor.Level.HEADERS` kullan (BODY degil) |
+| Biometric auth basarisiz olunca PIN/pattern fallback'i kendimiz implement etmek | Yanlis implementasyon guvenlik acigi yaratir | Android'in `setAllowedAuthenticators(BIOMETRIC_STRONG or DEVICE_CREDENTIAL)` kullan — sistem PIN/pattern'i kendisi yonetir |
+| API key'leri (Firebase, vb.) source code'da | APK decompile ile key'ler gorunur | `google-services.json` gitignore'a ekle, CI/CD ile inject et veya Firebase App Check kullan |
+| Backend auth token'i olmadan WebSocket baglantisi kabul etmek | Yetkisiz kullanicilar canli veri gorebilir | WebSocket handshake'inde JWT token'i query param veya header ile gonder, backend dogrula |
+| Cleartext HTTP ile yerel agda hassas veri gonderimi | Ayni agdaki baska cihazlar trafigi okuyabilir | Yerel agda bile HTTPS kullan (self-signed cert ile) veya riski kabul edip dokumante et |
+
+---
+
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Baglanti kopunca bos ekran gostermek | Kullanici uygulamanin bozuldugunu dusunur | Son bilinen veriyi goster + "Baglanti kesildi, yeniden baglaniliyor..." banner |
+| Her API hatasini ayni toast ile gostermek ("Bir hata olustu") | Kullanici ne yapacagini bilmez | Hataya ozel mesaj: "Sunucuya ulasilamadi" vs "Oturum suresi doldu" vs "Yetkisiz islem" |
+| Dashboard'da tum widget'lari ayni anda yuklemek | Ilk acilista 3-5 saniye beyaz ekran | Skeleton/shimmer loader goster, widget'lari oncelik sirasina gore yukle |
+| Cyberpunk tema'da dusuk kontrast metin | Yaslı kullanicilar veya gunes altinda okuyamaz | WCAG 2.1 AA kontrast oranini (4.5:1) sagla — neon renkler arka plana gore ayarla |
+| Router yonetim islemlerinde onay olmadan islem yapmak | Yanlis tiklama ile firewall kurali silinir | Kritik islemlerde (kural silme, cihaz engelleme, VPN peer silme) confirmation dialog goster |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Bridge isolation active:** `nft list chain bridge filter forward` shows BOTH `bridge_isolation_lan_wan` AND `bridge_isolation_wan_lan` drop rules — if only one is present, traffic still flows in one direction
-- [ ] **Accounting working:** `nft list chain bridge accounting upload` shows counters incrementing — if frozen at 0 while devices are active, accounting migration failed silently
-- [ ] **Sysctl persistent:** After reboot, `sysctl net.bridge.bridge-nf-call-iptables` returns `1` — if `0` or "No such file", br_netfilter module load persistence is missing
-- [ ] **DHCP gateway adopted by all devices:** `ip route show` from a LAN device shows `default via 192.168.1.2` — NOT `.1`; old leases may still point to `.1` for hours
-- [ ] **Pi's own internet works:** `curl --connect-timeout 5 https://www.google.com` from Pi returns 200 — Pi routing broken is silent from LAN's perspective
-- [ ] **Rollback tested:** Run `remove_bridge_isolation()` then `ensure_bridge_isolation()` in sequence at least once to confirm the rollback cycle works before production use
-- [ ] **masquerade_fix table removed cleanly:** `nft list ruleset | grep masquerade_fix` returns empty — if table still exists it's dead code that may conflict
-- [ ] **TC marking in new chains:** `nft list chain bridge accounting tc_mark_up` shows mark rules; bandwidth limiting on a test device still works after transition
+- [ ] **Auth flow:** Login calisiyor AMA token yenileme test edilmedi — 15 dakika sonra kullanici atilir
+- [ ] **WebSocket:** Veri geliyor AMA ag degisikligi sonrasi reconnect test edilmedi — WiFi'dan cikinca kalici kopukluk
+- [ ] **Push notifications:** Bildirim geliyor AMA uygulama kapaliyken (killed state) test edilmedi — foreground service olmadan calismaz
+- [ ] **Biometric:** Parmak izi calisiyor AMA biyometrik kayitli degilse fallback test edilmedi — kullanici giremez
+- [ ] **Dual endpoint:** Evde calisiyor AMA disaridan erisim test edilmedi — wall.tonbilx.com uzerinden 404/timeout
+- [ ] **Offline durumu:** Internet varken calisiyor AMA internet yokken crash test edilmedi — NetworkOnMainThreadException veya bos ekran
+- [ ] **Dark tema:** Cyberpunk renkleri guzel AMA sistem light mode'da test edilmedi — status bar/navigation bar renk uyumsuzlugu
+- [ ] **Large screen:** S24 Ultra'da guzel AMA kucuk ekranda (5") test edilmedi — icerik tasiyor veya kesiyor
+- [ ] **ProGuard/R8:** Debug'da calisiyor AMA release build'de test edilmedi — minification Retrofit model'lerini kirar (Keep rules eksik)
+- [ ] **Battery:** Calisiyor AMA 1 saat acik kaldiktan sonra batarya etkisi test edilmedi — WebSocket + polling bataryayi eritir
 
 ---
 
@@ -223,12 +261,12 @@ Network state transitions during live operation always risk disrupting in-flight
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| SSH lockout after drop rules break routing | HIGH (requires physical Pi access if no recovery path) | (1) Connect keyboard/monitor to Pi OR use pre-staged `/tmp/rollback.sh`; (2) run rollback commands; (3) verify SSH reconnects; (4) diagnose root cause before retrying |
-| Accounting counters at zero post-migration | LOW (no connectivity impact) | (1) Check br_netfilter loaded; (2) check ip_forward=1; (3) verify input/output chain hooks are correct; (4) if needed, delete and recreate accounting chains |
-| All LAN devices lost internet (DHCP gateway issue) | MEDIUM (internet outage until DHCP renewal) | (1) Immediately run rollback to restore `.1` gateway in dnsmasq; (2) reload dnsmasq; (3) wait for device lease renewal; (4) redo with short-lease pre-staging approach |
-| Sysctl br_netfilter not persistent after reboot | LOW (rules are still added by main.py on startup) | (1) Add `br_netfilter` to `/etc/modules-load.d/`; (2) verify with reboot; (3) sysctl.d file works correctly once module is pre-loaded |
-| masquerade_fix deleted before isolation active | MEDIUM (brief connectivity disruption for LAN devices) | (1) Restore bridge masquerade_fix using `ensure_bridge_masquerade()`; (2) reorder transition steps per correct sequence |
-| nftables rules lost after reboot | MEDIUM (silent re-isolation on next main.py start, but window of exposure) | (1) `systemctl enable nftables`; (2) verify `/etc/nftables.conf` contains isolation rules; (3) reboot to confirm persistence |
+| Token refresh race condition | MEDIUM | (1) OkHttp Authenticator'a `Mutex` ekle; (2) retry queue implement et; (3) tum API cagrilarini test et |
+| WebSocket lifecycle leak | HIGH | (1) Tum ViewModel'leri refactor et; (2) WebSocket manager sinifi yaz; (3) lifecycle-aware baglanti yonetimi ekle |
+| FCM token kaybi | LOW | (1) `onNewToken()` callback ekle; (2) uygulama acilisinda token sync; (3) backend'te eski token temizligi |
+| Recomposition patlamasi | HIGH | (1) Compose compiler metrics aktif et; (2) tum data class'lari `@Stable`/`@Immutable` yap; (3) state okuma noktalarini tasi — neredeyse tum UI'yi etkiler |
+| Dual endpoint eksikligi | MEDIUM | (1) NetworkManager sinifi yaz; (2) OkHttp Interceptor'a endpoint secim mantigi ekle; (3) tum API cagrilarini test et |
+| ProGuard model kirma | LOW | (1) `@Keep` annotation veya `proguard-rules.pro`'ya Retrofit model keep rules ekle; (2) release build test et |
 
 ---
 
@@ -236,26 +274,30 @@ Network state transitions during live operation always risk disrupting in-flight
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Drop kills accounting counters silently | Step 2 (accounting migration) | Watch counters increment in real time for 30 seconds after migration |
-| Ruleset not persisted across reboot | Step 6 (cleanup/apply) + post-reboot check | Reboot Pi, re-check `nft list ruleset` before declaring done |
-| DHCP gateway change disconnects all devices | Step 5 (DHCP) — must use short-lease pre-staging | Verify all test devices show `default via 192.168.1.2` in route table |
-| SSH lockout during transition | Step 6 (apply ordering) | Pre-stage rollback; apply in strict order; tmux session |
-| br_netfilter sysctl lost after reboot | Step 6 (sysctl persistence) | After reboot: `lsmod \| grep br_netfilter` and `sysctl net.bridge.bridge-nf-call-iptables` |
-| Removing masquerade_fix breaks existing sessions | Step 6 (reordering) | Verify masquerade_fix removed AFTER isolation + NAT verified working |
-| br_netfilter not active when drop rules applied | Step 1/6 (apply ordering) | `lsmod \| grep br_netfilter` before any nft commands |
+| WebSocket lifecycle leak | Phase 1: Networking altyapi | LeakCanary ile bellek testi, 10 dakika kullanim sonrasi WebSocket sayisi = 1 |
+| JWT token refresh race | Phase 1: Auth altyapi | 6 paralel API istegi gonder, hepsi basarili donmeli (token expired durumunda) |
+| Dual endpoint yonetimi | Phase 1: Networking altyapi | WiFi'dan mobil veriye gec — 5 saniye icinde API istekleri basarili olmali |
+| HTTPS/sertifika konfigurasyonu | Phase 1: Networking altyapi | wall.tonbilx.com + 192.168.1.2 her ikisine de baglanabilmeli |
+| Compose recomposition | Phase 2: UI/Dashboard | Layout Inspector'da gereksiz recomposition sayisi < 2 per frame |
+| FCM token yonetimi | Phase 3: Push notifications | Uygulama sil-yeniden kur, bildirim 1 dakika icinde gelmeli |
+| Foreground service (background WebSocket) | Phase 2: Real-time veri | Uygulama arka planda 30 dakika — WebSocket hala bagli |
+| ProGuard model kirma | Phase 4: Release hazirligi | Release APK ile tum API cagrilari calismali |
 
 ---
 
 ## Sources
 
-- [Netfilter hooks — nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Netfilter_hooks) — Bridge family hook priorities and drop verdict finality (HIGH confidence)
-- [Bridge filtering — nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Bridge_filtering) — Forward vs input/output hook semantics (HIGH confidence)
-- [Proper isolation of a Linux bridge — Vincent Bernat](https://vincent.bernat.ch/en/blog/2017-linux-bridge-isolation) — br_netfilter interaction, MAC bypass, ARP exploitation pitfalls (MEDIUM confidence — 2017, concepts stable)
-- [br_netfilter sysctl persistence — GitHub moby/moby discussion #48559](https://github.com/moby/moby/discussions/48559) — Module-load timing dependency causing silent sysctl failure (HIGH confidence — multiple reproducers)
-- [Configuring chains — nftables wiki](https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains) — Priority ordering, drop verdict is final (HIGH confidence)
-- [DHCP lease time management — ManageEngine OpUtils](https://www.manageengine.com/products/oputils/tech-topics/dhcp-lease-time.html) — T1/T2 renewal timing and gateway change window (MEDIUM confidence)
-- nftables bridge accounting forward hook code in `backend/app/hal/linux_nftables.py` — direct code inspection of existing `check=False` patterns and `BRIDGE_CHAIN = "per_device"` (HIGH confidence — first-hand)
+- [Jetpack Compose Performance Best Practices — Android Developers](https://developer.android.com/develop/ui/compose/performance/bestpractices) — Recomposition, stability, LazyColumn keys (HIGH confidence)
+- [Overcoming Common Performance Pitfalls in Jetpack Compose — ProAndroidDev](https://proandroiddev.com/overcoming-common-performance-pitfalls-in-jetpack-compose-98e6b155fbb4) — Backwards writes, unstable types (MEDIUM confidence)
+- [FCM on Android — Firebase Blog (2025)](https://firebase.blog/posts/2025/04/fcm-on-android/) — Doze mode, message priority, token lifecycle (HIGH confidence)
+- [Handling JWT Token Expiration in Android Kotlin — Medium](https://medium.com/@prakash_ranjan/handling-jwt-token-expiration-and-re-authentication-in-android-kotlin-441838e5ce0a) — Refresh token race condition (MEDIUM confidence)
+- [Secure Token Storage Best Practices — Capgo](https://capgo.app/blog/secure-token-storage-best-practices-for-mobile-developers/) — EncryptedSharedPreferences, Android Keystore (MEDIUM confidence)
+- [HTTPS — OkHttp Official Docs](https://square.github.io/okhttp/features/https/) — Certificate pinning, TrustManager (HIGH confidence)
+- [Monitor Connectivity Status — Android Developers](https://developer.android.com/training/monitoring-device-state/connectivity-status-type) — NetworkCallback, transport changes (HIGH confidence)
+- [Network Security Config — Android Developers](https://developer.android.com/privacy-and-security/security-config) — Cleartext traffic, domain-specific config (HIGH confidence)
+- [Handle WebSocket in Jetpack Compose with OkHttp and SharedFlow — Medium](https://medium.com/@danimahardhika/handle-websocket-in-jetpack-compose-with-okhttp-and-sharedflow-b1ed7c9fd713) — WebSocket + Compose lifecycle pattern (MEDIUM confidence)
+- [Biometric Authentication with Backend Verification — ProAndroidDev](https://proandroiddev.com/biometric-authentication-with-backend-verification-6feaa0188963) — CryptoObject + JWT signing (MEDIUM confidence)
 
 ---
-*Pitfalls research for: TonbilAiOS Bridge Isolation Transition*
-*Researched: 2026-02-25*
+*Pitfalls research for: TonbilAiOS v2.0 Android App*
+*Researched: 2026-03-06*

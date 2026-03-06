@@ -1,8 +1,8 @@
 # Feature Research
 
-**Domain:** Bridge isolation / transparent-bridge to router-mode transition on Linux (Raspberry Pi)
-**Researched:** 2026-02-25
-**Confidence:** HIGH (kernel/nftables mechanics are well-documented; project-specific hook changes verified from codebase)
+**Domain:** Android Router Management / Network Security Monitoring App
+**Researched:** 2026-03-06
+**Confidence:** HIGH (well-established domain with mature competitors: UniFi, Nighthawk, Firewalla, TP-Link Tether, ASUS Router)
 
 ---
 
@@ -10,145 +10,157 @@
 
 ### Table Stakes (Users Expect These)
 
-Features the system cannot work correctly without after the mode transition. Missing any of these = devices lose internet or isolation is not achieved.
+Features users assume exist in any router management mobile app. Missing these = app feels like a broken web wrapper.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Bridge L2 forward drop (LAN↔WAN) | Core isolation: modem must not see individual device MACs. Without this the "router mode" is just a bridge with NAT bolted on — devices are still exposed to modem | LOW | Two nftables rules on `bridge filter forward` chain: `iifname eth1 oifname eth0 drop` and reverse. Both must exist atomically. |
-| ip_forward=1 (kernel sysctl) | NAT cannot route packets between interfaces without IP forwarding enabled at the kernel level | LOW | Already enabled in most scenarios but must be verified and persisted in `/etc/sysctl.d/`. Regression risk: systemd-sysctl can reset this on reboot. |
-| NAT MASQUERADE on WAN egress | Without NAT, LAN device packets arrive at modem with private src IP. Modem drops or ignores them because it's never seen those IPs via DHCP | LOW | Rule: `ip saddr 192.168.1.0/24 ip daddr != 192.168.1.0/24 masquerade` in `inet nat postrouting`. Already partially in place for VPN — must confirm LAN subnet rule is separate. |
-| DHCP gateway change (.1 → .2) | After isolation Pi IS the router. Clients that still route via .1 (modem) will try to send packets through the modem, which now has no route back to the LAN devices (it lost their MAC visibility). Traffic dies silently. | MEDIUM | Two-part: (a) dnsmasq config `dhcp-option=3,192.168.1.2`, (b) DB `dhcp_pools.gateway`. Existing clients hold old lease — they won't reconnect until lease expires or are rebooted. Forced DHCPNAK not implemented. |
-| br_netfilter module load | NAT at the inet layer only fires for packets that reach the IP stack. br_netfilter is required so bridge-traversing packets are also subjected to ip(6)tables/nftables nat hooks. Without it, MASQUERADE silently does nothing for bridged frames. | LOW | `modprobe br_netfilter` + `net.bridge.bridge-nf-call-iptables=1`. Must be persistent via `/etc/modules-load.d/`. |
-| ICMP redirect disable on all interfaces | After Pi becomes router, Pi's kernel may send ICMP Redirect to LAN clients saying "use .1 directly" — which bypasses Pi and breaks DNS filtering, bandwidth accounting, and firewall | LOW | `net.ipv4.conf.all.send_redirects=0` and `net.ipv4.conf.br0.send_redirects=0`. Must be persisted. |
-| Remove old bridge masquerade_fix table | The old `bridge masquerade_fix` table rewrites MAC addresses so modem accepts frames. In router mode this is actively harmful — it fights with the new isolation rules and introduces unnecessary overhead | LOW | `nft delete table 'bridge masquerade_fix'`. One-shot cleanup. |
-| Bridge accounting hook migration (forward → input/output) | After L2 forward is dropped, the `bridge accounting per_device` chain on the `forward` hook sees zero traffic — all LAN traffic now enters/exits via the IP stack boundary. Counters go dead. | MEDIUM | Replace single `per_device` chain (hook: forward, priority -2) with two chains: `upload` (hook: input, priority -2, iifname eth1) and `download` (hook: output, priority -2, oifname eth1). Counter comment format unchanged so read/parse logic needs minimal update. |
-| TC mark chain migration (forward → input/output) | Same hook problem as accounting but for bandwidth limiting. TC marks set on the forward hook die when forward traffic is dropped. Bandwidth limits stop working silently. | MEDIUM | Replace `tc_mark` chain (hook: forward, priority -1) with `tc_mark_up` (hook: input, priority -1) and `tc_mark_down` (hook: output, priority -1). SKB marks survive IP stack routing, so HTB qdiscs on eth1/eth0 continue to function. |
-| main.py lifespan swap (masquerade → isolation) | Startup must call `ensure_bridge_isolation()` not `ensure_bridge_masquerade()`. If not changed, every backend restart re-adds the old MAC rewrite table and re-enables bridge forwarding workarounds that conflict with isolation. | LOW | One-line change in `lifespan()`. Old function deprecated/removed. |
-| sysctl persistence across reboots | `sysctl -w` changes are in-memory only. After Pi reboot, ICMP redirects re-enable, bridge isolation kernel params reset. Isolation appears to work until next reboot. | LOW | Write to `/etc/sysctl.d/99-bridge-isolation.conf`. Also verify ip_forward is in persistent config. |
-| nftables persist after transition | After applying all nftables rules, if `/etc/nftables.conf` is not updated, a Pi reboot loses: isolation drop rules, new accounting chains, tc mark chains. System reverts to transparent bridge silently. | LOW | `nft list ruleset > /etc/nftables.conf` (with `flush ruleset` header). Or call `persist_nftables()` function already implemented. |
-
----
+| Dashboard / Overview Screen | Every competitor has a single-glance network status screen. Users open the app wanting to see "is everything OK?" in 2 seconds. | MEDIUM | Show: connection status, bandwidth gauge, active device count, DNS block count, threat count. Map 1:1 from web dashboard widgets but optimize for vertical scroll. |
+| Device List + Detail | Core function. Users want to see who's on their network, what they're doing, and block/manage them. | MEDIUM | List: device name, IP, MAC, status indicator, current bandwidth. Detail: traffic history, DNS queries, profile assignment, block toggle. |
+| Push Notifications (FCM) | Mobile's #1 advantage over web. Users expect alerts without opening the app: new device joined, DDoS detected, device blocked, VPN status change. | HIGH | Requires backend FCM integration (new endpoint for token registration, notification dispatch service). This is the primary reason to have a native app. |
+| Biometric Authentication | Standard security practice for admin/management apps. No one wants to type JWT credentials on a phone. | LOW | Android BiometricPrompt API. Store JWT in EncryptedSharedPreferences, unlock with fingerprint/face. |
+| Pull-to-Refresh | Mobile UI convention. Users expect to swipe down to refresh data on every screen. | LOW | Standard Compose pattern with SwipeRefresh. |
+| Real-time Data Updates | Web uses WebSocket for live bandwidth/DNS data. Mobile must match this — stale data on a monitoring app is unacceptable. | MEDIUM | Use OkHttp WebSocket client or SSE. Same ws:// endpoint as web frontend. |
+| DNS Blocking Toggle (Quick On/Off) | Users frequently need to temporarily disable filtering (e.g., a blocked site they actually need). Must be one tap. | LOW | Single API call to toggle. Can also be a Quick Settings Tile (see Differentiators). |
+| Device Blocking (Pause Internet) | Nighthawk, UniFi, Firewalla all have "pause device" as a primary action. Parents use this constantly. | LOW | Already in backend API. One-tap block/unblock per device. |
+| Profile Management (View + Assign) | Content filtering profiles are a core TonbilAiOS feature. Users need to assign profiles to devices from mobile. | LOW | List profiles, assign to device. Backend API exists. |
+| Remote Access (WAN) | Managing router only from local network defeats the purpose of a mobile app. Must work via wall.tonbilx.com. | LOW | Already available via HTTPS. App needs base URL configuration: auto-detect local (192.168.1.2) vs remote (wall.tonbilx.com). |
+| Dark Theme | The web UI is cyberpunk dark theme. A light-themed Android app would feel disconnected. Also, AMOLED screens benefit from dark UI. | LOW | Jetpack Compose theming. Define color palette matching web neon-cyan/magenta/green scheme. |
+| Connection Status Indicator | Users need to see at a glance: is the router reachable? Is internet working? Is VPN active? | LOW | Persistent header or status bar. Ping /api/v1/dashboard/summary on interval. |
+| Settings Screen (Server URL, Auth) | Users need to configure server address, manage login, clear cache, etc. | LOW | Standard settings pattern. |
 
 ### Differentiators (Competitive Advantage)
 
-Features that make this a robust, production-quality router transition rather than a minimal hack.
+Features that set TonbilAiOS apart from generic router apps. Most competitors are vendor-locked (Nighthawk = NETGEAR only, Tether = TP-Link only). TonbilAiOS is a custom AI-powered system.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Software rollback function (`remove_bridge_isolation()`) | Pi is the single internet path. If transition breaks something, no rollback = hard-down until physical access. A tested rollback via SSH is the difference between 2-minute recovery and driving home. | LOW | Already designed in BRIDGE_ISOLATION_PLAN.md. Removes nftables rules by handle, re-enables ICMP redirects, optionally re-loads old masquerade table. Should be an API endpoint or at minimum a CLI call. |
-| Atomic nftables rule application | Applying isolation drop rules one-by-one creates a window where only one direction is blocked. During that window clients may establish new connections that later become orphaned. | MEDIUM | Use `nft -f -` with a heredoc that adds both drop rules in a single batch. nftables processes `-f` input atomically per-transaction. |
-| Validation test suite post-transition | Operators cannot visually confirm modem isolation is working without testing. Without automated checks, silent failures (only one drop rule applied, wrong interface name) go undetected. | MEDIUM | Seven verification checks designed in BRIDGE_ISOLATION_PLAN.md: ARP table check, conntrack ESTABLISHED count, veth namespace test, bridge forward stats, Pi internet access, DNS resolution, bridge counter activity. |
-| Conntrack flush after gateway change | After DHCP gateway changes from .1 to .2, existing client TCP connections have conntrack entries that still route return traffic via the old path. Until entries expire (minutes for TCP), some connections fail silently. | MEDIUM | `conntrack -F` (or selective flush) after gateway change. Clients reconnect with new gateway. Trade-off: brief connection drop vs. extended stale routing. Controlled disruption is better than random failures. |
-| Per-interface ICMP redirect disable (not just `all`) | `net.ipv4.conf.all.send_redirects=0` sets the default but per-interface settings can override it. `br0` interface created dynamically may inherit wrong default if `all` is set after interface creation. | LOW | Also set `net.ipv4.conf.br0.send_redirects=0` and `net.ipv4.conf.eth0.send_redirects=0` explicitly. BRIDGE_ISOLATION_PLAN.md already includes br0; eth0 is an additional hardening. |
-| Counter value preservation during hook migration | When deleting `per_device` chain and recreating as `upload`/`download`, existing byte counts are lost. This causes a visible counter reset spike in the dashboard bandwidth charts. | HIGH | Read all counter values via `read_device_counters()` before deleting old chain, store as a migration offset in Redis, add offset to subsequent reads. Complex but prevents confusing "bandwidth reset to zero" events in UI. |
-| DHCP lease force-renewal after gateway change | Clients with long leases (24h default) will use the old .1 gateway until lease expires. During that window they bypass Pi's firewall and DNS filtering. | HIGH | Options: (a) set very short lease time briefly then restore, (b) send DHCPFORCERENEW (requires RFC 3203 support — most clients don't support), (c) rely on natural expiry (simplest, acceptable for home network). Option (a) is the practical choice. |
-| Mode status API endpoint | Operators need to know programmatically whether the system is in bridge mode or router mode. Useful for the dashboard and for scripted health checks. | LOW | Read nftables ruleset, check for `bridge_isolation_lan_wan` comment presence. Return `{"mode": "router"}` or `{"mode": "bridge"}`. |
-
----
+| Home Screen Widget (Glance) | See bandwidth, device count, threat status WITHOUT opening the app. None of the major router apps do this well. OpManager recently added it as a premium feature. | MEDIUM | Jetpack Glance (Compose-based widget API). Show: up/down bandwidth, active devices, last alert. Update every 30-60 seconds via WorkManager. |
+| Quick Settings Tile | Toggle DNS filtering or pause all internet from the Android notification shade. Extremely fast access. | LOW | Android TileService API (API 24+). Two tiles: "DNS Filtering" toggle and "Block All Devices" toggle. |
+| AI Chat (Mobile) | No competitor has an AI assistant for network management on mobile. Users can ask "why is my internet slow?" or "block YouTube for kids" in natural language. | MEDIUM | Reuse existing /api/v1/chat endpoint. Standard chat UI with Compose. Telegram intents already handle 16 commands — same backend. |
+| Per-Device Traffic Visualization | Firewalla excels here. Show per-device bandwidth usage over time with charts, top domains visited, app detection. Most router apps show basic lists only. | MEDIUM | Use existing /flows/ endpoints. Recharts equivalent: Vico or MPAndroidChart for Compose. |
+| Notification Categories + Channels | Android notification channels let users fine-tune which alerts they get: security (high priority), new device (medium), bandwidth (low). | LOW | Define channels: Security Alerts, Device Events, Traffic Alerts, System Status. FCM topics per category. |
+| Live Traffic Monitor (Floating) | Picture-in-Picture or floating overlay showing real-time bandwidth. Unique to this app. | HIGH | Android PiP mode or SYSTEM_ALERT_WINDOW permission. Niche but impressive for power users. Defer to v2. |
+| Threat Map (Mobile) | DDoS attack world map on mobile. Visually striking, reinforces the "security" value prop. | MEDIUM | Simplified SVG or Canvas-based map. Existing web component can guide design, but must be touch-optimized. |
+| Auto-Discovery (Local/Remote) | App automatically detects if on local network (use 192.168.1.2) or remote (use wall.tonbilx.com). No manual URL switching. | LOW | Check if 192.168.1.2 responds on port 8000 with timeout. Fallback to wall.tonbilx.com. Cache result with TTL. |
+| Shortcut Actions (App Shortcuts) | Long-press app icon to see: "Block a Device", "Check Status", "Open Chat". Android static shortcuts. | LOW | AndroidManifest shortcut definitions. 3-4 shortcuts max. |
+| WiFi AP Management | Control the Pi's WiFi access point (hostapd) from mobile. Change SSID, password, channel, enable/disable. | LOW | Backend API exists. Standard form UI. |
+| Haptic Feedback on Critical Alerts | Phone vibrates with distinct pattern for security alerts vs info. Subtle but professional. | LOW | Android VibrationEffect API. Different patterns for threat vs info. |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Remove bridge (br0) entirely, use eth0/eth1 directly | "Clean" architecture — no bridge at all, just two routed interfaces | Requires reconfiguring DHCP server, all MAC-based accounting (which uses bridge layer hooks), TC marking, and potentially WireGuard bindings. Massive scope expansion — accounting system was designed around bridge MAC visibility. At least 5 subsystems need changes. | Keep br0. Drop forwarding between its ports. br0 still provides MAC visibility for accounting via input/output hooks. |
-| Move to VLAN-based segmentation simultaneously | "While we're at it, separate IoT/trusted VLANs" | Requires 802.1q VLAN support on switch, VLAN-aware bridge config, separate DHCP pools, separate nftables rules per VLAN. This is a separate milestone of its own. | Keep flat 192.168.1.0/24. VLAN segmentation is a future milestone. |
-| Replace dnsmasq DHCP with ISC DHCP or Kea | Some prefer dedicated DHCP server | dnsmasq is already in production and working. Migration mid-transition is a compounding risk — two systems changing at once makes debugging impossible. | Keep dnsmasq. Update only the gateway option. |
-| IPv6 NAT (NAT66) | IPv6 clients on LAN would also benefit from isolation | NAT66 is non-standard, poorly supported, and unnecessary for home use — ISPs don't give Raspberry Pi home devices IPv6 WAN addresses in this topology. Adds complexity to firewall rules. | Disable IPv6 on br0 (`net.ipv6.conf.br0.disable_ipv6=1`) or accept that IPv6 traffic bypasses the transition scope entirely. |
-| Implement QoS traffic shaping changes simultaneously | "The TC qdiscs need updating too" | TC qdiscs on eth0/eth1 do NOT need changes — only the nftables mark chains that feed them need hook migration. Changing qdiscs simultaneously increases debugging surface. | Only migrate the nftables mark hooks (tc_mark_up / tc_mark_down). Keep HTB qdiscs unchanged. |
-| UI toggle for bridge/router mode | Frontend switch to flip between modes | Adds API surface and state management that is not needed — this is a one-way migration for this deployment. A toggle creates the illusion that both modes are equally supported long-term. | Implement `remove_bridge_isolation()` as an emergency CLI/API call only, not a UI feature. |
+| Offline Mode / Local Cache | "I want to see data when router is down" | If router is down, cached data is stale and misleading. Router management is inherently online. Caching state creates sync conflicts when reconnecting. | Show clear "Router Unreachable" screen with last-known status timestamp. No fake data. |
+| Full Config Backup/Restore from Mobile | "I want to backup my entire router config from my phone" | Config includes nftables rules, sysctl, dnsmasq, hostapd — touching these from mobile is dangerous. One wrong restore bricks the network. | View-only config summary on mobile. Full backup/restore stays in web UI or SSH. |
+| Direct SSH Terminal in App | "I want a terminal to my Pi from the app" | Security nightmare. SSH credentials in a mobile app, fat-finger risk on a phone keyboard for root commands. Scope creep into general server management. | AI Chat handles common commands via structured intents. For SSH, use dedicated apps (JuiceSSH, Termius). |
+| Multi-Router Management | "I have multiple routers/sites" | Adds massive complexity: site switching, per-site auth, per-site notifications. TonbilAiOS is a single-Pi deployment. | Single router. If multi-site needed in future, it's a separate milestone. |
+| Bandwidth Speed Test from App | "Test my internet speed from the app" | The app tests phone-to-router speed, NOT internet speed. Misleading results. Also, running iperf from mobile drains battery. | Show bandwidth data from the router's perspective (already collected by bandwidth_monitor). Link to Speedtest app for phone-side testing. |
+| Custom Theme Editor | "I want to pick my own colors" | Massive UI effort for minimal value. Cyberpunk theme IS the brand. Custom themes create untested color combinations and visual bugs. | Single cyberpunk dark theme. Maybe offer "dim" variant for AMOLED. |
+| Tablet-Optimized Layout | "I want a tablet version" | Target device is Samsung S24 Ultra. Tablet layout doubles UI work for near-zero user base. | Responsive Compose layouts that look acceptable on tablets but optimize for phone. |
+| Real-time Video/Camera Feed | "Show me a camera feed of my router room" | Completely out of scope. This is network management, not home security. | Not applicable. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[br_netfilter module load]
-    └──required by──> [NAT MASQUERADE on WAN egress]
-                          └──required by──> [Bridge L2 forward drop (LAN↔WAN)]
-                                                (drop alone without NAT = no internet for LAN devices)
+[Biometric Auth]
+    └──requires──> [JWT Auth + EncryptedSharedPreferences]
+                       └──requires──> [API Client (Retrofit/Ktor)]
 
-[Bridge L2 forward drop]
-    └──required by──> [Bridge accounting hook migration]
-                      (forward hook sees zero traffic after L2 drop)
-    └──required by──> [TC mark chain migration]
-                      (mark chain on forward hook stops firing)
+[Push Notifications (FCM)]
+    └──requires──> [Backend FCM Token Endpoint (NEW)]
+    └──requires──> [Backend Notification Dispatch Service (NEW)]
+    └──requires──> [Android Notification Channels]
 
-[DHCP gateway change (.1 → .2)]
-    └──enhances──> [Bridge L2 forward drop]
-                   (clients that still use .1 as gateway bypass isolation partially)
-    └──triggers need for──> [Conntrack flush after gateway change]
+[Home Screen Widget]
+    └──requires──> [API Client]
+    └──requires──> [WorkManager (background refresh)]
+    └──enhances──> [Dashboard Screen]
 
-[ip_forward=1]
-    └──required by──> [NAT MASQUERADE]
-                      (without it, packets are not forwarded between interfaces at all)
+[Quick Settings Tile]
+    └──requires──> [API Client]
+    └──requires──> [Biometric Auth] (should verify before toggling security features)
 
-[Remove old bridge masquerade_fix table]
-    └──required by──> [Bridge L2 forward drop]
-                      (masquerade_fix MAC rewrite conflicts with isolation semantics)
+[Live Traffic Monitor]
+    └──requires──> [WebSocket Client]
+    └──requires──> [Dashboard Screen]
 
-[sysctl persistence]
-    └──required by──> [ICMP redirect disable]
-    └──required by──> [ip_forward=1]
-                      (both are runtime-only without persistence)
+[AI Chat (Mobile)]
+    └──requires──> [API Client]
+    └──independent of──> most other features
 
-[nftables persist]
-    └──required by──> ALL nftables changes
-                      (reboots revert all rules without persistence)
+[Device Blocking]
+    └──requires──> [Device List Screen]
+    └──requires──> [API Client]
 
-[main.py lifespan swap]
-    └──conflicts with──> [Remove old bridge masquerade_fix table]
-                         (if lifespan still calls ensure_bridge_masquerade(), it re-creates the table on each restart)
+[Profile Assignment]
+    └──requires──> [Device Detail Screen]
+    └──requires──> [Profile List (API)]
 
-[Software rollback]
-    └──depends on──> [Bridge L2 forward drop]
-                     (rollback only meaningful after isolation is applied)
-    └──independent of──> ALL other features
-                         (can be tested before transition is applied)
+[Auto-Discovery]
+    └──enhances──> [API Client]
+    └──should exist before──> [All screens]
+
+[Notification Categories]
+    └──requires──> [Push Notifications (FCM)]
+    └──enhances──> [All alert-generating features]
+
+[Per-Device Traffic Viz]
+    └──requires──> [Device Detail Screen]
+    └──requires──> [Charting Library]
 ```
 
 ### Dependency Notes
 
-- **NAT MASQUERADE requires br_netfilter:** Packets traversing a Linux bridge do not automatically pass through the inet (IP layer) netfilter hooks. `br_netfilter` is the module that forces bridged packets through IP-layer hooks so MASQUERADE fires. Without it, MASQUERADE rules exist but silently do nothing for LAN-originating traffic. (Confidence: HIGH — verified via nftables wiki and kernel docs)
-
-- **L2 forward drop makes accounting forward hook useless:** Once `iifname eth1 oifname eth0 drop` is in place, LAN packets are no longer bridged — they enter the IP stack at the bridge input hook and exit at the bridge output hook. The `per_device` chain on `forward` hook never fires. Counter values stop incrementing. This is the core reason the accounting hook migration is mandatory, not optional. (Confidence: HIGH — verified via nftables bridge filtering docs)
-
-- **DHCP gateway change conflicts with client lease caching:** Existing clients hold leases with gateway=.1. Even after dnsmasq is updated, clients only pick up the new gateway on lease renewal or reboot. During this window, clients route return traffic through the modem, which now cannot reach LAN devices directly (their MACs are hidden). This creates an asymmetric routing window. (Confidence: MEDIUM — standard DHCP behavior, verified via multiple sources)
-
-- **main.py lifespan swap conflicts with masquerade_fix table removal:** If `ensure_bridge_masquerade()` is still called in `lifespan()`, every backend restart re-creates the `bridge masquerade_fix` table. The manual cleanup step must be paired with the lifespan code change — they cannot be applied independently. (Confidence: HIGH — direct codebase inspection)
+- **FCM requires backend changes:** Two new endpoints needed: POST /api/v1/notifications/register-device (stores FCM token) and internal dispatch service that sends FCM messages when events occur (new device, DDoS alert, etc.). This is the highest-effort backend change.
+- **Biometric Auth requires EncryptedSharedPreferences:** JWT token must be stored encrypted. BiometricPrompt gates access to the decryption key. Standard Android security pattern.
+- **Widget requires WorkManager:** Widgets cannot maintain persistent connections. Must use periodic WorkManager tasks to fetch data and update widget. Battery optimization may throttle updates.
+- **Quick Settings Tile should require biometric:** Toggling DNS filtering from the notification shade is powerful but dangerous. Should prompt biometric before executing security-sensitive actions.
 
 ---
 
 ## MVP Definition
 
-### Launch With (v1 — Minimum for functional bridge isolation)
+### Launch With (v1)
 
-These features together achieve the stated goal: modem sees only Pi, LAN devices have internet, existing features work.
+Minimum viable product — core monitoring and management from Android.
 
-- [x] **Bridge L2 forward drop (both directions)** — Core isolation. Without this, nothing else matters.
-- [x] **br_netfilter load + bridge-nf-call-iptables=1** — Without this, MASQUERADE is a no-op for LAN traffic.
-- [x] **ip_forward=1 (verified + persisted)** — Prerequisite for any routing.
-- [x] **NAT MASQUERADE rule for LAN subnet** — LAN devices need this to reach internet after isolation.
-- [x] **Remove bridge masquerade_fix table** — Old MAC rewrite conflicts with router mode.
-- [x] **ICMP redirect disable (all + br0)** — Without this, Pi tells clients to bypass it, breaking DNS filtering.
-- [x] **Bridge accounting hook migration (forward → input/output)** — Bandwidth counters go dead otherwise.
-- [x] **TC mark chain migration (forward → input/output)** — Bandwidth limiting goes dead otherwise.
-- [x] **main.py lifespan swap** — Every backend restart would undo the transition otherwise.
-- [x] **DHCP gateway change (.1 → .2)** — Clients that renew leases must get Pi as gateway, not modem.
-- [x] **sysctl persistence + nftables persistence** — Reboot resilience.
+- [ ] **API Client + Auth (JWT)** — Foundation for everything
+- [ ] **Biometric Authentication** — Security requirement for admin app
+- [ ] **Auto-Discovery (local/remote)** — Seamless connection to router
+- [ ] **Dashboard Screen** — Single-glance network status
+- [ ] **Device List + Detail** — See and manage connected devices
+- [ ] **Device Blocking (pause internet)** — #1 action users take
+- [ ] **DNS Blocking Overview** — See what's being filtered
+- [ ] **Profile View + Assignment** — Assign content profiles to devices
+- [ ] **Push Notifications (FCM) — basic** — New device, security alert, router offline
+- [ ] **Pull-to-Refresh** — Mobile UX essential
+- [ ] **Cyberpunk Dark Theme** — Brand consistency
+- [ ] **Settings Screen** — Server URL, logout, about
 
 ### Add After Validation (v1.x)
 
-Once the transition is confirmed working and devices are communicating:
+Features to add once core is stable.
 
-- [ ] **Software rollback (`remove_bridge_isolation()`)** — Needed before transition is applied; validates rollback path works. Should be implemented first but only invoked if problems arise.
-- [ ] **Validation test suite** — Run post-transition to confirm each subsystem is working. The 7-step test in BRIDGE_ISOLATION_PLAN.md is the checklist.
-- [ ] **Mode status API endpoint** — Dashboard health widget can surface current mode. Low priority; rollback and validation are higher value.
+- [ ] **Real-time WebSocket data** — Live bandwidth updates on dashboard
+- [ ] **Home Screen Widget** — Glance at status without opening app
+- [ ] **Quick Settings Tile** — Toggle DNS from notification shade
+- [ ] **AI Chat** — Natural language network management
+- [ ] **Traffic Monitoring (live flows, history)** — Deep traffic visibility
+- [ ] **VPN Management** — View/manage WireGuard peers
+- [ ] **Firewall Rules** — View/manage firewall rules
+- [ ] **WiFi AP Management** — Control hostapd settings
+- [ ] **Notification Channels (categorized)** — Fine-grained alert control
+- [ ] **App Shortcuts** — Long-press quick actions
 
 ### Future Consideration (v2+)
 
-- [ ] **Counter value preservation during hook migration** — Prevents cosmetic counter-reset spikes. High implementation effort, low user impact (data is still collected post-migration).
-- [ ] **DHCP lease force-renewal** — Clients pick up new gateway faster. Involves brief intentional disruption; most home users tolerate natural expiry.
-- [ ] **Conntrack flush after gateway change** — Eliminates stale routing window. Causes brief TCP RST storm; must be user-triggered, not automatic.
+- [ ] **Threat Map (DDoS visualization)** — Visually impressive but not critical
+- [ ] **Live Traffic Floating Overlay** — Power user feature, PiP mode
+- [ ] **Security Settings Management** — Complex config screens, lower priority
+- [ ] **Telegram Integration Settings** — Manage from mobile
+- [ ] **Haptic Feedback Patterns** — Polish feature
 
 ---
 
@@ -156,60 +168,82 @@ Once the transition is confirmed working and devices are communicating:
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Bridge L2 forward drop | HIGH | LOW | P1 |
-| br_netfilter + bridge-nf-call-iptables | HIGH | LOW | P1 |
-| ip_forward=1 persisted | HIGH | LOW | P1 |
-| NAT MASQUERADE (LAN subnet) | HIGH | LOW | P1 |
-| Remove masquerade_fix table | HIGH | LOW | P1 |
-| ICMP redirect disable | HIGH | LOW | P1 |
-| Bridge accounting hook migration | HIGH | MEDIUM | P1 |
-| TC mark chain migration | HIGH | MEDIUM | P1 |
-| main.py lifespan swap | HIGH | LOW | P1 |
-| DHCP gateway change | HIGH | LOW | P1 |
-| sysctl + nftables persistence | HIGH | LOW | P1 |
-| Software rollback function | HIGH | LOW | P2 |
-| Validation test suite | MEDIUM | MEDIUM | P2 |
-| Atomic nftables rule application | MEDIUM | LOW | P2 |
-| Per-interface ICMP disable (eth0) | LOW | LOW | P2 |
-| Mode status API endpoint | LOW | LOW | P3 |
-| Counter value preservation | LOW | HIGH | P3 |
-| DHCP lease force-renewal | LOW | MEDIUM | P3 |
-| Conntrack flush after gateway change | MEDIUM | LOW | P3 |
+| API Client + JWT Auth | HIGH | MEDIUM | P1 |
+| Biometric Auth | HIGH | LOW | P1 |
+| Auto-Discovery | HIGH | LOW | P1 |
+| Dashboard Screen | HIGH | MEDIUM | P1 |
+| Device List + Detail | HIGH | MEDIUM | P1 |
+| Device Blocking | HIGH | LOW | P1 |
+| Push Notifications (FCM) | HIGH | HIGH | P1 |
+| DNS Blocking Overview | MEDIUM | LOW | P1 |
+| Profile View + Assignment | MEDIUM | LOW | P1 |
+| Cyberpunk Theme | MEDIUM | LOW | P1 |
+| Pull-to-Refresh | MEDIUM | LOW | P1 |
+| Settings Screen | MEDIUM | LOW | P1 |
+| WebSocket Live Data | HIGH | MEDIUM | P2 |
+| Home Screen Widget | HIGH | MEDIUM | P2 |
+| Quick Settings Tile | MEDIUM | LOW | P2 |
+| AI Chat Mobile | MEDIUM | MEDIUM | P2 |
+| Traffic Monitoring | MEDIUM | MEDIUM | P2 |
+| VPN Management | MEDIUM | LOW | P2 |
+| Firewall Rules | LOW | MEDIUM | P2 |
+| WiFi AP Management | LOW | LOW | P2 |
+| Notification Channels | LOW | LOW | P2 |
+| App Shortcuts | LOW | LOW | P2 |
+| Threat Map | LOW | HIGH | P3 |
+| Floating Traffic Overlay | LOW | HIGH | P3 |
+| Security Settings | LOW | MEDIUM | P3 |
+| Telegram Settings | LOW | LOW | P3 |
 
 **Priority key:**
-- P1: Must have for the transition to function correctly
-- P2: Should have for robustness and recovery
+- P1: Must have for launch
+- P2: Should have, add in subsequent releases
 - P3: Nice to have, future consideration
 
 ---
 
 ## Competitor Feature Analysis
 
-"Competitors" in this context are established home router firmware implementations that have solved the same bridge→router transition problem.
+| Feature | UniFi | Nighthawk (NETGEAR) | Firewalla | TP-Link Tether | TonbilAiOS (Our Plan) |
+|---------|-------|---------------------|-----------|----------------|----------------------|
+| Dashboard overview | Full network topology + health score | Simple status + speed | Device-centric with threat score | Basic router status | Cyberpunk-themed glance dashboard with bandwidth gauge |
+| Device management | List + block + group | List + pause + parental | Deep per-device analytics + block | List + block | List + block + profile assign + traffic detail |
+| Push notifications | Device offline, firmware update, client events | Security alerts, new device | Threat alerts, new device, abnormal activity | Basic alerts | FCM: security, device, traffic, system categories |
+| DNS filtering | Basic content filtering (paid add-on) | Smart Parental Controls (paid) | Family Protect + Safe Search + Ad Block | Basic parental | Profile-based category filtering (built-in, free) |
+| AI assistant | None | None | None | None | AI Chat with 16+ intents (UNIQUE differentiator) |
+| Home widget | None | None | None | None | Bandwidth + device count + last alert |
+| Quick Settings | None | None | None | None | DNS toggle + block-all tile |
+| VPN management | Single-tap VPN | None | Built-in VPN server/client | None | WireGuard peer management |
+| Traffic analysis | Basic client stats | Traffic meter | Deep flow analysis + app detection | Basic | Per-flow tracking with app/service detection |
+| Remote access | UniFi Cloud (account required) | Anywhere Access (account) | Remote management | TP-Link Cloud (account) | wall.tonbilx.com (self-hosted, no account) |
+| DDoS/Threat monitoring | Basic IDS alerts | Armor (paid subscription) | IDS/IPS built-in | None | DDoS map + threat analysis + DNS fingerprinting |
+| Biometric auth | No | No | Yes | No | Yes (fingerprint/face) |
+| Vendor lock-in | Ubiquiti hardware only | NETGEAR hardware only | Firewalla hardware only | TP-Link hardware only | Raspberry Pi (open hardware) |
 
-| Feature | OpenWrt | pfSense | Our Approach |
-|---------|---------|---------|--------------|
-| Bridge isolation via nftables | Yes (uses iptables/nf_tables under the hood via firewall4) | Yes (pf-based, different mechanism) | Direct nftables rules — same semantics as OpenWrt firewall4 bridge isolation |
-| Accounting on input/output hooks | Yes — OpenWrt's traffic accounting uses FORWARD/INPUT on inet, not bridge hooks, because it typically runs as a pure router (no br_netfilter needed in clean mode) | N/A | Our approach must handle the bridge-specific case because br0 persists; direct inet hook accounting would miss MAC-to-device mapping |
-| DHCP gateway management | Integrated — UCI sets gateway atomically with interface config | Integrated via GUI | Separate dnsmasq config file + DB update — must coordinate both manually |
-| Rollback | Full config snapshot/restore via UCI | Config backup/restore via GUI | `remove_bridge_isolation()` function — minimal but sufficient for this topology |
-| Sysctl persistence | Via `/etc/sysctl.conf` managed by UCI | Via tunable system | `/etc/sysctl.d/99-bridge-isolation.conf` — standard Linux approach |
+**Key competitive advantages:**
+1. **AI Chat** — No competitor has conversational network management
+2. **No vendor lock-in** — Runs on standard Raspberry Pi
+3. **Self-hosted remote access** — No cloud account, no subscription
+4. **Built-in DNS filtering** — No paid add-on (unlike Nighthawk Armor or UniFi)
+5. **Home widget + Quick Settings** — Mobile-native features competitors lack
 
 ---
 
 ## Sources
 
-- nftables wiki — Simple ruleset for a home router: https://wiki.nftables.org/wiki-nftables/index.php/Simple_ruleset_for_a_home_router (HIGH confidence)
-- nftables wiki — Bridge filtering hooks: https://wiki.nftables.org/wiki-nftables/index.php/Bridge_filtering (HIGH confidence — canonical hook descriptions)
-- nftables wiki — Performing NAT: https://wiki.nftables.org/wiki-nftables/index.php/Performing_Network_Address_Translation_(NAT) (HIGH confidence)
-- ebtables bridge-nf documentation — br_netfilter requirement: https://ebtables.netfilter.org/documentation/bridge-nf.html (HIGH confidence)
-- Vincent Bernat — Proper isolation of a Linux bridge: https://vincent.bernat.ch/en/blog/2017-linux-bridge-isolation (MEDIUM confidence — 2017, mechanics unchanged)
-- Linux Kernel docs — IP Sysctl: https://docs.kernel.org/networking/ip-sysctl.html (HIGH confidence)
-- Thermalcircle — nftables packet flow and Netfilter hooks: https://thermalcircle.de/doku.php?id=blog:linux:nftables_packet_flow_netfilter_hooks_detail (MEDIUM confidence)
-- BRIDGE_ISOLATION_PLAN.md — project-specific implementation details (HIGH confidence — ground truth for this system)
-- Codebase inspection — `linux_nftables.py`, `linux_tc.py`, `main.py` (HIGH confidence — direct source review)
+- [NETGEAR Nighthawk App features](https://www.netgear.com/home/services/nighthawk-app/) (MEDIUM confidence)
+- [UniFi App on Google Play](https://play.google.com/store/apps/details?id=com.ubnt.easyunifi) (MEDIUM confidence)
+- [Firewalla App features](https://firewalla.com/) (MEDIUM confidence)
+- [TP-Link Tether features](https://techdator.net/best-apps-help-control-your-router/) (LOW confidence — third-party review)
+- [Android Quick Settings Tile API](https://developer.android.com/develop/ui/views/quicksettings-tiles) (HIGH confidence — official docs)
+- [Android BiometricPrompt API](https://developer.android.com/training/sign-in/biometric-auth) (HIGH confidence — official docs, training data)
+- [WiFi Widget (Jetpack Glance example)](https://github.com/w2sv/WiFi-Widget) (MEDIUM confidence)
+- [OpManager mobile widgets for network monitoring](https://blogs.manageengine.com/itom/opmanager/opmanagers-new-mobile-widgets-redefine-network-monitoring-onthego.html) (MEDIUM confidence)
+- [Router alert types for push notifications](https://askanydifference.com/setting-up-email-or-push-alerts-for-router-events/) (LOW confidence)
+- [Firebase Cloud Messaging docs](https://firebase.google.com/docs/cloud-messaging/) (HIGH confidence — official docs)
+- TonbilAiOS v5 codebase and PROJECT.md (HIGH confidence — direct source)
 
 ---
 
-*Feature research for: Bridge isolation / transparent-bridge to router-mode transition, TonbilAiOS*
-*Researched: 2026-02-25*
+*Feature research for: TonbilAiOS Android App (v2.0 Milestone)*
+*Researched: 2026-03-06*

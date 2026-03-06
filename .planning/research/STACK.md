@@ -1,313 +1,321 @@
-# Stack Research
+# Technology Stack — TonbilAiOS Android App
 
-**Domain:** Linux bridge isolation — transparent bridge to router mode transition on Raspberry Pi
-**Researched:** 2026-02-25
-**Confidence:** MEDIUM-HIGH (core nftables bridge semantics verified via official wiki; mark preservation across families LOW confidence — not definitively documented)
+**Project:** TonbilAiOS v2.0 Android App
+**Researched:** 2026-03-06
+**Overall Confidence:** HIGH (versions verified via official docs and Maven repositories)
 
 ---
 
 ## Recommended Stack
 
-### Core Technologies
+### Build System & Language
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| nftables bridge family | Kernel 5.3+ | L2 forwarding drop rules (forward hook) | Direct replacement for ebtables; supports `iifname`/`oifname` matching in forward hook; bridge family's `filter` chain type is the correct tool for L2 isolation drops |
-| nftables bridge family | Kernel 5.3+ | Bandwidth accounting (input/output hooks) | After L2 forwarding is blocked, `input` hook sees frames arriving at br0's IP stack; `output` hook sees frames leaving to bridge ports — correct replacement for the lost `forward` hook |
-| nftables inet family | Kernel 5.2+ | NAT / MASQUERADE | Bridge family does NOT support nat chain type. MASQUERADE must live in `inet nat` or `ip nat` table at postrouting hook. TonbilAiOS already uses `inet nat` — no change needed |
-| nftables inet family | Kernel 5.2+ | TC mark assignment (alternative) | If bridge mark preservation is unreliable, move TC marking to `inet mangle` forward/postrouting hooks where mark behavior is well-documented |
-| sysctl | any | ip_forward, send_redirects, bridge-nf-call | Three distinct sysctl namespaces control bridge→router behavior; each has specific load-order requirements |
-| modprobe br_netfilter | Kernel ≥ 4.x | Legacy: passes bridged IPv4 packets to iptables/ip-family hooks | Load only if inet-family rules need to see bridged traffic. For this project — DO NOT load; it causes double-processing and unexpected nftables ip-family hits on bridge traffic |
+| Technology | Version | Purpose | Why | Confidence |
+|------------|---------|---------|-----|------------|
+| Kotlin | 2.3.10 | Primary language | Stable release (Feb 2026). KSP support, Compose compiler built-in. Avoid 2.3.20-RC2 (release candidate). | HIGH |
+| Android Gradle Plugin | 9.0.1 | Build toolchain | Stable (Jan 2026). Built-in Kotlin support (no separate kotlin-android plugin needed). AGP 9.1 is too fresh. | HIGH |
+| Gradle | 9.1.0+ | Build automation | Required by AGP 9.0. Use `libs.versions.toml` version catalog for dependency management. | HIGH |
+| Compose Compiler | Built-in | Kotlin→Compose compilation | Kotlin 2.0+ bundles the Compose compiler plugin. No separate `kotlinCompilerExtensionVersion` needed. | HIGH |
 
-### Supporting Libraries / Tools
+### Core UI Framework
 
-| Library / Tool | Version | Purpose | When to Use |
-|----------------|---------|---------|-------------|
-| `conntrack -L` | iproute2 | Verify NAT sessions survive transition | After transition, confirm existing sessions are tracked through Pi IP stack |
-| `nft -a list chain bridge filter forward` | nftables | List forward-chain rules with handles for rollback | Before any modification, snapshot handle numbers for safe deletion |
-| `ip netns` + `veth` | iproute2 | Synthetic test device (namespace simulation) | Integration test without needing physical client device |
-| `tcpdump -i eth0 arp` | libpcap | Verify modem ARP table no longer sees LAN MACs | Definitive isolation proof — only Pi MAC should appear on eth0 |
-| `/etc/sysctl.d/99-bridge-isolation.conf` | sysctl.d | Persist isolation sysctls across reboots | Required; bare `sysctl -w` is lost on reboot |
+| Technology | Version | Purpose | Why | Confidence |
+|------------|---------|---------|-----|------------|
+| Jetpack Compose BOM | 2026.02.01 | UI toolkit version management | Latest stable BOM. Manages all Compose library versions automatically. | HIGH |
+| Compose UI | 1.10.4 (via BOM) | Core UI rendering | Stable, well-tested. No need to pin individual versions when using BOM. | HIGH |
+| Material 3 | 1.4.0 (via BOM) | Design system | Supports custom dark color schemes — essential for cyberpunk theme. `darkColorScheme()` with neon hex values. | HIGH |
+| Compose Animation | 1.10.4 (via BOM) | Neon glow/pulse effects | Built-in animation APIs for glow effects, pulsing badges, transition animations. | HIGH |
 
-### Development Tools
+### Navigation
 
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| `nft -f -` (stdin mode) | Apply multi-statement rulesets atomically | Use for complex rule sequences to avoid partial-apply state |
-| `nft list ruleset` | Full ruleset dump before/after | Snapshot before changes; diff after for verification |
-| `systemd-sysctl` | Apply sysctl.d files | Run `systemctl restart systemd-sysctl` after adding new conf files |
+| Technology | Version | Purpose | Why | Confidence |
+|------------|---------|---------|-----|------------|
+| Navigation Compose | 2.9.7 | Screen navigation | Type-safe routes with `@Serializable` (stable since 2.8.0). Compose-first API. Avoid Navigation3 (prerelease). | HIGH |
+| Kotlin Serialization Plugin | 2.3.10 | Route serialization | Required by type-safe navigation. Match Kotlin version exactly. | HIGH |
 
----
+### Networking — REST API
 
-## nftables Bridge Family — Hook Points and Priority Values
+| Technology | Version | Purpose | Why | Confidence |
+|------------|---------|---------|-----|------------|
+| Ktor Client | 3.4.1 | HTTP client (REST + WebSocket) | Latest stable (March 2026). Kotlin-native, coroutine-based, multiplatform-ready. Single library for both REST and WebSocket — no need for separate OkHttp + WebSocket libs. | HIGH |
+| Ktor Client OkHttp Engine | 3.4.1 | HTTP engine for Android | OkHttp engine is the most mature Android engine. Handles connection pooling, TLS, HTTP/2 transparently. | HIGH |
+| Ktor Content Negotiation | 3.4.1 | JSON serialization | Plugs into Ktor client for automatic JSON (de)serialization of request/response bodies. | HIGH |
+| Ktor Client WebSockets | 3.4.1 | Real-time data (WebSocket) | Native WebSocket support in same Ktor client. Integrates with Kotlin Flows for reactive data streams. Replaces existing web frontend's `useWebSocket.ts`. | HIGH |
+| Ktor Client Auth | 3.4.1 | JWT bearer token handling | Built-in bearer token provider with automatic refresh. No manual interceptor code needed. | HIGH |
+| Kotlinx Serialization JSON | 1.7.3 | JSON parsing | Kotlin-native serialization. Faster than Gson/Moshi, no reflection. Works with Ktor content negotiation. | MEDIUM |
 
-This is the authoritative reference for the hook migration in this project.
+### Dependency Injection
 
-### Bridge Family Hooks
+| Technology | Version | Purpose | Why | Confidence |
+|------------|---------|---------|-----|------------|
+| Koin | 4.1.1 (via Koin BOM) | Dependency injection | Kotlin DSL-based, zero annotation processing, fast build times. Better for single-developer projects than Hilt (less boilerplate). Compose integration built-in via `koinViewModel()`. | HIGH |
+| Koin Android | 4.1.1 | Android-specific DI | ViewModel injection, WorkManager integration, Android lifecycle awareness. | HIGH |
+| Koin Compose | 4.1.1 | Compose DI integration | Direct `koinViewModel()` in Composables. No need for Hilt's `@HiltViewModel` + `hiltViewModel()` ceremony. | HIGH |
 
-| Hook | Named Priority | Numerical Value | NF Constant | What Fires Here |
-|------|---------------|-----------------|-------------|-----------------|
-| prerouting | dstnat | -300 | NF_BR_PRI_NAT_DST_BRIDGED | Before FDB decision; can redirect frames |
-| all hooks | filter | -200 | NF_BR_PRI_FILTER_BRIDGED | Standard filtering priority |
-| all hooks | (br_netfilter) | 0 | NF_BR_PRI_BRNF | Where br_netfilter intercepts (avoid using this priority) |
-| output | out | 100 | NF_BR_PRI_NAT_DST_OTHER | Local bridge output |
-| all hooks | (br_filter2) | 200 | NF_BR_PRI_FILTER_OTHER | Post-br_netfilter filtering |
-| postrouting | srcnat | 300 | NF_BR_PRI_NAT_SRC | Bridge SNAT (filter type only — not real NAT) |
+### Authentication
 
-**Critical:** The same keyword `filter` maps to -200 in bridge family but 0 in inet/ip families. This is a known difference, not a bug. (Source: nftables wiki, Netfilter hooks page)
+| Technology | Version | Purpose | Why | Confidence |
+|------------|---------|---------|-----|------------|
+| AndroidX Biometric | 1.1.0 | Fingerprint/face auth | Latest stable. Provides `BiometricPrompt` with PIN/password fallback. S24 Ultra supports fingerprint + face. | HIGH |
+| AndroidX Biometric (alpha) | 1.4.0-alpha05 | Compose-friendly auth | Optional upgrade: `registerForAuthenticationResult()` API, `biometric-compose` module. Only if stable API feels limiting. | LOW |
 
-### Which Hook Fires for Which Traffic Path
+### Secure Storage
 
-```
-BRIDGE TRANSPARENT MODE (current):
-  External frame → eth0 → bridge FDB lookup → eth1 → client
-                              ↓ fires: forward hook
+| Technology | Version | Purpose | Why | Confidence |
+|------------|---------|---------|-----|------------|
+| DataStore Preferences | 1.2.0 | Local key-value storage | Replaces SharedPreferences. Coroutine-based, type-safe. For JWT tokens, user preferences, server URL. | HIGH |
+| Google Tink Android | 1.16.0 | Encryption for DataStore | EncryptedSharedPreferences is DEPRECATED (security-crypto 1.1.0-alpha07). Tink + DataStore is the official replacement. AES-GCM encryption with Android Keystore key management. | HIGH |
 
-ROUTER MODE (after isolation):
-  External packet → eth0 → bridge input → Pi IP stack → routing → bridge output → eth1
-                              ↓ fires: input hook           ↓ fires: output hook
-```
+**CRITICAL: Do NOT use EncryptedSharedPreferences.** It is deprecated, has OEM-specific crashes ("keyset corruption"), and causes main-thread blocking. Use DataStore + Tink instead.
 
-**This is why accounting must move from forward to input/output.** After L2 forwarding is blocked, the forward hook never fires for LAN↔WAN traffic — packets instead traverse the IP stack and hit input (arriving at Pi) and output (leaving Pi toward eth1).
+### Push Notifications
 
-### Chain Types Supported by Bridge Family
+| Technology | Version | Purpose | Why | Confidence |
+|------------|---------|---------|-----|------------|
+| Firebase BOM | 34.10.0 | Firebase version management | Latest BOM (Feb 2026). Manages all Firebase library versions. | MEDIUM |
+| Firebase Cloud Messaging | via BOM | Push notifications | Android standard for push. FCM token registration → backend stores token → backend sends notifications via FCM HTTP v1 API. | HIGH |
 
-| Chain Type | Bridge | inet | ip | Notes |
-|------------|--------|------|----|-------|
-| filter | YES | YES | YES | Only chain type available in bridge |
-| nat | NO | YES (kernel 5.2+) | YES | Bridge cannot do NAT — use inet nat for MASQUERADE |
-| route | NO | YES | YES | Not available in bridge |
+### Image Loading
 
-**Implication:** All NAT/MASQUERADE rules stay in `inet nat` table. Bridge family rules are filter-only.
+| Technology | Version | Purpose | Why | Confidence |
+|------------|---------|---------|-----|------------|
+| Coil 3 | 3.4.0 | Image loading (device icons, avatars) | Kotlin-first, Compose-native (`AsyncImage`), coroutine-based. Lighter than Glide/Picasso. Compose integration is first-class. | HIGH |
 
----
+### Architecture Components
 
-## sysctl Parameters for Bridge Isolation
+| Technology | Version | Purpose | Why | Confidence |
+|------------|---------|---------|-----|------------|
+| Lifecycle ViewModel Compose | latest via BOM | ViewModel in Compose | `viewModel()` composable function. State management per-screen. | HIGH |
+| Lifecycle Runtime Compose | latest via BOM | Lifecycle-aware Compose | `collectAsStateWithLifecycle()` for Flow→State conversion respecting lifecycle. | HIGH |
+| Kotlinx Coroutines Android | 1.10.1 | Async operations | Dispatchers.Main, structured concurrency, Flow for reactive streams. | MEDIUM |
 
-### Required Parameters
+### Charts & Visualization
 
-| Parameter | Value | Why | Persistence |
-|-----------|-------|-----|-------------|
-| `net.ipv4.ip_forward` | 1 | Pi must route packets between eth0 and eth1 via IP stack | `/etc/sysctl.d/99-bridge-isolation.conf` |
-| `net.ipv4.conf.all.send_redirects` | 0 | Prevent Pi from telling clients to go directly to modem (.1) — breaks isolation | Same file |
-| `net.ipv4.conf.br0.send_redirects` | 0 | Interface-specific guard for the bridge interface | Same file |
+| Technology | Version | Purpose | Why | Confidence |
+|------------|---------|---------|-----|------------|
+| Vico | 2.1.2 | Charts (bandwidth, traffic) | Compose-native charting library. Supports line, bar, and combined charts. Alternative to MPAndroidChart (View-based, not Compose-native). | MEDIUM |
 
-### Parameters to NOT Set (Anti-recommendations)
+### Testing
 
-| Parameter | Why to Avoid |
-|-----------|-------------|
-| `net.bridge.bridge-nf-call-iptables=1` | Causes br_netfilter to intercept bridged packets and feed them into ip-family nftables rules. Creates double-processing. Since TonbilAiOS uses nftables bridge family directly, this is not needed. |
-| `net.bridge.bridge-nf-call-ip6tables=1` | Same reason for IPv6 |
-
-### Boot-Order Problem with bridge-nf-call Sysctls
-
-`net.bridge.bridge-nf-call-*` parameters only exist in sysctl namespace after `br_netfilter` module is loaded. If they appear in `/etc/sysctl.conf` without the module being loaded first, the kernel logs "unknown key" and ignores them. The solution is to not load `br_netfilter` at all — which is the correct choice here since TonbilAiOS already uses nftables bridge family.
-
-If `br_netfilter` is currently loaded on the Pi, unload it:
-
-```bash
-sudo modprobe -r br_netfilter
-# Verify absence:
-lsmod | grep br_netfilter  # should be empty
-```
-
----
-
-## Bridge Isolation — nftables Rule Structure
-
-### L2 Forwarding Drop (bridge filter forward chain)
-
-```nft
-# In bridge family — filter chain type — forward hook
-table bridge filter {
-    chain forward {
-        type filter hook forward priority -200; policy accept;
-
-        # Drop all direct L2 forwarding between LAN and WAN ports
-        iifname "eth1" oifname "eth0" drop comment "bridge_isolation_lan_wan"
-        iifname "eth0" oifname "eth1" drop comment "bridge_isolation_wan_lan"
-    }
-}
-```
-
-After these rules, no Ethernet frame can pass from eth1→eth0 or eth0→eth1 at L2. All traffic must traverse Pi's IP stack.
-
-### Bandwidth Accounting (bridge filter input/output chains)
-
-```nft
-table bridge accounting {
-    chain upload {
-        type filter hook input priority -200; policy accept;
-        # iifname "eth1" ether saddr <MAC> counter comment "bw_<MAC>_up"
-    }
-    chain download {
-        type filter hook output priority -200; policy accept;
-        # oifname "eth1" ether daddr <MAC> counter comment "bw_<MAC>_down"
-    }
-}
-```
-
-**Why input for upload:** When a client sends traffic, the frame arrives at br0 from eth1. The bridge `input` hook fires because the frame is destined for the bridge interface itself (which has an IP address and acts as gateway). `ether saddr` = client MAC = upload direction.
-
-**Why output for download:** When Pi routes a packet to a client, it goes from IP stack → bridge `output` hook → eth1. `ether daddr` = client MAC = download direction.
-
-### TC Marking (bridge filter input/output chains)
-
-```nft
-table bridge accounting {
-    chain tc_mark_up {
-        type filter hook input priority -200; policy accept;
-        iifname "eth1" ether saddr <MAC> meta mark set <MARK> comment "tc_mark_<MAC>_up"
-    }
-    chain tc_mark_down {
-        type filter hook output priority -200; policy accept;
-        oifname "eth1" ether daddr <MAC> meta mark set <MARK> comment "tc_mark_<MAC>_down"
-    }
-}
-```
-
-**Mark preservation note (LOW confidence):** The SKB mark field is part of the socket buffer and persists across netfilter hooks within the same packet's lifecycle. Marks set in bridge hooks should be visible to subsequent TC qdiscs on eth1. However, this was not definitively verified in official documentation — the BRIDGE_ISOLATION_PLAN.md explicitly states "TC qdisc changes are NOT needed", implying marks set at bridge input/output are seen by the HTB qdiscs on eth1/eth0. This matches general Linux networking behavior (SKB mark is persistent), but validate with a post-transition bandwidth limit test.
-
-### NAT / MASQUERADE (inet nat postrouting — unchanged)
-
-```nft
-table inet nat {
-    chain postrouting {
-        type nat hook postrouting priority 100; policy accept;
-        ip saddr 192.168.1.0/24 ip daddr != 192.168.1.0/24 masquerade comment "bridge_lan_masq"
-    }
-}
-```
-
-This table is already present in TonbilAiOS and requires no migration — NAT lives in inet family and was always processed by the IP routing stack, not the bridge forward path.
-
----
-
-## br_netfilter — The Critical Module
-
-### What It Does
-
-`br_netfilter` makes the kernel "pretend" that bridged frames are being routed. This causes bridged packets to pass through the IP stack's Netfilter hooks (ip family prerouting, forward, postrouting). This is a legacy compatibility shim for iptables-based bridge firewalls.
-
-### Why NOT to Load It in This Project
-
-1. It creates double-processing: packets would hit both bridge hooks AND inet/ip hooks
-2. nftables bridge family (kernel 5.3+) provides native bridge filtering with conntrack — br_netfilter is not needed
-3. If loaded, `net.bridge.bridge-nf-call-iptables` becomes available; if accidentally set to 1, it would route all bridge frames through inet nftables rules — potentially matching existing firewall rules unexpectedly
-4. The kernel documentation explicitly says: "br_netfilter is a legacy feature... its use is discouraged"
-
-### Detection
-
-```bash
-lsmod | grep br_netfilter  # should return empty after transition
-sysctl net.bridge.bridge-nf-call-iptables 2>/dev/null  # should fail: key not found
-```
+| Technology | Version | Purpose | Why | Confidence |
+|------------|---------|---------|-----|------------|
+| JUnit 5 | 5.11.x | Unit tests | Standard JVM testing framework. | HIGH |
+| Compose UI Test | via BOM | UI tests | `createComposeRule()` for Compose UI testing. | HIGH |
+| Ktor Client Mock | 3.4.1 | API mocking | Built-in mock engine for Ktor — no separate mock server needed. | HIGH |
+| Koin Test | 4.1.1 | DI testing | `checkModules()` for verifying DI graph at test time. | HIGH |
 
 ---
 
 ## Alternatives Considered
 
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| nftables bridge family forward hook DROP | ebtables drop rule | Never — ebtables is deprecated on Debian 12 (Bookworm); nftables bridge family is the direct replacement |
-| nftables bridge family forward hook DROP | `bridge link set dev eth1 isolated on` (VLAN isolation) | Only if VLAN-aware bridging is configured; most efficient method but requires bridge vlan_filtering=1 which may not be set on Pi |
-| nftables bridge family forward hook DROP | tc ingress matchall DROP on br0 | Alternative that works regardless of nftables; simpler but loses ability to use nftables rules for exceptions |
-| `inet nat postrouting masquerade` | `bridge postrouting srcnat` | Never — bridge family does not support nat chain type; srcnat in bridge context is still filter type and cannot perform real NAT |
-| sysctl.d persistent file | Writing to /etc/sysctl.conf | Use sysctl.d — cleaner, modular, avoids merge conflicts with system defaults |
+| Category | Recommended | Alternative | Why Not Alternative |
+|----------|-------------|-------------|---------------------|
+| HTTP Client | Ktor Client 3.4.1 | Retrofit 2.x + OkHttp | Retrofit is Java-first, requires annotation processor. Ktor is Kotlin-native, coroutine-native, handles both REST and WebSocket in one library. Retrofit would need a separate WebSocket library. |
+| DI Framework | Koin 4.1.1 | Hilt (Dagger) 2.x | Hilt requires KSP/KAPT annotation processing, adds build time, more boilerplate. For a single-developer project, Koin's DSL is faster to write and debug. Performance difference is negligible in real apps. |
+| JSON Parser | Kotlinx Serialization | Gson / Moshi | Gson uses reflection (slow, ProGuard issues). Moshi is good but requires codegen. Kotlinx Serialization is compile-time, Kotlin-native, and required by Navigation Compose type-safe routes anyway. |
+| Image Loading | Coil 3 | Glide 4.x / Picasso | Glide is View-based, requires `GlideImage` wrapper for Compose. Coil is Compose-native. Picasso is unmaintained. |
+| Charts | Vico | MPAndroidChart | MPAndroidChart is View-based (requires `AndroidView` wrapper in Compose). Vico is Compose-native. |
+| Secure Storage | DataStore + Tink | EncryptedSharedPreferences | DEPRECATED. Keyset corruption bugs on Samsung/Huawei devices. Main-thread blocking. Official guidance is to migrate to DataStore + Tink. |
+| Navigation | Navigation Compose 2.9.7 | Voyager / Compose Destinations | Official Jetpack solution, type-safe since 2.8.0. Third-party navlibs add risk of abandonment. |
+| WebSocket | Ktor Client WebSockets | Scarlet / OkHttp WebSocket | Ktor provides WebSocket in the same client. No separate dependency. Scarlet is unmaintained. |
+| Biometric | AndroidX Biometric 1.1.0 | Custom fingerprint API | AndroidX Biometric abstracts hardware differences. Custom API would break on Samsung vs Pixel vs Xiaomi. |
 
 ---
 
 ## What NOT to Use
 
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| `table bridge nat` or `bridge postrouting nat` | Bridge family only supports filter chain type; attempting to create a nat chain in bridge table fails with an error | `table inet nat` with postrouting hook |
-| Loading `br_netfilter` module | Causes bridged traffic to double-process through ip/inet nftables rules; creates unpredictable interactions with existing firewall rules | Do not load — use nftables bridge family natively |
-| `nft add chain bridge accounting per_device` with forward hook (old pattern) | After L2 isolation, forward hook never fires for LAN↔WAN traffic; counters never increment | Replace with `upload` (input hook) and `download` (output hook) chains |
-| `nft add chain bridge accounting tc_mark` with forward hook (old pattern) | Same reason — forward hook dead for isolated traffic | Replace with `tc_mark_up` (input hook) and `tc_mark_down` (output hook) |
-| Setting `net.bridge.bridge-nf-call-iptables=1` | Enables legacy path that interferes with native bridge filtering | Leave at 0 (default when br_netfilter not loaded) |
-| `priority 0` in bridge family chains | Value 0 = NF_BR_PRI_BRNF, the br_netfilter interception point; can cause ordering conflicts | Use `-200` (filter priority) for accounting/marking chains |
+| Avoid | Why |
+|-------|-----|
+| **Retrofit** | Java-first API, requires separate WebSocket solution. Ktor covers REST + WebSocket in one library. |
+| **Dagger (without Hilt)** | Raw Dagger is overkill for any project in 2026. If you want compile-time DI, use Hilt. But Koin is simpler here. |
+| **Room Database** | This app is a thin client — all data lives on the Pi's MariaDB. Local caching uses DataStore, not a full SQL database. |
+| **Jetpack Compose Multiplatform** | Scope is Android-only for v2.0. KMP adds complexity. If iOS is needed later, Ktor + Koin are already multiplatform-ready. |
+| **XML Layouts** | Dead in 2026 for new projects. All UI must be Jetpack Compose. |
+| **SharedPreferences** | Deprecated pattern. Use DataStore. |
+| **EncryptedSharedPreferences** | Officially deprecated. Use DataStore + Tink. |
+| **Gson** | Reflection-based, ProGuard issues. Use kotlinx.serialization. |
+| **WorkManager for WebSocket** | WebSocket should use a foreground service, not WorkManager. WorkManager is for deferred background tasks. |
 
 ---
 
-## Stack Patterns by Variant
+## Cyberpunk Theme Implementation
 
-**If br_netfilter is currently loaded on the Pi:**
-- Unload it with `modprobe -r br_netfilter` before applying isolation rules
-- Remove any `net.bridge.bridge-nf-call-*` entries from sysctl files
-- Because it causes bridge traffic to also hit inet/ip rules, potentially breaking existing firewall logic
+Material 3 `darkColorScheme()` maps directly to the existing web theme:
 
-**If the bridge table named `masquerade_fix` exists (old TonbilAiOS MAC-rewrite):**
-- Delete it: `nft delete table bridge masquerade_fix`
-- Because router mode sends packets from Pi's own IP/MAC; modem sees Pi's MAC directly; MAC rewriting is not only unnecessary but would cause incorrect source MACs on WAN
+```kotlin
+// Color.kt
+val NeonCyan = Color(0xFF00F0FF)
+val NeonMagenta = Color(0xFFFF00E5)
+val NeonGreen = Color(0xFF39FF14)
+val NeonAmber = Color(0xFFFFB800)
+val NeonRed = Color(0xFFFF003C)
+val DarkSurface = Color(0xFF0A0A14)       // Deep purple-black
+val GlassBg = Color(0x0DFFFFFF)           // 5% white
+val GlassBorder = Color(0x1FFFFFFF)       // 12% white
 
-**If accounting chain migration fails (old forward chain still running):**
-- The old forward chain receives no traffic after isolation — counters freeze at last value before transition
-- This is a silent failure: bandwidth monitoring appears operational but shows stale data
-- Detection: check if counters increment after traffic; if not, the chain was not migrated
-
-**If TC marks do not survive bridge→IP stack transition:**
-- Fallback: move TC marking to `inet mangle` forward hook using ip saddr/daddr instead of ether saddr/daddr
-- This works because after isolation, all traffic is routed through IP stack and inet forward fires
-- Cost: loses per-device tracking for devices with same IP but different MAC (edge case)
-
----
-
-## Version Compatibility
-
-| Kernel Feature | Min Kernel | Raspberry Pi OS Version | Notes |
-|----------------|-----------|------------------------|-------|
-| nftables bridge family | 3.18 | Any current Pi OS | Basic bridge filtering |
-| Bridge conntrack (kernel-native, replaces br_netfilter) | 5.3 | Pi OS Bullseye (5.10) or later | Needed for stateful bridge filtering |
-| inet family NAT | 5.2 | Pi OS Bullseye (5.10) or later | Already used in TonbilAiOS |
-| Bridge input/output hooks | 4.x | All current Pi OS | Standard hooks |
-| meta mark in bridge chains | 3.14 | All current Pi OS | mark set works in bridge filter |
-
-Raspberry Pi OS Bookworm (current) ships kernel 6.1+. All features above are available.
-
----
-
-## Installation
-
-No new packages required. All technologies are already present on the Pi:
-
-```bash
-# Verify nft version
-nft --version  # should be >= 0.9.3 for bridge conntrack support
-
-# Verify kernel version
-uname -r  # should be >= 5.3
-
-# Verify br_netfilter is NOT loaded (desired state)
-lsmod | grep br_netfilter  # expect: empty output
-
-# Apply persistent sysctl
-sudo tee /etc/sysctl.d/99-bridge-isolation.conf > /dev/null << 'EOF'
-net.ipv4.ip_forward=1
-net.ipv4.conf.all.send_redirects=0
-net.ipv4.conf.br0.send_redirects=0
-EOF
-sudo systemctl restart systemd-sysctl
+val CyberpunkDarkScheme = darkColorScheme(
+    primary = NeonCyan,
+    secondary = NeonMagenta,
+    tertiary = NeonGreen,
+    error = NeonRed,
+    background = DarkSurface,
+    surface = DarkSurface,
+    onPrimary = Color.Black,
+    onSecondary = Color.Black,
+    onBackground = Color.White,
+    onSurface = Color.White,
+)
 ```
+
+Neon glow effects via `Modifier.drawBehind` with `drawCircle` using radial gradients and `BlendMode.Screen`. No external library needed.
+
+---
+
+## Gradle Setup (libs.versions.toml)
+
+```toml
+[versions]
+kotlin = "2.3.10"
+agp = "9.0.1"
+compose-bom = "2026.02.01"
+ktor = "3.4.1"
+koin-bom = "4.1.1"
+navigation = "2.9.7"
+biometric = "1.1.0"
+datastore = "1.2.0"
+tink = "1.16.0"
+firebase-bom = "34.10.0"
+coil = "3.4.0"
+vico = "2.1.2"
+serialization = "1.7.3"
+coroutines = "1.10.1"
+
+[libraries]
+# Compose (managed by BOM)
+compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
+compose-ui = { group = "androidx.compose.ui", name = "ui" }
+compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+compose-animation = { group = "androidx.compose.animation", name = "animation" }
+
+# Navigation
+navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
+
+# Ktor
+ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
+ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-client-websockets = { group = "io.ktor", name = "ktor-client-websockets", version.ref = "ktor" }
+ktor-client-auth = { group = "io.ktor", name = "ktor-client-auth", version.ref = "ktor" }
+ktor-serialization-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-logging = { group = "io.ktor", name = "ktor-client-logging", version.ref = "ktor" }
+ktor-client-mock = { group = "io.ktor", name = "ktor-client-mock", version.ref = "ktor" }
+
+# Koin
+koin-bom = { group = "io.insert-koin", name = "koin-bom", version.ref = "koin-bom" }
+koin-android = { group = "io.insert-koin", name = "koin-android" }
+koin-compose = { group = "io.insert-koin", name = "koin-androidx-compose" }
+koin-compose-viewmodel = { group = "io.insert-koin", name = "koin-compose-viewmodel" }
+
+# Security
+biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
+datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+tink-android = { group = "com.google.crypto.tink", name = "tink-android", version.ref = "tink" }
+
+# Firebase
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebase-bom" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
+
+# Image
+coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
+coil-network = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+
+# Charts
+vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }
+
+# Serialization
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+
+# Lifecycle
+lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose" }
+lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose" }
+
+[bundles]
+ktor = ["ktor-client-core", "ktor-client-okhttp", "ktor-client-content-negotiation",
+        "ktor-client-websockets", "ktor-client-auth", "ktor-serialization-json", "ktor-client-logging"]
+koin = ["koin-android", "koin-compose", "koin-compose-viewmodel"]
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+google-services = { id = "com.google.gms.google-services", version = "4.4.2" }
+```
+
+---
+
+## Android Configuration
+
+```kotlin
+// build.gradle.kts (app module)
+android {
+    namespace = "com.tonbil.aios"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "com.tonbil.aios"
+        minSdk = 28          // Android 9 (Pie)
+        targetSdk = 36       // Android 15
+        versionCode = 1
+        versionName = "2.0.0"
+    }
+
+    buildFeatures {
+        compose = true
+    }
+}
+```
+
+- **minSdk 28:** Android 9+ covers 95%+ of active devices. BiometricPrompt requires API 28+.
+- **targetSdk 36:** Latest API level supported by AGP 9.0.
+- **compileSdk 36:** Match targetSdk.
+
+---
+
+## Backend Changes Required
+
+The existing FastAPI backend needs these additions for the Android app:
+
+| Endpoint | Purpose | Effort |
+|----------|---------|--------|
+| `POST /api/v1/devices/fcm-token` | Register FCM token for push notifications | Low |
+| `DELETE /api/v1/devices/fcm-token` | Unregister FCM token on logout | Low |
+| `POST /api/v1/auth/refresh` | JWT token refresh (if not already present) | Low |
+| Backend FCM sender | Python `firebase-admin` SDK to send push notifications | Medium |
 
 ---
 
 ## Sources
 
-- [nftables wiki — Bridge filtering](https://wiki.nftables.org/wiki-nftables/index.php/Bridge_filtering) — hook types, chain types, conntrack kernel version (HIGH confidence)
-- [nftables wiki — Netfilter hooks](https://wiki.nftables.org/wiki-nftables/index.php/Netfilter_hooks) — bridge family priority table, NF_BR_PRI constants (HIGH confidence)
-- [nftables wiki — Nftables families](https://wiki.nftables.org/wiki-nftables/index.php/Nftables_families) — filter-only bridge family, no conntrack note (HIGH confidence)
-- [nftables wiki — Configuring chains](https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains) — chain type support matrix per family (HIGH confidence)
-- [nftables wiki — Performing NAT](https://wiki.nftables.org/wiki-nftables/index.php/Performing_Network_Address_Translation_(NAT)) — inet nat support since kernel 5.2, masquerade only in postrouting (HIGH confidence)
-- [nft manpage — netfilter.org](https://www.netfilter.org/projects/nftables/manpage.html) — bridge priority values, reject statement hook restriction (HIGH confidence)
-- [Vincent Bernat — Proper isolation of a Linux bridge (2017)](https://vincent.bernat.ch/en/blog/2017-linux-bridge-isolation) — br_netfilter ordering, VLAN filtering approach, sysctl.conf issue (MEDIUM confidence — older but technically accurate)
-- [libvirt wiki — net.bridge.bridge-nf-call](https://wiki.libvirt.org/Net.bridge.bridge-nf-call_and_sysctl.conf.html) — boot-order problem, why to disable br_netfilter (MEDIUM confidence)
-- [Linux kernel docs — Ethernet Bridging](https://docs.kernel.org/networking/bridge.html) — br_netfilter is legacy, discouraged (HIGH confidence)
-- [DataDog security rules — send_redirects](https://docs.datadoghq.com/security/default_rules/xccdf-org-ssgproject-content-rule-sysctl-net-ipv4-conf-all-send-redirects/) — send_redirects=0 for router mode (MEDIUM confidence)
-- [nftables wiki — Classification to TC structure](https://wiki.nftables.org/wiki-nftables/index.php/Classification_to_tc_structure_example) — TC marking uses ip family filter hook, not bridge (MEDIUM confidence, suggests fallback approach)
-- Mark preservation across bridge→inet families: NOT definitively documented in official sources (LOW confidence — treat as hypothesis requiring post-transition validation)
+- [Jetpack Compose Releases](https://developer.android.com/jetpack/androidx/releases/compose) — Compose BOM 2026.02.01, Material 3 1.4.0 (HIGH)
+- [Ktor 3.4.0 Release Blog](https://blog.jetbrains.com/kotlin/2026/01/ktor-3-4-0-is-now-available/) — Ktor 3.4.1 stable (HIGH)
+- [Kotlin 2.3.0 Release Blog](https://blog.jetbrains.com/kotlin/2025/12/kotlin-2-3-0-released/) — Kotlin 2.3.10 stable (HIGH)
+- [AGP 9.0.1 Release Notes](https://developer.android.com/build/releases/agp-9-0-0-release-notes) — AGP 9.0.1 (HIGH)
+- [Navigation Compose Releases](https://developer.android.com/jetpack/androidx/releases/navigation) — 2.9.7 stable (HIGH)
+- [Biometric Releases](https://developer.android.com/jetpack/androidx/releases/biometric) — 1.1.0 stable, 1.4.0-alpha05 (HIGH)
+- [DataStore Releases](https://developer.android.com/jetpack/androidx/releases/datastore) — 1.2.0 stable (HIGH)
+- [Koin Official](https://insert-koin.io/) — 4.1.1 via BOM (HIGH)
+- [Firebase BOM Maven](https://mvnrepository.com/artifact/com.google.firebase/firebase-bom) — 34.10.0 (MEDIUM)
+- [Coil GitHub](https://github.com/coil-kt/coil) — 3.4.0 (HIGH)
+- [Tink Setup](https://developers.google.com/tink/setup/java) — tink-android 1.16.0 (MEDIUM)
+- [EncryptedSharedPreferences Deprecated](https://www.droidcon.com/2025/12/16/goodbye-encryptedsharedpreferences-a-2026-migration-guide/) — Migration guide (HIGH)
+- [Hilt vs Koin 2025 Droidcon](https://www.droidcon.com/2025/11/26/hilt-vs-koin-the-hidden-cost-of-runtime-injection-and-why-compile-time-di-wins/) — DI comparison (MEDIUM)
+- [Vico Charts](https://github.com/patrykandpatrick/vico) — Compose-native charting (MEDIUM)
 
 ---
 
-*Stack research for: TonbilAiOS bridge isolation milestone*
-*Researched: 2026-02-25*
+*Stack research for: TonbilAiOS v2.0 Android App*
+*Researched: 2026-03-06*
