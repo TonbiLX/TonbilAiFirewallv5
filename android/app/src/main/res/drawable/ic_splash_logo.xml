@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108"
+    android:tint="@color/neon_cyan">
+
+    <!-- Shield / firewall icon in neon cyan -->
+    <path
+        android:fillColor="#00F0FF"
+        android:pathData="M54,16L22,30v18c0,17.7 13.6,34.2 32,38 18.4,-3.8 32,-20.3 32,-38V30L54,16zM54,53.99h24c-1.7,12.6 -10.8,23.8 -24,27.3V54H30V34.3l24,-10.7v30.39z" />
+
+</vector>

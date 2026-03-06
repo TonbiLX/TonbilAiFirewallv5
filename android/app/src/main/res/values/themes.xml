@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Splash screen theme (Android 12+ SplashScreen API) -->
+    <style name="Theme.TonbilAi.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/dark_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.TonbilAi</item>
+    </style>
+
+    <!-- Base application theme -->
+    <style name="Theme.TonbilAi" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/dark_background</item>
+        <item name="android:statusBarColor">@color/dark_background</item>
+        <item name="android:navigationBarColor">@color/dark_background</item>
+    </style>
+
+</resources>
