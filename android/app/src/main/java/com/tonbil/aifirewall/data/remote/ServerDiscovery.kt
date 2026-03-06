@@ -32,16 +32,10 @@ class ServerDiscovery(
         return try {
             val testUrl = url.trimEnd('/') + "/"
             val response: HttpResponse = testClient.get("${testUrl}${ApiRoutes.DASHBOARD_SUMMARY}")
-            response.status.isSuccess()
+            // Any HTTP response means server is reachable (401/403 = needs auth, still alive)
+            response.status.value in 200..499
         } catch (_: Exception) {
-            // Also try auth/login — any response (even 405) means server is there
-            try {
-                val testUrl = url.trimEnd('/') + "/"
-                testClient.get("${testUrl}${ApiRoutes.AUTH_LOGIN}")
-                true
-            } catch (_: Exception) {
-                false
-            }
+            false
         }
     }
 
