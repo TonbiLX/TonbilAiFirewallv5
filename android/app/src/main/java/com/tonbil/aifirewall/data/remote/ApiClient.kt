@@ -1,5 +1,6 @@
 package com.tonbil.aifirewall.data.remote
 
+import com.tonbil.aifirewall.data.local.TokenManager
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -12,7 +13,10 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
-fun createHttpClient(): HttpClient {
+fun createHttpClient(
+    serverDiscovery: ServerDiscovery,
+    tokenManager: TokenManager
+): HttpClient {
     return HttpClient(OkHttp) {
         install(ContentNegotiation) {
             json(Json {
@@ -31,9 +35,27 @@ fun createHttpClient(): HttpClient {
             connectTimeoutMillis = 10_000
         }
 
+        install(authInterceptorPlugin(tokenManager))
+
         defaultRequest {
-            url(ApiRoutes.BASE_URL)
+            url(serverDiscovery.activeUrl)
             contentType(ContentType.Application.Json)
+        }
+    }
+}
+
+fun createTestHttpClient(): HttpClient {
+    return HttpClient(OkHttp) {
+        install(ContentNegotiation) {
+            json(Json {
+                ignoreUnknownKeys = true
+                isLenient = true
+            })
+        }
+
+        install(HttpTimeout) {
+            requestTimeoutMillis = 5_000
+            connectTimeoutMillis = 3_000
         }
     }
 }

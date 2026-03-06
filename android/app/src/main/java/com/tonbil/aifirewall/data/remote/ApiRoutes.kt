@@ -6,6 +6,9 @@ object ApiRoutes {
 
     const val DASHBOARD_SUMMARY = "dashboard/summary"
     const val AUTH_LOGIN = "auth/login"
+    const val AUTH_ME = "auth/me"
+    const val AUTH_LOGOUT = "auth/logout"
+    const val AUTH_CHECK = "auth/check"
     const val DEVICES = "devices"
 
     const val WS_URL = "wss://wall.tonbilx.com/api/v1/ws"
