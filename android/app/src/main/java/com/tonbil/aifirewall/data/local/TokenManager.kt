@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import java.time.LocalDate
 
 class TokenManager(context: Context) {
 
@@ -60,11 +61,22 @@ class TokenManager(context: Context) {
         return prefs.getBoolean(KEY_BIOMETRIC_ENABLED, false)
     }
 
+    fun shouldShowSplashToday(): Boolean {
+        val lastShown = prefs.getString(KEY_SPLASH_LAST_DATE, null)
+        val today = LocalDate.now().toString()
+        return lastShown != today
+    }
+
+    fun markSplashShownToday() {
+        prefs.edit().putString(KEY_SPLASH_LAST_DATE, LocalDate.now().toString()).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "tonbilai_secure_prefs"
         private const val KEY_TOKEN = "jwt_token"
         private const val KEY_USERNAME = "username"
         private const val KEY_DISPLAY_NAME = "display_name"
         private const val KEY_BIOMETRIC_ENABLED = "biometric_enabled"
+        private const val KEY_SPLASH_LAST_DATE = "splash_last_date"
     }
 }

@@ -38,17 +38,17 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
 
-        // Determine start destination based on token state
-        val startDestination: Any = if (tokenManager.isLoggedIn()) {
-            if (tokenManager.isBiometricEnabled()) {
-                // Has token + biometric enabled → show login for biometric prompt
-                LoginRoute
-            } else {
-                // Has token, no biometric → show splash then dashboard
-                SplashRoute
-            }
+        // Splash intro: only once per day, at app launch (before login)
+        val showSplash = tokenManager.shouldShowSplashToday()
+        if (showSplash) {
+            tokenManager.markSplashShownToday()
+        }
+
+        val startDestination: Any = if (showSplash) {
+            SplashRoute
+        } else if (tokenManager.isLoggedIn() && !tokenManager.isBiometricEnabled()) {
+            DashboardRoute
         } else {
-            // No token → must login
             LoginRoute
         }
 
@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
 
-                // Hide bottom nav on auth screens
+                // Hide bottom nav on auth/splash screens
                 val isAuthScreen = currentDestination?.hasRoute(LoginRoute::class) == true ||
                     currentDestination?.hasRoute(ServerSettingsRoute::class) == true ||
                     currentDestination?.hasRoute(SplashRoute::class) == true

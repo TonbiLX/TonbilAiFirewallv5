@@ -11,9 +11,11 @@ import com.tonbil.aifirewall.feature.dashboard.DashboardScreen
 import com.tonbil.aifirewall.feature.devices.DeviceDetailScreen
 import com.tonbil.aifirewall.feature.devices.DevicesScreen
 import androidx.navigation.toRoute
+import com.tonbil.aifirewall.data.local.TokenManager
 import com.tonbil.aifirewall.feature.security.SecurityScreen
 import com.tonbil.aifirewall.feature.settings.SettingsScreen
 import com.tonbil.aifirewall.feature.splash.SplashScreen
+import org.koin.compose.koinInject
 
 @Composable
 fun AppNavHost(
@@ -21,6 +23,8 @@ fun AppNavHost(
     modifier: Modifier = Modifier,
     startDestination: Any = DashboardRoute,
 ) {
+    val tokenManager: TokenManager = koinInject()
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -29,7 +33,9 @@ fun AppNavHost(
         composable<SplashRoute> {
             SplashScreen(
                 onSplashFinished = {
-                    navController.navigate(DashboardRoute) {
+                    // After splash: go to dashboard if logged in, otherwise login
+                    val nextRoute: Any = if (tokenManager.isLoggedIn()) DashboardRoute else LoginRoute
+                    navController.navigate(nextRoute) {
                         popUpTo(SplashRoute) { inclusive = true }
                     }
                 },
@@ -38,7 +44,7 @@ fun AppNavHost(
         composable<LoginRoute> {
             LoginScreen(
                 onLoginSuccess = {
-                    navController.navigate(SplashRoute) {
+                    navController.navigate(DashboardRoute) {
                         popUpTo(LoginRoute) { inclusive = true }
                     }
                 },
