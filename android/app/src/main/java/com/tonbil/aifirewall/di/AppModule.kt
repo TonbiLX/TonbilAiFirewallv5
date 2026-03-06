@@ -43,6 +43,6 @@ val featureModules = module {
     viewModel { SecurityViewModel() }
     viewModel { SettingsViewModel() }
     // Auth
-    viewModel { LoginViewModel(get(), get()) }
+    viewModel { LoginViewModel(get(), get(), get()) }
     viewModel { ServerSettingsViewModel(get(), get()) }
 }

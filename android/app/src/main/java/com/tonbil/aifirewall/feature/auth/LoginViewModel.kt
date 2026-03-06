@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tonbil.aifirewall.data.local.TokenManager
+import com.tonbil.aifirewall.data.remote.ServerDiscovery
 import com.tonbil.aifirewall.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,11 +21,15 @@ data class LoginUiState(
     val showBiometricPrompt: Boolean = false,
     val showBiometricOnly: Boolean = false,
     val passwordVisible: Boolean = false,
+    val isDiscovering: Boolean = true,
+    val serverFound: Boolean = false,
+    val connectedUrl: String? = null,
 )
 
 class LoginViewModel(
     private val authRepository: AuthRepository,
     private val tokenManager: TokenManager,
+    private val serverDiscovery: ServerDiscovery,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -34,6 +39,20 @@ class LoginViewModel(
         // If already logged in with biometric enabled, show biometric-only mode
         if (tokenManager.isLoggedIn() && tokenManager.isBiometricEnabled()) {
             _uiState.update { it.copy(showBiometricOnly = true) }
+        }
+
+        // Auto-discover server on startup
+        viewModelScope.launch {
+            _uiState.update { it.copy(isDiscovering = true) }
+            val url = serverDiscovery.discoverServer()
+            _uiState.update {
+                it.copy(
+                    isDiscovering = false,
+                    serverFound = url != null,
+                    connectedUrl = url,
+                    errorMessage = if (url == null) "Sunucu bulunamadi. Sunucu Ayarlari'ndan baglanti yapin." else null,
+                )
+            }
         }
     }
 
@@ -73,7 +92,7 @@ class LoginViewModel(
                 onFailure = { error ->
                     val message = when {
                         error.message?.contains("401") == true -> "Hatali kullanici adi veya sifre"
-                        error.message?.contains("connect", ignoreCase = true) == true -> "Sunucuya baglanılamadı"
+                        error.message?.contains("connect", ignoreCase = true) == true -> "Sunucuya baglanilamadi"
                         else -> error.message ?: "Giris basarisiz"
                     }
                     _uiState.update {
@@ -84,9 +103,6 @@ class LoginViewModel(
         }
     }
 
-    /**
-     * Check if biometric should be offered after successful login.
-     */
     fun shouldOfferBiometric(context: Context): Boolean {
         return BiometricHelper.canAuthenticate(context) && !tokenManager.isBiometricEnabled()
     }
@@ -95,21 +111,30 @@ class LoginViewModel(
         tokenManager.setBiometricEnabled(enabled)
     }
 
-    /**
-     * Called when biometric-only login succeeds (returning user).
-     */
     fun onBiometricLoginSuccess() {
         _uiState.update { it.copy(isLoginSuccess = true) }
     }
 
-    /**
-     * Switch from biometric-only to password form.
-     */
     fun switchToPasswordLogin() {
         _uiState.update { it.copy(showBiometricOnly = false) }
     }
 
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    fun retryDiscovery() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isDiscovering = true, errorMessage = null) }
+            val url = serverDiscovery.discoverServer()
+            _uiState.update {
+                it.copy(
+                    isDiscovering = false,
+                    serverFound = url != null,
+                    connectedUrl = url,
+                    errorMessage = if (url == null) "Sunucu bulunamadi. Sunucu Ayarlari'ndan baglanti yapin." else null,
+                )
+            }
+        }
     }
 }

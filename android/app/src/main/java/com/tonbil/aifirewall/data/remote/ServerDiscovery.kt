@@ -5,56 +5,91 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 
 class ServerDiscovery(
     private val serverConfig: ServerConfig,
     private val testClient: HttpClient
 ) {
-    var activeUrl: String = ApiRoutes.BASE_URL
+    var activeUrl: String = ""
         private set
+
+    private val _isDiscovered = MutableStateFlow(false)
+    val isDiscovered: StateFlow<Boolean> = _isDiscovered.asStateFlow()
+
+    private val _isDiscovering = MutableStateFlow(false)
+    val isDiscovering: StateFlow<Boolean> = _isDiscovering.asStateFlow()
 
     suspend fun getActiveUrl(): String {
         if (activeUrl.isNotEmpty()) return activeUrl
-        return discoverServer() ?: ApiRoutes.BASE_URL
+        return discoverServer() ?: ""
     }
 
     suspend fun testConnection(url: String): Boolean {
         return try {
-            val response: HttpResponse = testClient.get("${url}${ApiRoutes.DASHBOARD_SUMMARY}")
+            val testUrl = url.trimEnd('/') + "/"
+            val response: HttpResponse = testClient.get("${testUrl}${ApiRoutes.DASHBOARD_SUMMARY}")
             response.status.isSuccess()
         } catch (_: Exception) {
-            false
+            // Also try without auth — just check if server responds
+            try {
+                val testUrl = url.trimEnd('/') + "/"
+                val response: HttpResponse = testClient.get("${testUrl}${ApiRoutes.AUTH_CHECK}")
+                // Any response (even 401) means server is there
+                true
+            } catch (_: Exception) {
+                false
+            }
         }
     }
 
     suspend fun discoverServer(): String? {
-        // 1. Try last connected URL
-        val lastUrl = serverConfig.getLastConnectedUrl().firstOrNull()
-        if (lastUrl != null && testConnection(lastUrl)) {
-            activeUrl = lastUrl
-            return lastUrl
-        }
+        _isDiscovering.value = true
+        try {
+            // 1. Try saved server URL
+            val savedUrl = serverConfig.serverUrlFlow.firstOrNull()
+            if (!savedUrl.isNullOrBlank() && savedUrl != ApiRoutes.BASE_URL && testConnection(savedUrl)) {
+                activeUrl = savedUrl
+                _isDiscovered.value = true
+                return savedUrl
+            }
 
-        // 2. Try local network (192.168.1.2)
-        if (testConnection(ApiRoutes.LOCAL_URL)) {
-            activeUrl = ApiRoutes.LOCAL_URL
-            serverConfig.setLastConnectedUrl(ApiRoutes.LOCAL_URL)
-            return ApiRoutes.LOCAL_URL
-        }
+            // 2. Try last connected URL
+            val lastUrl = serverConfig.getLastConnectedUrl().firstOrNull()
+            if (!lastUrl.isNullOrBlank() && testConnection(lastUrl)) {
+                activeUrl = lastUrl
+                _isDiscovered.value = true
+                return lastUrl
+            }
 
-        // 3. Try remote (wall.tonbilx.com)
-        if (testConnection(ApiRoutes.BASE_URL)) {
-            activeUrl = ApiRoutes.BASE_URL
-            serverConfig.setLastConnectedUrl(ApiRoutes.BASE_URL)
-            return ApiRoutes.BASE_URL
-        }
+            // 3. Try local network (192.168.1.2)
+            if (testConnection(ApiRoutes.LOCAL_URL)) {
+                activeUrl = ApiRoutes.LOCAL_URL
+                serverConfig.setLastConnectedUrl(ApiRoutes.LOCAL_URL)
+                _isDiscovered.value = true
+                return ApiRoutes.LOCAL_URL
+            }
 
-        return null
+            // 4. Try remote (wall.tonbilx.com)
+            if (testConnection(ApiRoutes.BASE_URL)) {
+                activeUrl = ApiRoutes.BASE_URL
+                serverConfig.setLastConnectedUrl(ApiRoutes.BASE_URL)
+                _isDiscovered.value = true
+                return ApiRoutes.BASE_URL
+            }
+
+            return null
+        } finally {
+            _isDiscovering.value = false
+        }
     }
 
     suspend fun switchToUrl(url: String) {
         activeUrl = url
+        _isDiscovered.value = true
         serverConfig.setServerUrl(url)
         serverConfig.setLastConnectedUrl(url)
     }
