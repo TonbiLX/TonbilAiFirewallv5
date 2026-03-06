@@ -1,11 +1,20 @@
 package com.tonbil.aifirewall.di
 
+import com.tonbil.aifirewall.data.remote.createHttpClient
+import com.tonbil.aifirewall.feature.dashboard.DashboardViewModel
+import com.tonbil.aifirewall.feature.devices.DevicesViewModel
+import com.tonbil.aifirewall.feature.security.SecurityViewModel
+import com.tonbil.aifirewall.feature.settings.SettingsViewModel
+import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val appModule = module {
-    // HttpClient will be added in Plan 02 when ApiClient.kt is created
+    single { createHttpClient() }
 }
 
 val featureModules = module {
-    // ViewModels will be added in Plan 02
+    viewModel { DashboardViewModel(get()) }
+    viewModel { DevicesViewModel() }
+    viewModel { SecurityViewModel() }
+    viewModel { SettingsViewModel() }
 }
