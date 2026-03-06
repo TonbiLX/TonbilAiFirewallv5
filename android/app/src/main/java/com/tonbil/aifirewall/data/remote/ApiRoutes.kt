@@ -12,4 +12,13 @@ object ApiRoutes {
     const val DEVICES = "devices"
 
     const val WS_URL = "wss://wall.tonbilx.com/api/v1/ws"
+
+    fun wsUrl(serverDiscovery: ServerDiscovery, token: String): String {
+        val baseUrl = serverDiscovery.activeUrl
+        val wsBase = baseUrl
+            .replace("https://", "wss://")
+            .replace("http://", "ws://")
+            .removeSuffix("/")
+        return "${wsBase}ws?token=$token"
+    }
 }

@@ -4,8 +4,10 @@ import com.tonbil.aifirewall.data.local.ServerConfig
 import com.tonbil.aifirewall.data.local.TokenManager
 import com.tonbil.aifirewall.data.remote.ServerDiscovery
 import com.tonbil.aifirewall.data.remote.createHttpClient
+import com.tonbil.aifirewall.data.remote.WebSocketManager
 import com.tonbil.aifirewall.data.remote.createTestHttpClient
 import com.tonbil.aifirewall.data.repository.AuthRepository
+import com.tonbil.aifirewall.data.repository.DashboardRepository
 import com.tonbil.aifirewall.feature.auth.LoginViewModel
 import com.tonbil.aifirewall.feature.auth.ServerSettingsViewModel
 import com.tonbil.aifirewall.feature.dashboard.DashboardViewModel
@@ -25,6 +27,8 @@ val appModule = module {
     single { ServerDiscovery(get<ServerConfig>(), get<HttpClient>(named("test"))) }
     single { createHttpClient(get<ServerDiscovery>(), get<TokenManager>()) }
     single { AuthRepository(get(), get<TokenManager>()) }
+    single { WebSocketManager(get(), get<ServerDiscovery>(), get<TokenManager>()) }
+    single { DashboardRepository(get()) }
 }
 
 val featureModules = module {
