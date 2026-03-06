@@ -34,11 +34,10 @@ class ServerDiscovery(
             val response: HttpResponse = testClient.get("${testUrl}${ApiRoutes.DASHBOARD_SUMMARY}")
             response.status.isSuccess()
         } catch (_: Exception) {
-            // Also try without auth — just check if server responds
+            // Also try auth/login — any response (even 405) means server is there
             try {
                 val testUrl = url.trimEnd('/') + "/"
-                val response: HttpResponse = testClient.get("${testUrl}${ApiRoutes.AUTH_CHECK}")
-                // Any response (even 401) means server is there
+                testClient.get("${testUrl}${ApiRoutes.AUTH_LOGIN}")
                 true
             } catch (_: Exception) {
                 false

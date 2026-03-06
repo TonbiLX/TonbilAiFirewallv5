@@ -8,19 +8,15 @@ object ApiRoutes {
     const val AUTH_LOGIN = "auth/login"
     const val AUTH_ME = "auth/me"
     const val AUTH_LOGOUT = "auth/logout"
-    const val AUTH_CHECK = "auth/check"
     const val DEVICES = "devices"
     const val PROFILES = "profiles"
-    const val DNS_QUERY_LOGS = "dns/query-logs"
-    const val TRAFFIC_FLOWS_DEVICE = "traffic/flows/device"
 
     fun deviceDetail(id: Int) = "$DEVICES/$id"
     fun deviceBlock(id: Int) = "$DEVICES/$id/block"
     fun deviceUnblock(id: Int) = "$DEVICES/$id/unblock"
     fun deviceConnectionHistory(id: Int) = "$DEVICES/$id/connection-history"
-    fun deviceTrafficSummary(id: Int) = "$TRAFFIC_FLOWS_DEVICE/$id/summary"
-
-    const val WS_URL = "wss://wall.tonbilx.com/api/v1/ws"
+    fun deviceDnsQueries(id: Int) = "traffic/per-device/$id/dns-queries"
+    fun deviceTrafficSummary(id: Int) = "traffic/per-device/$id/connections"
 
     fun wsUrl(serverDiscovery: ServerDiscovery, token: String): String {
         val baseUrl = serverDiscovery.activeUrl

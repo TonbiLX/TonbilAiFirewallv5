@@ -96,7 +96,7 @@ class DeviceRepository(private val client: HttpClient) {
         limit: Int = 50,
     ): Result<List<DnsQueryLogDto>> {
         return try {
-            val response: List<DnsQueryLogDto> = client.get(ApiRoutes.DNS_QUERY_LOGS) {
+            val response: List<DnsQueryLogDto> = client.get(ApiRoutes.deviceDnsQueries(0)) {
                 url {
                     parameters.append("client_ip", clientIp)
                     parameters.append("limit", limit.toString())
