@@ -60,4 +60,9 @@ dependencies {
     // AndroidX
     implementation(libs.core.ktx)
     implementation(libs.core.splashscreen)
+
+    // Security + Auth
+    implementation(libs.security.crypto)
+    implementation(libs.biometric)
+    implementation(libs.datastore.preferences)
 }

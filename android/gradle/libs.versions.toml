@@ -9,6 +9,9 @@ coreSplashscreen = "1.0.1"
 activityCompose = "1.10.1"
 coreKtx = "1.16.0"
 lifecycleRuntimeCompose = "2.9.0"
+securityCrypto = "1.1.0-alpha06"
+biometric = "1.2.0-alpha05"
+datastorePreferences = "1.1.4"
 
 [libraries]
 # Compose
@@ -42,6 +45,9 @@ ktor-client-logging = { group = "io.ktor", name = "ktor-client-logging", version
 # AndroidX
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
+security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
+datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
