@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TonbilAiOS Android App
 status: executing
-last_updated: "2026-03-06T10:49:57Z"
+last_updated: "2026-03-06T11:42:35Z"
 progress:
   total_phases: 10
   completed_phases: 0
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 5
+  completed_plans: 5
 ---
 
 # Project State
@@ -18,23 +18,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-06)
 
 **Core value:** TonbilAiOS v5'in tum ozelliklerini Samsung S24 Ultra uzerinden yonetme ve izleme
-**Current focus:** Phase 7 — Authentication
+**Current focus:** Phase 8 — Dashboard
 
 ## Current Position
 
-Phase: 7 of 15 (Authentication)
-Plan: 2 of 2 complete
+Phase: 8 of 15 (Dashboard)
+Plan: 1 of 2 complete
 Status: Executing
-Last activity: 2026-03-06 — Plan 07-02 completed (Auth UI layer)
+Last activity: 2026-03-06 — Plan 08-01 completed (Dashboard data layer)
 
-Progress: [████░░░░░░] 20%
+Progress: [█████░░░░░] 25%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 2.5 min
-- Total execution time: 0.17 hours
+- Total plans completed: 5
+- Average duration: 2.4 min
+- Total execution time: 0.2 hours
 
 **By Phase:**
 
@@ -42,6 +42,7 @@ Progress: [████░░░░░░] 20%
 |-------|-------|-------|----------|
 | 06-project-skeleton | 2/2 | 4 min | 2 min |
 | 07-authentication | 2/2 | 6 min | 3 min |
+| 08-dashboard | 1/2 | 2 min | 2 min |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Progress: [████░░░░░░] 20%
 - [07-02] BiometricHelper BIOMETRIC_STRONG only, no DEVICE_CREDENTIAL
 - [07-02] Returning user biometric-only mode with password fallback
 - [07-02] Bottom nav hidden on auth screens (LoginRoute, ServerSettingsRoute)
+- [08-01] ApiRoutes.wsUrl() dynamically derives WS URL from ServerDiscovery.activeUrl
+- [08-01] WebSocketManager uses MutableSharedFlow with replay=1 and DROP_OLDEST overflow
 
 ### Pending Todos
 
@@ -84,8 +87,8 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 07-02-PLAN.md
-Resume file: .planning/phases/07-authentication/07-02-SUMMARY.md
+Stopped at: Completed 08-01-PLAN.md
+Resume file: .planning/phases/08-dashboard/08-01-SUMMARY.md
 
 ## Post-Milestone Work (GSD disi)
 

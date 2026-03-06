@@ -26,8 +26,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Dashboard
 
-- [ ] **DASH-01**: Ana dashboard ekrani — baglanti durumu, bant genisligi, cihaz sayisi, DNS ozet
-- [ ] **DASH-02**: WebSocket canli veri akisi — bandwidth, DNS, cihaz guncellemeleri (lifecycle-safe)
+- [x] **DASH-01**: Ana dashboard ekrani — baglanti durumu, bant genisligi, cihaz sayisi, DNS ozet
+- [x] **DASH-02**: WebSocket canli veri akisi — bandwidth, DNS, cihaz guncellemeleri (lifecycle-safe)
 - [ ] **DASH-03**: Istatistik kartlari — toplam trafik, engellenen sorgu, aktif cihaz, tehdit sayisi
 - [ ] **DASH-04**: Bant genisligi grafigi (Vico chart)
 - [ ] **DASH-05**: Home screen widget (Glance) — bant genisligi, cihaz sayisi, son tehdit
@@ -151,8 +151,8 @@ Deferred to future release.
 | AUTH-04 | Phase 7 | Complete |
 | AUTH-05 | Phase 7 | Complete |
 | AUTH-06 | Phase 7 | Complete |
-| DASH-01 | Phase 8 | Pending |
-| DASH-02 | Phase 8 | Pending |
+| DASH-01 | Phase 8 | Complete |
+| DASH-02 | Phase 8 | Complete |
 | DASH-03 | Phase 8 | Pending |
 | DASH-04 | Phase 8 | Pending |
 | DASH-05 | Phase 14 | Pending |
