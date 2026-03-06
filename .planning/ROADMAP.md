@@ -73,7 +73,10 @@
   2. Uygulama acildiginda cyberpunk koyu tema gorунuyor (neon cyan/magenta vurgu renkleri, koyu arka plan)
   3. Bottom navigation ile en az 4 ana ekran arasinda gecis yapilabiliyor
   4. API client wall.tonbilx.com adresine test istegi gonderebiliyor ve JSON yanit aliyor
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 06-01-PLAN.md — Gradle proje yapisi, version catalog, cyberpunk tema, Koin DI
+- [ ] 06-02-PLAN.md — Bottom navigation, placeholder ekranlar, Ktor API client
 
 ### Phase 7: Authentication
 **Goal**: Kullanici guvenli bir sekilde hesabina erisebiliyor — sifre, biyometrik veya otomatik token ile
@@ -189,7 +192,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 3. TC Mark Chain Migration | v1.0 | 1/1 | Complete | 2026-02-25 |
 | 4. Startup and Persistence | v1.0 | 1/1 | Complete | 2026-03-03 |
 | 5. DHCP Gateway and Validation | v1.0 | 2/2 | Complete | 2026-03-03 |
-| 6. Project Skeleton | v2.0 | 0/? | Not started | - |
+| 6. Project Skeleton | v2.0 | 0/2 | Planning | - |
 | 7. Authentication | v2.0 | 0/? | Not started | - |
 | 8. Dashboard | v2.0 | 0/? | Not started | - |
 | 9. Device Management | v2.0 | 0/? | Not started | - |
