@@ -32,7 +32,7 @@ val appModule = module {
 }
 
 val featureModules = module {
-    viewModel { DashboardViewModel(get()) }
+    viewModel { DashboardViewModel(get(), get()) }
     viewModel { DevicesViewModel() }
     viewModel { SecurityViewModel() }
     viewModel { SettingsViewModel() }
