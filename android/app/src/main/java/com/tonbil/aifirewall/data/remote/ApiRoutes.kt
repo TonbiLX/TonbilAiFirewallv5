@@ -1,7 +1,7 @@
 package com.tonbil.aifirewall.data.remote
 
 object ApiRoutes {
-    const val BASE_URL = "https://wall.tonbilx.com/api/v1/"
+    const val BASE_URL = "http://wall.tonbilx.com/api/v1/"
     const val LOCAL_URL = "http://192.168.1.2/api/v1/"
 
     const val DASHBOARD_SUMMARY = "dashboard/summary"
