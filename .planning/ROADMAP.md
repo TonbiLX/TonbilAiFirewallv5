@@ -88,7 +88,7 @@ Plans:
   3. Uygulama kapatilip acildiginda token gecerli ise tekrar giris istenmiyor
   4. Yerel agda (192.168.1.2) ve disaridan (wall.tonbilx.com) otomatik gecis yapiliyor, baglanti kopuklugunda diger adres deneniyor
   5. Sunucu ayarlari ekranindan manuel URL girilip baglanti testi yapilabiliyor
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 07-01-PLAN.md — Token depolama, server discovery, auth interceptor, AuthRepository
 - [ ] 07-02-PLAN.md — Login ekrani, biyometrik auth, sunucu ayarlari, navigation guard
@@ -196,7 +196,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 4. Startup and Persistence | v1.0 | 1/1 | Complete | 2026-03-03 |
 | 5. DHCP Gateway and Validation | v1.0 | 2/2 | Complete | 2026-03-03 |
 | 6. Project Skeleton | v2.0 | 0/2 | Planning | - |
-| 7. Authentication | v2.0 | 0/2 | Planning | - |
+| 7. Authentication | 1/2 | In Progress|  | - |
 | 8. Dashboard | v2.0 | 0/? | Not started | - |
 | 9. Device Management | v2.0 | 0/? | Not started | - |
 | 10. DNS Filtering | v2.0 | 0/? | Not started | - |

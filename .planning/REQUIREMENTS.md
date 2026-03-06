@@ -19,10 +19,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **AUTH-01**: Kullanici email/sifre ile giris yapabilir (mevcut JWT auth)
 - [ ] **AUTH-02**: Biyometrik kimlik dogrulama — parmak izi veya yuz tanima ile giris
-- [ ] **AUTH-03**: JWT token guvenli depolama (EncryptedSharedPreferences)
-- [ ] **AUTH-04**: Otomatik token yenileme (Mutex ile race condition onleme)
-- [ ] **AUTH-05**: Auto-discovery — yerel (192.168.1.2) / uzak (wall.tonbilx.com) otomatik gecis
-- [ ] **AUTH-06**: Sunucu ayarlari ekrani — manuel URL yapilandirma + baglanti testi
+- [x] **AUTH-03**: JWT token guvenli depolama (EncryptedSharedPreferences)
+- [x] **AUTH-04**: Otomatik token yenileme (Mutex ile race condition onleme)
+- [x] **AUTH-05**: Auto-discovery — yerel (192.168.1.2) / uzak (wall.tonbilx.com) otomatik gecis
+- [x] **AUTH-06**: Sunucu ayarlari ekrani — manuel URL yapilandirma + baglanti testi
 
 ### Dashboard
 
@@ -147,10 +147,10 @@ Deferred to future release.
 | SETUP-05 | Phase 6 | Complete |
 | AUTH-01 | Phase 7 | Pending |
 | AUTH-02 | Phase 7 | Pending |
-| AUTH-03 | Phase 7 | Pending |
-| AUTH-04 | Phase 7 | Pending |
-| AUTH-05 | Phase 7 | Pending |
-| AUTH-06 | Phase 7 | Pending |
+| AUTH-03 | Phase 7 | Complete |
+| AUTH-04 | Phase 7 | Complete |
+| AUTH-05 | Phase 7 | Complete |
+| AUTH-06 | Phase 7 | Complete |
 | DASH-01 | Phase 8 | Pending |
 | DASH-02 | Phase 8 | Pending |
 | DASH-03 | Phase 8 | Pending |
