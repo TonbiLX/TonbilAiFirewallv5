@@ -35,11 +35,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Device Management
 
-- [ ] **DEV-01**: Cihaz listesi — isim, IP, MAC, durum gostergesi, anlik bant genisligi
-- [ ] **DEV-02**: Cihaz detay ekrani — trafik gecmisi, DNS sorgulari, profil bilgisi
-- [ ] **DEV-03**: Tek dokunusla cihaz engelleme/engel kaldirma (internet durdurma)
-- [ ] **DEV-04**: Cihaza profil atama/degistirme
-- [ ] **DEV-05**: Pull-to-refresh tum cihaz ekranlarinda
+- [x] **DEV-01**: Cihaz listesi — isim, IP, MAC, durum gostergesi, anlik bant genisligi
+- [x] **DEV-02**: Cihaz detay ekrani — trafik gecmisi, DNS sorgulari, profil bilgisi
+- [x] **DEV-03**: Tek dokunusla cihaz engelleme/engel kaldirma (internet durdurma)
+- [x] **DEV-04**: Cihaza profil atama/degistirme
+- [x] **DEV-05**: Pull-to-refresh tum cihaz ekranlarinda
 
 ### DNS Filtering
 
@@ -157,11 +157,11 @@ Deferred to future release.
 | DASH-04 | Phase 8 | Complete |
 | DASH-05 | Phase 14 | Pending |
 | DASH-06 | Phase 14 | Pending |
-| DEV-01 | Phase 9 | Pending |
-| DEV-02 | Phase 9 | Pending |
-| DEV-03 | Phase 9 | Pending |
-| DEV-04 | Phase 9 | Pending |
-| DEV-05 | Phase 9 | Pending |
+| DEV-01 | Phase 9 | Complete |
+| DEV-02 | Phase 9 | Complete |
+| DEV-03 | Phase 9 | Complete |
+| DEV-04 | Phase 9 | Complete |
+| DEV-05 | Phase 9 | Complete |
 | DNS-01 | Phase 10 | Pending |
 | DNS-02 | Phase 10 | Pending |
 | DNS-03 | Phase 10 | Pending |

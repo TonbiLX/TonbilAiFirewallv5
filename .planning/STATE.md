@@ -31,23 +31,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-06)
 
 **Core value:** TonbilAiOS v5'in tum ozelliklerini Samsung S24 Ultra uzerinden yonetme ve izleme
-**Current focus:** Phase 8 — Dashboard
+**Current focus:** Phase 9 — Device Management
 
 ## Current Position
 
-Phase: 8 of 15 (Dashboard) -- COMPLETE
-Plan: 2 of 2 complete
+Phase: 9 of 15 (Device Management)
+Plan: 1 of 2 complete
 Status: Executing
-Last activity: 2026-03-06 — Plan 08-02 completed (Dashboard UI layer)
+Last activity: 2026-03-06 — Plan 09-01 completed (Device Management data layer)
 
-Progress: [██████░░░░] 30%
+Progress: [██████░░░░] 33%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
+- Total plans completed: 7
 - Average duration: 2.3 min
-- Total execution time: 0.23 hours
+- Total execution time: 0.27 hours
 
 **By Phase:**
 
@@ -56,6 +56,7 @@ Progress: [██████░░░░] 30%
 | 06-project-skeleton | 2/2 | 4 min | 2 min |
 | 07-authentication | 2/2 | 6 min | 3 min |
 | 08-dashboard | 2/2 | 4 min | 2 min |
+| 09-device-management | 1/2 | 2 min | 2 min |
 
 ## Accumulated Context
 
@@ -91,6 +92,9 @@ Progress: [██████░░░░] 30%
 - [08-02] BandwidthPoint max 60 points (3 min at 3s interval) with takeLast
 - [08-02] Stat card navigation: Aktif Cihaz -> DevicesRoute, others -> SecurityRoute
 - [08-02] Vico CartesianChart with ModelProducer pattern and LaunchedEffect
+- [09-01] Ktor url block with parameters.append for query string construction
+- [09-01] ContentType.Application.Json explicit set for PATCH requests
+- [09-01] ApiRoutes fun methods for dynamic route construction (deviceDetail, deviceBlock etc.)
 
 ### Pending Todos
 
@@ -103,8 +107,8 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 08-02-PLAN.md
-Resume file: .planning/phases/08-dashboard/08-02-SUMMARY.md
+Stopped at: Completed 09-01-PLAN.md
+Resume file: .planning/phases/09-device-management/09-01-SUMMARY.md
 
 ## Post-Milestone Work (GSD disi)
 
