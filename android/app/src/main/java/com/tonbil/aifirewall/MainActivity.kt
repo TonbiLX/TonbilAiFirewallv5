@@ -19,6 +19,7 @@ import com.tonbil.aifirewall.ui.navigation.CyberpunkBottomNav
 import com.tonbil.aifirewall.ui.navigation.DashboardRoute
 import com.tonbil.aifirewall.ui.navigation.LoginRoute
 import com.tonbil.aifirewall.ui.navigation.ServerSettingsRoute
+import com.tonbil.aifirewall.ui.navigation.SplashRoute
 import com.tonbil.aifirewall.ui.theme.CyberpunkTheme
 import org.koin.android.ext.android.inject
 
@@ -43,8 +44,8 @@ class MainActivity : ComponentActivity() {
                 // Has token + biometric enabled → show login for biometric prompt
                 LoginRoute
             } else {
-                // Has token, no biometric → go directly to dashboard
-                DashboardRoute
+                // Has token, no biometric → show splash then dashboard
+                SplashRoute
             }
         } else {
             // No token → must login
@@ -59,7 +60,8 @@ class MainActivity : ComponentActivity() {
 
                 // Hide bottom nav on auth screens
                 val isAuthScreen = currentDestination?.hasRoute(LoginRoute::class) == true ||
-                    currentDestination?.hasRoute(ServerSettingsRoute::class) == true
+                    currentDestination?.hasRoute(ServerSettingsRoute::class) == true ||
+                    currentDestination?.hasRoute(SplashRoute::class) == true
 
                 Scaffold(
                     bottomBar = {

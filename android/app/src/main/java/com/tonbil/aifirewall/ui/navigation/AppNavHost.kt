@@ -13,6 +13,7 @@ import com.tonbil.aifirewall.feature.devices.DevicesScreen
 import androidx.navigation.toRoute
 import com.tonbil.aifirewall.feature.security.SecurityScreen
 import com.tonbil.aifirewall.feature.settings.SettingsScreen
+import com.tonbil.aifirewall.feature.splash.SplashScreen
 
 @Composable
 fun AppNavHost(
@@ -25,10 +26,19 @@ fun AppNavHost(
         startDestination = startDestination,
         modifier = modifier,
     ) {
+        composable<SplashRoute> {
+            SplashScreen(
+                onSplashFinished = {
+                    navController.navigate(DashboardRoute) {
+                        popUpTo(SplashRoute) { inclusive = true }
+                    }
+                },
+            )
+        }
         composable<LoginRoute> {
             LoginScreen(
                 onLoginSuccess = {
-                    navController.navigate(DashboardRoute) {
+                    navController.navigate(SplashRoute) {
                         popUpTo(LoginRoute) { inclusive = true }
                     }
                 },

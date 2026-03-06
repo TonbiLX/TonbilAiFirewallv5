@@ -7,6 +7,9 @@ import kotlinx.serialization.Serializable
 @Serializable object SecurityRoute
 @Serializable object SettingsRoute
 
+// Splash
+@Serializable object SplashRoute
+
 // Auth screens
 @Serializable object LoginRoute
 @Serializable object ServerSettingsRoute

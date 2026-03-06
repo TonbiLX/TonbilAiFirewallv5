@@ -49,6 +49,7 @@ import com.tonbil.aifirewall.data.remote.WebSocketState
 import com.tonbil.aifirewall.data.remote.dto.TopClientDto
 import com.tonbil.aifirewall.data.remote.dto.TopDomainDto
 import com.tonbil.aifirewall.ui.components.GlassCard
+import com.tonbil.aifirewall.ui.components.PulsingDot
 import com.tonbil.aifirewall.ui.navigation.DevicesRoute
 import com.tonbil.aifirewall.ui.navigation.SecurityRoute
 import com.tonbil.aifirewall.ui.theme.CyberpunkTheme
@@ -240,14 +241,18 @@ private fun ConnectionStatusBanner(state: WebSocketState) {
         WebSocketState.DISCONNECTED -> colors.neonRed to "Baglanti Kesildi"
     }
 
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
+    GlassCard(modifier = Modifier.fillMaxWidth(), glowColor = color) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(color),
-            )
+            if (state == WebSocketState.CONNECTED) {
+                PulsingDot(color = color, size = 10.dp)
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(color),
+                )
+            }
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = text,
@@ -270,6 +275,7 @@ private fun StatCardItem(
 ) {
     GlassCard(
         modifier = modifier.clickable(onClick = onClick),
+        glowColor = color,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(

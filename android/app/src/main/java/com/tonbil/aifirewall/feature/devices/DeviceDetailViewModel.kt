@@ -74,7 +74,7 @@ class DeviceDetailViewModel(
 
                     // DNS logs need the device IP, so load after device
                     val dnsResult = deviceResult.getOrNull()?.ipAddress?.let { ip ->
-                        deviceRepository.getDnsLogs(ip)
+                        deviceRepository.getDnsLogs(deviceId, ip)
                     }
 
                     _uiState.update { state ->

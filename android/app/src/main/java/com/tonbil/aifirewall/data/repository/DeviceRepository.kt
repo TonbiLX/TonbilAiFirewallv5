@@ -92,11 +92,12 @@ class DeviceRepository(private val client: HttpClient) {
     }
 
     suspend fun getDnsLogs(
+        deviceId: Int,
         clientIp: String,
         limit: Int = 50,
     ): Result<List<DnsQueryLogDto>> {
         return try {
-            val response: List<DnsQueryLogDto> = client.get(ApiRoutes.deviceDnsQueries(0)) {
+            val response: List<DnsQueryLogDto> = client.get(ApiRoutes.deviceDnsQueries(deviceId)) {
                 url {
                     parameters.append("client_ip", clientIp)
                     parameters.append("limit", limit.toString())

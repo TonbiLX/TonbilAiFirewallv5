@@ -1,5 +1,10 @@
 package com.tonbil.aifirewall.ui.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -12,14 +17,20 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.tonbil.aifirewall.ui.theme.DarkSurface
 import com.tonbil.aifirewall.ui.theme.NeonCyan
+import com.tonbil.aifirewall.ui.theme.NeonMagenta
 import com.tonbil.aifirewall.ui.theme.TextSecondary
 
 data class BottomNavItem(
@@ -40,39 +51,58 @@ fun CyberpunkBottomNav(navController: NavController) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    NavigationBar(
-        containerColor = DarkSurface,
-        contentColor = NeonCyan,
-    ) {
-        bottomNavItems.forEach { item ->
-            val selected = currentDestination?.hasRoute(item.route::class) == true
-
-            NavigationBarItem(
-                selected = selected,
-                onClick = {
-                    navController.navigate(item.route) {
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
-                        }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
-                icon = {
-                    Icon(
-                        imageVector = item.icon,
-                        contentDescription = item.label,
+    Box(
+        modifier = Modifier.drawBehind {
+            // Top glow line
+            drawRoundRect(
+                brush = Brush.horizontalGradient(
+                    listOf(
+                        Color.Transparent,
+                        NeonCyan.copy(alpha = 0.3f),
+                        NeonMagenta.copy(alpha = 0.2f),
+                        NeonCyan.copy(alpha = 0.3f),
+                        Color.Transparent,
                     )
-                },
-                label = { Text(item.label) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = NeonCyan,
-                    selectedTextColor = NeonCyan,
-                    unselectedIconColor = TextSecondary,
-                    unselectedTextColor = TextSecondary,
-                    indicatorColor = Color.Transparent,
                 ),
+                size = size.copy(height = 2.dp.toPx()),
+                cornerRadius = CornerRadius(1.dp.toPx()),
             )
+        },
+    ) {
+        NavigationBar(
+            containerColor = DarkSurface,
+            contentColor = NeonCyan,
+        ) {
+            bottomNavItems.forEach { item ->
+                val selected = currentDestination?.hasRoute(item.route::class) == true
+
+                NavigationBarItem(
+                    selected = selected,
+                    onClick = {
+                        navController.navigate(item.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    icon = {
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = item.label,
+                        )
+                    },
+                    label = { Text(item.label) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = NeonCyan,
+                        selectedTextColor = NeonCyan,
+                        unselectedIconColor = TextSecondary,
+                        unselectedTextColor = TextSecondary,
+                        indicatorColor = NeonCyan.copy(alpha = 0.1f),
+                    ),
+                )
+            }
         }
     }
 }

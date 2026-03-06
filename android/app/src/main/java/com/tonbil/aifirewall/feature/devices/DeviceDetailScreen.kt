@@ -194,7 +194,7 @@ private fun OverviewTab(
     ) {
         // Device info card
         item {
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
+            GlassCard(modifier = Modifier.fillMaxWidth(), glowColor = colors.neonCyan) {
                 Text(
                     text = "Cihaz Bilgileri",
                     style = MaterialTheme.typography.titleMedium,
