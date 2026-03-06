@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TonbilAiOS Android App
 status: executing
-last_updated: "2026-03-06T11:42:35Z"
+last_updated: "2026-03-06T11:47:40Z"
 progress:
   total_phases: 10
   completed_phases: 0
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 6
+  completed_plans: 6
 ---
 
 # Project State
@@ -22,19 +22,19 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 
 ## Current Position
 
-Phase: 8 of 15 (Dashboard)
-Plan: 1 of 2 complete
+Phase: 8 of 15 (Dashboard) -- COMPLETE
+Plan: 2 of 2 complete
 Status: Executing
-Last activity: 2026-03-06 — Plan 08-01 completed (Dashboard data layer)
+Last activity: 2026-03-06 — Plan 08-02 completed (Dashboard UI layer)
 
-Progress: [█████░░░░░] 25%
+Progress: [██████░░░░] 30%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 2.4 min
-- Total execution time: 0.2 hours
+- Total plans completed: 6
+- Average duration: 2.3 min
+- Total execution time: 0.23 hours
 
 **By Phase:**
 
@@ -42,7 +42,7 @@ Progress: [█████░░░░░] 25%
 |-------|-------|-------|----------|
 | 06-project-skeleton | 2/2 | 4 min | 2 min |
 | 07-authentication | 2/2 | 6 min | 3 min |
-| 08-dashboard | 1/2 | 2 min | 2 min |
+| 08-dashboard | 2/2 | 4 min | 2 min |
 
 ## Accumulated Context
 
@@ -75,6 +75,9 @@ Progress: [█████░░░░░] 25%
 - [07-02] Bottom nav hidden on auth screens (LoginRoute, ServerSettingsRoute)
 - [08-01] ApiRoutes.wsUrl() dynamically derives WS URL from ServerDiscovery.activeUrl
 - [08-01] WebSocketManager uses MutableSharedFlow with replay=1 and DROP_OLDEST overflow
+- [08-02] BandwidthPoint max 60 points (3 min at 3s interval) with takeLast
+- [08-02] Stat card navigation: Aktif Cihaz -> DevicesRoute, others -> SecurityRoute
+- [08-02] Vico CartesianChart with ModelProducer pattern and LaunchedEffect
 
 ### Pending Todos
 
@@ -87,8 +90,8 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-06
-Stopped at: Completed 08-01-PLAN.md
-Resume file: .planning/phases/08-dashboard/08-01-SUMMARY.md
+Stopped at: Completed 08-02-PLAN.md
+Resume file: .planning/phases/08-dashboard/08-02-SUMMARY.md
 
 ## Post-Milestone Work (GSD disi)
 

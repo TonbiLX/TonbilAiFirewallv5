@@ -28,7 +28,7 @@
 
 - [ ] **Phase 6: Project Skeleton** - Gelistirme ortami, proje iskeleti, tema, navigasyon, API client
 - [ ] **Phase 7: Authentication** - JWT giris, biyometrik auth, token yonetimi, auto-discovery
-- [ ] **Phase 8: Dashboard** - Ana dashboard ekrani, WebSocket canli veri, grafikler
+- [x] **Phase 8: Dashboard** - Ana dashboard ekrani, WebSocket canli veri, grafikler (completed 2026-03-06)
 - [ ] **Phase 9: Device Management** - Cihaz listesi, detay, engelleme, profil atama
 - [ ] **Phase 10: DNS Filtering** - DNS ozet, filtreleme toggle, kategoriler, profil yonetimi
 - [ ] **Phase 11: Network Security** - Firewall kurallari, VPN peer yonetimi, DDoS koruma izleme
@@ -102,7 +102,7 @@ Plans:
   2. Bant genisligi grafigi canli olarak guncelleniyor (WebSocket uzerinden veri akisi)
   3. Uygulama arka plana gidip geri geldiginde WebSocket baglantisi otomatik yeniden kuruluyor
   4. Istatistik kartlarina dokunulunca ilgili detay ekranina yonlendirme yapiliyor
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 08-01-PLAN.md — Veri katmani: Dashboard/WebSocket DTOlari, WebSocketManager, DashboardRepository, Vico bagimliligi
 - [ ] 08-02-PLAN.md — UI katmani: DashboardScreen, istatistik kartlari, Vico bandwidth grafigi, kart navigasyonu
@@ -200,7 +200,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 5. DHCP Gateway and Validation | v1.0 | 2/2 | Complete | 2026-03-03 |
 | 6. Project Skeleton | v2.0 | 0/2 | Planning | - |
 | 7. Authentication | 1/2 | In Progress|  | - |
-| 8. Dashboard | v2.0 | 0/2 | Planning | - |
+| 8. Dashboard | 2/2 | Complete   | 2026-03-06 | - |
 | 9. Device Management | v2.0 | 0/? | Not started | - |
 | 10. DNS Filtering | v2.0 | 0/? | Not started | - |
 | 11. Network Security | v2.0 | 0/? | Not started | - |
