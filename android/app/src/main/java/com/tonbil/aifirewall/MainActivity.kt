@@ -74,6 +74,7 @@ class MainActivity : ComponentActivity() {
                         navController = navController,
                         modifier = Modifier.padding(innerPadding),
                         startDestination = startDestination,
+                        tokenManager = tokenManager,
                     )
                 }
             }
