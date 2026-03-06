@@ -11,6 +11,19 @@ object ApiRoutes {
     const val DEVICES = "devices"
     const val PROFILES = "profiles"
 
+    // Security & Stats
+    const val DNS_STATS = "dns/stats"
+    const val DNS_BLOCKLISTS = "dns/blocklists"
+    const val FIREWALL_STATS = "firewall/stats"
+    const val FIREWALL_CONNECTIONS_COUNT = "firewall/connections/count"
+    const val VPN_STATS = "vpn/stats"
+    const val VPN_PEERS = "vpn/peers"
+    const val DDOS_STATUS = "ddos/status"
+    const val DDOS_COUNTERS = "ddos/counters"
+    const val SECURITY_STATS = "security/stats"
+    const val DHCP_STATS = "dhcp/stats"
+    const val DHCP_LEASES_LIVE = "dhcp/leases/live"
+
     fun deviceDetail(id: Int) = "$DEVICES/$id"
     fun deviceBlock(id: Int) = "$DEVICES/$id/block"
     fun deviceUnblock(id: Int) = "$DEVICES/$id/unblock"
@@ -24,6 +37,6 @@ object ApiRoutes {
             .replace("https://", "wss://")
             .replace("http://", "ws://")
             .removeSuffix("/")
-        return "${wsBase}ws?token=$token"
+        return "${wsBase}/ws?token=$token"
     }
 }

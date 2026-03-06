@@ -10,6 +10,7 @@ import com.tonbil.aifirewall.data.repository.AuthRepository
 import com.tonbil.aifirewall.data.repository.DashboardRepository
 import com.tonbil.aifirewall.data.repository.DeviceRepository
 import com.tonbil.aifirewall.data.repository.ProfileRepository
+import com.tonbil.aifirewall.data.repository.SecurityRepository
 import com.tonbil.aifirewall.feature.auth.LoginViewModel
 import com.tonbil.aifirewall.feature.auth.ServerSettingsViewModel
 import com.tonbil.aifirewall.feature.dashboard.DashboardViewModel
@@ -34,14 +35,15 @@ val appModule = module {
     single { DashboardRepository(get()) }
     single { DeviceRepository(get()) }
     single { ProfileRepository(get()) }
+    single { SecurityRepository(get()) }
 }
 
 val featureModules = module {
     viewModel { DashboardViewModel(get(), get()) }
     viewModel { DevicesViewModel(get(), get()) }
     viewModel { params -> DeviceDetailViewModel(params.get(), get(), get(), get()) }
-    viewModel { SecurityViewModel() }
-    viewModel { SettingsViewModel() }
+    viewModel { SecurityViewModel(get()) }
+    viewModel { SettingsViewModel(get(), get()) }
     // Auth
     viewModel { LoginViewModel(get(), get(), get()) }
     viewModel { ServerSettingsViewModel(get(), get()) }
