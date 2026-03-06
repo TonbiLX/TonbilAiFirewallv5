@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tonbil.aifirewall.ui.components.GlassCard
+import com.tonbil.aifirewall.ui.theme.CyberpunkColors
 import com.tonbil.aifirewall.ui.theme.CyberpunkTheme
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -181,7 +182,7 @@ fun DeviceDetailScreen(
 private fun OverviewTab(
     uiState: DeviceDetailUiState,
     viewModel: DeviceDetailViewModel,
-    colors: CyberpunkTheme.CyberpunkColors,
+    colors: CyberpunkColors,
 ) {
     val device = uiState.device ?: return
 
@@ -391,7 +392,7 @@ private fun OverviewTab(
 @Composable
 private fun TrafficTab(
     uiState: DeviceDetailUiState,
-    colors: CyberpunkTheme.CyberpunkColors,
+    colors: CyberpunkColors,
 ) {
     LazyColumn(
         modifier = Modifier
@@ -463,7 +464,7 @@ private fun TrafficTab(
 @Composable
 private fun DnsTab(
     uiState: DeviceDetailUiState,
-    colors: CyberpunkTheme.CyberpunkColors,
+    colors: CyberpunkColors,
 ) {
     val blockedCount = uiState.dnsLogs.count { it.blocked }
 
