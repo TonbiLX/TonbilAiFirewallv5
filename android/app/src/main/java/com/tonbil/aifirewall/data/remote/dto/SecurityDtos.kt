@@ -110,3 +110,152 @@ data class DhcpLeaseDto(
     val hostname: String? = null,
     val expiry: String? = null,
 )
+
+// DNS Blocklist
+@Serializable
+data class BlocklistDto(
+    val id: Int = 0,
+    val name: String = "",
+    val url: String = "",
+    val enabled: Boolean = true,
+    @SerialName("domain_count") val domainCount: Int = 0,
+    @SerialName("last_updated") val lastUpdated: String? = null,
+)
+
+// DNS Rule (custom allow/block)
+@Serializable
+data class DnsRuleDto(
+    val id: Int = 0,
+    val domain: String = "",
+    val action: String = "", // "block" or "allow"
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+// Firewall Rule
+@Serializable
+data class FirewallRuleDto(
+    val id: Int = 0,
+    val name: String = "",
+    val direction: String = "", // "inbound" or "outbound"
+    val protocol: String = "",
+    val port: String? = null,
+    @SerialName("source_ip") val sourceIp: String? = null,
+    @SerialName("dest_ip") val destIp: String? = null,
+    val action: String = "", // "accept", "drop", "reject"
+    val enabled: Boolean = true,
+)
+
+// AI Insight
+@Serializable
+data class AiInsightDto(
+    val id: Int = 0,
+    val severity: String = "", // "info", "warning", "critical"
+    val category: String = "",
+    val title: String = "",
+    val description: String = "",
+    val dismissed: Boolean = false,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+// Live Flow
+@Serializable
+data class LiveFlowDto(
+    @SerialName("flow_id") val flowId: String = "",
+    val protocol: String = "",
+    @SerialName("src_ip") val srcIp: String = "",
+    @SerialName("src_port") val srcPort: Int = 0,
+    @SerialName("dst_ip") val dstIp: String = "",
+    @SerialName("dst_port") val dstPort: Int = 0,
+    @SerialName("dst_domain") val dstDomain: String? = null,
+    @SerialName("bytes_in") val bytesIn: Long = 0,
+    @SerialName("bytes_out") val bytesOut: Long = 0,
+    @SerialName("bps_in") val bpsIn: Long = 0,
+    @SerialName("bps_out") val bpsOut: Long = 0,
+    val state: String = "",
+    @SerialName("service_name") val serviceName: String? = null,
+    @SerialName("app_name") val appName: String? = null,
+    val direction: String = "", // "outbound" or "inbound"
+    @SerialName("device_id") val deviceId: Int? = null,
+    val hostname: String? = null,
+)
+
+// Flow Stats
+@Serializable
+data class FlowStatsDto(
+    @SerialName("total_active") val totalActive: Int = 0,
+    @SerialName("total_bytes_in") val totalBytesIn: Long = 0,
+    @SerialName("total_bytes_out") val totalBytesOut: Long = 0,
+    @SerialName("unique_destinations") val uniqueDestinations: Int = 0,
+    @SerialName("tracked_devices") val trackedDevices: Int = 0,
+)
+
+// WiFi AP
+@Serializable
+data class WifiStatusDto(
+    val running: Boolean = false,
+    val ssid: String = "",
+    val channel: Int = 0,
+    @SerialName("connected_clients") val connectedClients: Int = 0,
+    val frequency: String = "",
+)
+
+@Serializable
+data class WifiClientDto(
+    @SerialName("mac_address") val macAddress: String = "",
+    @SerialName("signal_strength") val signalStrength: Int = 0,
+    @SerialName("rx_bytes") val rxBytes: Long = 0,
+    @SerialName("tx_bytes") val txBytes: Long = 0,
+    val hostname: String? = null,
+)
+
+// Telegram
+@Serializable
+data class TelegramConfigDto(
+    @SerialName("bot_token") val botToken: String = "",
+    @SerialName("chat_id") val chatId: String = "",
+    val enabled: Boolean = false,
+    @SerialName("notify_threats") val notifyThreats: Boolean = true,
+    @SerialName("notify_devices") val notifyDevices: Boolean = true,
+    @SerialName("notify_ddos") val notifyDdos: Boolean = true,
+)
+
+// System Monitor
+@Serializable
+data class SystemOverviewDto(
+    val uptime: String = "",
+    @SerialName("cpu_percent") val cpuPercent: Float = 0f,
+    @SerialName("memory_percent") val memoryPercent: Float = 0f,
+    @SerialName("memory_used_mb") val memoryUsedMb: Int = 0,
+    @SerialName("memory_total_mb") val memoryTotalMb: Int = 0,
+    @SerialName("disk_percent") val diskPercent: Float = 0f,
+    @SerialName("disk_used_gb") val diskUsedGb: Float = 0f,
+    @SerialName("disk_total_gb") val diskTotalGb: Float = 0f,
+    @SerialName("cpu_temp") val cpuTemp: Float = 0f,
+)
+
+@Serializable
+data class ServiceStatusDto(
+    @SerialName("service_name") val serviceName: String = "",
+    val status: String = "", // "running", "stopped", "failed"
+    @SerialName("display_name") val displayName: String = "",
+)
+
+// Chat
+@Serializable
+data class ChatSendDto(
+    val message: String,
+)
+
+@Serializable
+data class ChatResponseDto(
+    val reply: String = "",
+    val intent: String? = null,
+    val data: kotlinx.serialization.json.JsonElement? = null,
+)
+
+@Serializable
+data class ChatMessageDto(
+    val role: String = "",
+    val content: String = "",
+    val timestamp: String? = null,
+)

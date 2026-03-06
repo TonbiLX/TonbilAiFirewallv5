@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tonbil.aifirewall.data.remote.WebSocketManager
 import com.tonbil.aifirewall.data.remote.WebSocketState
+import com.tonbil.aifirewall.data.remote.dto.TopClientDto
+import com.tonbil.aifirewall.data.remote.dto.TopDomainDto
 import com.tonbil.aifirewall.data.repository.DashboardRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +40,10 @@ data class DashboardUiState(
     val vpnEnabled: Boolean = false,
     val vpnConnectedPeers: Int = 0,
     val vpnTotalPeers: Int = 0,
+    // Top lists
+    val topQueriedDomains: List<TopDomainDto> = emptyList(),
+    val topBlockedDomains: List<TopDomainDto> = emptyList(),
+    val topClients: List<TopClientDto> = emptyList(),
 )
 
 private const val MAX_BANDWIDTH_POINTS = 60 // Son 3 dakika (3sn aralik)
@@ -111,6 +117,9 @@ class DashboardViewModel(
                             vpnEnabled = summary.vpn.enabled,
                             vpnConnectedPeers = summary.vpn.connectedPeers,
                             vpnTotalPeers = summary.vpn.totalPeers,
+                            topQueriedDomains = summary.topQueriedDomains,
+                            topBlockedDomains = summary.topBlockedDomains,
+                            topClients = summary.topClients,
                         )
                     }
                 }

@@ -46,6 +46,8 @@ import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
 import com.patrykandpatrick.vico.core.cartesian.layer.LineCartesianLayer
 import com.tonbil.aifirewall.data.remote.WebSocketState
+import com.tonbil.aifirewall.data.remote.dto.TopClientDto
+import com.tonbil.aifirewall.data.remote.dto.TopDomainDto
 import com.tonbil.aifirewall.ui.components.GlassCard
 import com.tonbil.aifirewall.ui.navigation.DevicesRoute
 import com.tonbil.aifirewall.ui.navigation.SecurityRoute
@@ -193,6 +195,37 @@ fun DashboardScreen(
                         }
                     }
                 }
+
+                // Top Queried Domains
+                if (uiState.topQueriedDomains.isNotEmpty()) {
+                    item {
+                        TopDomainCard(
+                            title = "En Cok Sorgulanan",
+                            domains = uiState.topQueriedDomains.take(5),
+                            accentColor = colors.neonCyan,
+                        )
+                    }
+                }
+
+                // Top Blocked Domains
+                if (uiState.topBlockedDomains.isNotEmpty()) {
+                    item {
+                        TopDomainCard(
+                            title = "En Cok Engellenen",
+                            domains = uiState.topBlockedDomains.take(5),
+                            accentColor = colors.neonRed,
+                        )
+                    }
+                }
+
+                // Top Clients
+                if (uiState.topClients.isNotEmpty()) {
+                    item {
+                        TopClientCard(
+                            clients = uiState.topClients.take(5),
+                        )
+                    }
+                }
             }
         }
     }
@@ -331,6 +364,88 @@ private fun BandwidthChart(
                     text = "Veri bekleniyor...",
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                     style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopDomainCard(
+    title: String,
+    domains: List<TopDomainDto>,
+    accentColor: Color,
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = accentColor,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        domains.forEachIndexed { index, item ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "${index + 1}.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    modifier = Modifier.width(20.dp),
+                )
+                Text(
+                    text = item.domain,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                )
+                Text(
+                    text = formatCount(item.count),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accentColor,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopClientCard(clients: List<TopClientDto>) {
+    val colors = CyberpunkTheme.colors
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "En Aktif Istemciler",
+            style = MaterialTheme.typography.titleMedium,
+            color = colors.neonMagenta,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        clients.forEachIndexed { index, item ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "${index + 1}.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    modifier = Modifier.width(20.dp),
+                )
+                Text(
+                    text = item.clientIp,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = formatCount(item.queryCount),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.neonMagenta,
                 )
             }
         }

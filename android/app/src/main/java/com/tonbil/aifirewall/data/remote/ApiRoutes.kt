@@ -24,6 +24,36 @@ object ApiRoutes {
     const val DHCP_STATS = "dhcp/stats"
     const val DHCP_LEASES_LIVE = "dhcp/leases/live"
 
+    // DNS Management
+    const val DNS_RULES = "dns/rules"
+
+    // Traffic Flows
+    const val TRAFFIC_FLOWS_LIVE = "traffic/flows/live"
+    const val TRAFFIC_FLOWS_STATS = "traffic/flows/stats"
+    const val TRAFFIC_TOTAL = "traffic/total"
+
+    // Firewall Rules
+    const val FIREWALL_RULES = "firewall/rules"
+
+    // AI Insights
+    const val INSIGHTS = "insights"
+    const val INSIGHTS_CRITICAL_COUNT = "insights/critical-count"
+
+    // WiFi
+    const val WIFI_STATUS = "wifi/status"
+    const val WIFI_CLIENTS = "wifi/clients"
+
+    // Telegram
+    const val TELEGRAM_CONFIG = "telegram/config"
+
+    // System
+    const val SYSTEM_OVERVIEW = "system-management/overview"
+    const val SYSTEM_SERVICES = "system-management/services"
+
+    // Chat
+    const val CHAT_SEND = "chat/send"
+    const val CHAT_HISTORY = "chat/history"
+
     fun deviceDetail(id: Int) = "$DEVICES/$id"
     fun deviceBlock(id: Int) = "$DEVICES/$id/block"
     fun deviceUnblock(id: Int) = "$DEVICES/$id/unblock"

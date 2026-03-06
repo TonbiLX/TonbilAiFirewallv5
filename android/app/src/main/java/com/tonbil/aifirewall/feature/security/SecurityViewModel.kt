@@ -2,13 +2,7 @@ package com.tonbil.aifirewall.feature.security
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tonbil.aifirewall.data.remote.dto.DdosCountersDto
-import com.tonbil.aifirewall.data.remote.dto.DdosProtectionStatusDto
-import com.tonbil.aifirewall.data.remote.dto.DnsStatsDto
-import com.tonbil.aifirewall.data.remote.dto.FirewallStatsDto
-import com.tonbil.aifirewall.data.remote.dto.SecurityStatsDto
-import com.tonbil.aifirewall.data.remote.dto.VpnPeerDto
-import com.tonbil.aifirewall.data.remote.dto.VpnStatsDto
+import com.tonbil.aifirewall.data.remote.dto.*
 import com.tonbil.aifirewall.data.repository.SecurityRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -25,15 +19,22 @@ data class SecurityUiState(
     val error: String? = null,
     // DNS
     val dnsStats: DnsStatsDto? = null,
+    val blocklists: List<BlocklistDto> = emptyList(),
+    val dnsRules: List<DnsRuleDto> = emptyList(),
     // Firewall
     val firewallStats: FirewallStatsDto? = null,
+    val firewallRules: List<FirewallRuleDto> = emptyList(),
     // VPN
     val vpnStats: VpnStatsDto? = null,
     val vpnPeers: List<VpnPeerDto> = emptyList(),
     // DDoS
     val ddosProtections: List<DdosProtectionStatusDto> = emptyList(),
     val ddosCounters: DdosCountersDto? = null,
-    // Security
+    // Traffic
+    val liveFlows: List<LiveFlowDto> = emptyList(),
+    val flowStats: FlowStatsDto? = null,
+    // AI Insights
+    val insights: List<AiInsightDto> = emptyList(),
     val securityStats: SecurityStatsDto? = null,
 )
 
@@ -53,11 +54,17 @@ class SecurityViewModel(
             try {
                 coroutineScope {
                     val dns = async { securityRepository.getDnsStats() }
+                    val bl = async { securityRepository.getBlocklists() }
+                    val rules = async { securityRepository.getDnsRules() }
                     val fw = async { securityRepository.getFirewallStats() }
+                    val fwRules = async { securityRepository.getFirewallRules() }
                     val vpn = async { securityRepository.getVpnStats() }
                     val peers = async { securityRepository.getVpnPeers() }
                     val ddos = async { securityRepository.getDdosStatus() }
                     val ddosC = async { securityRepository.getDdosCounters() }
+                    val flows = async { securityRepository.getLiveFlows() }
+                    val fStats = async { securityRepository.getFlowStats() }
+                    val ins = async { securityRepository.getInsights() }
                     val sec = async { securityRepository.getSecurityStats() }
 
                     _uiState.update {
@@ -66,11 +73,17 @@ class SecurityViewModel(
                             isRefreshing = false,
                             error = null,
                             dnsStats = dns.await().getOrNull(),
+                            blocklists = bl.await().getOrElse { emptyList() },
+                            dnsRules = rules.await().getOrElse { emptyList() },
                             firewallStats = fw.await().getOrNull(),
+                            firewallRules = fwRules.await().getOrElse { emptyList() },
                             vpnStats = vpn.await().getOrNull(),
                             vpnPeers = peers.await().getOrElse { emptyList() },
                             ddosProtections = ddos.await().getOrElse { emptyList() },
                             ddosCounters = ddosC.await().getOrNull(),
+                            liveFlows = flows.await().getOrElse { emptyList() },
+                            flowStats = fStats.await().getOrNull(),
+                            insights = ins.await().getOrElse { emptyList() },
                             securityStats = sec.await().getOrNull(),
                         )
                     }
