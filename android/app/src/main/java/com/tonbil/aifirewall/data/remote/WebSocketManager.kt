@@ -106,7 +106,8 @@ class WebSocketManager(
 
                     // If no active URL, try to discover
                     if (serverDiscovery.activeUrl.isEmpty()) {
-                        serverDiscovery.discoverServer() ?: run {
+                        val discovered = serverDiscovery.discoverServer()
+                        if (discovered == null) {
                             delay(retryDelay)
                             retryDelay = (retryDelay * 2).coerceAtMost(MAX_RETRY_DELAY)
                             continue

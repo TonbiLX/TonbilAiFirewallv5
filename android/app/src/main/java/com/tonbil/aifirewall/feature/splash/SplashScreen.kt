@@ -150,9 +150,6 @@ fun SplashScreen(
                     rotate(radarAngle, pivot = Offset(cx, cy)) {
                         drawArc(
                             brush = Brush.sweepGradient(
-                                0f to Color.Transparent,
-                                0.15f to NeonCyan.copy(alpha = 0.3f * shieldAlpha.value),
-                                0.3f to Color.Transparent,
                                 colors = listOf(
                                     Color.Transparent,
                                     NeonCyan.copy(alpha = 0.3f * shieldAlpha.value),
