@@ -17,8 +17,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Authentication
 
-- [ ] **AUTH-01**: Kullanici email/sifre ile giris yapabilir (mevcut JWT auth)
-- [ ] **AUTH-02**: Biyometrik kimlik dogrulama — parmak izi veya yuz tanima ile giris
+- [x] **AUTH-01**: Kullanici email/sifre ile giris yapabilir (mevcut JWT auth)
+- [x] **AUTH-02**: Biyometrik kimlik dogrulama — parmak izi veya yuz tanima ile giris
 - [x] **AUTH-03**: JWT token guvenli depolama (EncryptedSharedPreferences)
 - [x] **AUTH-04**: Otomatik token yenileme (Mutex ile race condition onleme)
 - [x] **AUTH-05**: Auto-discovery — yerel (192.168.1.2) / uzak (wall.tonbilx.com) otomatik gecis
@@ -145,8 +145,8 @@ Deferred to future release.
 | SETUP-03 | Phase 6 | Complete |
 | SETUP-04 | Phase 6 | Complete |
 | SETUP-05 | Phase 6 | Complete |
-| AUTH-01 | Phase 7 | Pending |
-| AUTH-02 | Phase 7 | Pending |
+| AUTH-01 | Phase 7 | Complete |
+| AUTH-02 | Phase 7 | Complete |
 | AUTH-03 | Phase 7 | Complete |
 | AUTH-04 | Phase 7 | Complete |
 | AUTH-05 | Phase 7 | Complete |
