@@ -7,5 +7,9 @@ import kotlinx.serialization.Serializable
 @Serializable object SecurityRoute
 @Serializable object SettingsRoute
 
+// Auth screens
+@Serializable object LoginRoute
+@Serializable object ServerSettingsRoute
+
 // Sub-screens (prepared for future phases)
 @Serializable data class DeviceDetailRoute(val deviceId: String)
