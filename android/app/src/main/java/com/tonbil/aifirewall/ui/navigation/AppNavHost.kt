@@ -40,7 +40,7 @@ fun AppNavHost(
                 onBack = { navController.popBackStack() },
             )
         }
-        composable<DashboardRoute> { DashboardScreen() }
+        composable<DashboardRoute> { DashboardScreen(onNavigate = { navController.navigate(it) }) }
         composable<DevicesRoute> { DevicesScreen() }
         composable<SecurityRoute> { SecurityScreen() }
         composable<SettingsRoute> { SettingsScreen() }
