@@ -64,17 +64,88 @@ Bridge hook → inet forward hook gecisi. br_netfilter aktifken bridge hook'lari
 **Duzenlenen dosyalar (7):** linux_nftables.py, bandwidth_monitor.py, traffic.py, TrafficPage.tsx, DeviceDetailPage.tsx, trafficApi.ts
 **Onceki sorun:** 98 Mbps speedtest'te dashboard 0 gosteriyordu (bridge hook). Simdi ~68 Mbps (10s poll) → ~95+ Mbps (3s poll)
 
-## Aktif Milestone
+### 6. VPN Client Outbound Routing Fix (2026-03-05) — %100
 
-Henuz yeni milestone belirlenmedi.
+VPN client modunda LAN→VPN tünel yönlendirme düzeltmesi. rp_filter gevşetme. Commit: `37a841a`.
+
+## Current Milestone: v2.0 TonbilAiOS Android App
+
+**Goal:** Samsung S24 Ultra (Android) için Kotlin Native mobil uygulama — TonbilAiOS v5'in tüm özelliklerini yönetme ve izleme.
+
+**Target features:**
+- Dashboard (bant genişliği, cihaz sayısı, DNS özet, canlı durum)
+- Cihaz yönetimi (liste, detay, profil atama, engelleme)
+- DNS filtreleme (engelleme listeleri, kategoriler, profiller)
+- Güvenlik duvarı kuralları yönetimi
+- VPN peer yönetimi
+- DDoS koruma izleme
+- Trafik izleme (canlı akışlar, büyük transferler, geçmiş)
+- Telegram bildirim ayarları
+- AI sohbet
+- WiFi AP yönetimi
+- Güvenlik ayarları
+- Push notification (FCM) + Telegram bildirimleri
+- Biyometrik giriş (parmak izi / yüz tanıma) + JWT auth
+- Cyberpunk tema (neon cyan/magenta, koyu arka plan)
+- Dışarıdan erişim: wall.tonbilx.com üzerinden HTTPS API
+
+**Platform:** Android önce (Kotlin Native), ileride iOS eklenebilir altyapı
+
+## Requirements
+
+### Validated
+
+- ✓ Dashboard — web (existing)
+- ✓ Cihaz yönetimi — web (existing)
+- ✓ DNS filtreleme + profil tabanlı — web (existing)
+- ✓ Güvenlik duvarı — web (existing)
+- ✓ VPN yönetimi — web (existing)
+- ✓ DDoS koruma — web (existing)
+- ✓ Trafik izleme (per-flow) — web (existing)
+- ✓ Telegram bildirimler — web + bot (existing)
+- ✓ AI sohbet — web (existing)
+- ✓ WiFi AP yönetimi — web (existing)
+- ✓ Güvenlik ayarları — web (existing)
+- ✓ Backend REST API — tüm endpoint'ler mevcut
+
+### Active
+
+- [ ] Kotlin Native Android uygulaması — tüm web özelliklerin mobil karşılığı
+- [ ] Push notification (FCM) — backend + mobil entegrasyon
+- [ ] Biyometrik kimlik doğrulama — parmak izi / yüz tanıma + JWT
+- [ ] Dışarıdan erişim — wall.tonbilx.com üzerinden güvenli API bağlantısı
+- [ ] Cyberpunk mobil tema — neon renk paleti + koyu arka plan
+
+### Out of Scope
+
+- iOS uygulaması — v2.0'da sadece Android, iOS ileride
+- Offline mod — cihaz her zaman ağa bağlı olmalı
+- Web arayüz değişiklikleri — mevcut web arayüzü olduğu gibi kalır
+
+## Context
+
+- Mevcut backend REST API tüm özellikleri destekliyor, yeni endpoint'ler push notification ve mobil auth için gerekecek
+- wall.tonbilx.com zaten web panele dışarıdan erişim sağlıyor — aynı domain app için de kullanılabilir
+- Samsung S24 Ultra: Snapdragon 8 Gen 3, Android 14+, büyük ekran (6.8")
+- Kotlin Native + Jetpack Compose modern Android geliştirme standardı
 
 ## Constraints
 
-- **Platform**: Raspberry Pi 5 (ARM64, Debian Bookworm)
-- **Ag**: br0 = eth0 (WAN) + eth1 (LAN), wlan0 bridge'e eklenebilir
-- **Deployment**: Paramiko SSH (pi.tonbil.com:2323 → 192.168.1.2)
-- **Redis sifresi**: `TonbilAiRedis2026` (CLAUDE.md'deki `TonbilAiOS2026Router` yanlis)
-- **SFTP**: `/opt/tonbilaios/` root'a ait → `/tmp/` uzerinden `sudo cp` gerekli
+- **Platform**: Android API 28+ (Android 9+), hedef: Android 14 (S24 Ultra)
+- **Dil**: Kotlin (Jetpack Compose UI)
+- **Backend**: Mevcut FastAPI REST API — yeni endpoint'ler eklenmeli (FCM token, push subscription)
+- **Ağ**: wall.tonbilx.com üzerinden HTTPS, yerel ağda doğrudan 192.168.1.2
+- **Deployment**: Pi'ye SSH ile backend değişiklikleri, app Google Play veya APK dağıtım
+
+## Key Decisions
+
+| Decision | Rationale | Outcome |
+|----------|-----------|---------|
+| Kotlin Native (Jetpack Compose) | En iyi Android performansı, modern UI toolkit, ileride KMP ile iOS | — Pending |
+| Cyberpunk tema | Web ile tutarlı marka kimliği | — Pending |
+| Biyometrik + JWT | Güvenlik + kullanım kolaylığı | — Pending |
+| wall.tonbilx.com üzerinden erişim | Mevcut altyapı, ek VPN gerekmez | — Pending |
+| FCM push notification | Android standart bildirim altyapısı | — Pending |
 
 ---
-*Last updated: 2026-03-05 after bandwidth accounting migration + sortable traffic tables*
+*Last updated: 2026-03-06 after milestone v2.0 initialization*
