@@ -73,8 +73,8 @@ fun createHttpClient(
                 if (baseUrl.isNotEmpty()) {
                     // Save relative path segments (e.g. ["auth", "login"])
                     val relativeSegments = request.url.pathSegments.filter { it.isNotEmpty() }
-                    // Set full base URL (protocol, host, port, path)
-                    request.url.takeFrom(baseUrl)
+                    // Set full base URL (protocol, host, port, path) — trim trailing slash to avoid //
+                    request.url.takeFrom(baseUrl.trimEnd('/'))
                     // Append relative path back
                     if (relativeSegments.isNotEmpty()) {
                         request.url.appendPathSegments(relativeSegments)
