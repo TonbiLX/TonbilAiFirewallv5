@@ -13,7 +13,9 @@ import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.http.ContentType
 import io.ktor.http.Url
+import io.ktor.http.appendPathSegments
 import io.ktor.http.contentType
+import io.ktor.http.takeFrom
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
@@ -46,19 +48,14 @@ fun createHttpClient(
             retryOnException(maxRetries = 2, retryOnTimeout = true)
             exponentialDelay()
             modifyRequest { request ->
-                // Use current activeUrl (non-suspend) — DynamicBaseUrl plugin handles discovery
+                // On retry, update host/port from current activeUrl
+                // Path is already correct from DynamicBaseUrl plugin on initial request
                 val currentUrl = serverDiscovery.activeUrl
                 if (currentUrl.isNotEmpty()) {
                     val parsed = Url(currentUrl)
                     request.url.protocol = parsed.protocol
                     request.url.host = parsed.host
                     request.url.port = parsed.port
-                    // Prepend base path (e.g. /api/v1/) to request path
-                    val basePath = parsed.encodedPath.trimEnd('/')
-                    val currentPath = request.url.encodedPath
-                    if (basePath.isNotEmpty() && !currentPath.startsWith(basePath)) {
-                        request.url.encodedPath = "$basePath/$currentPath"
-                    }
                 }
             }
         }
@@ -74,15 +71,13 @@ fun createHttpClient(
                     baseUrl = serverDiscovery.getActiveUrl()
                 }
                 if (baseUrl.isNotEmpty()) {
-                    val parsed = Url(baseUrl)
-                    request.url.protocol = parsed.protocol
-                    request.url.host = parsed.host
-                    request.url.port = parsed.port
-                    // Prepend base path (e.g. /api/v1/) to request path
-                    val basePath = parsed.encodedPath.trimEnd('/')
-                    val currentPath = request.url.encodedPath
-                    if (basePath.isNotEmpty() && !currentPath.startsWith(basePath)) {
-                        request.url.encodedPath = "$basePath/$currentPath"
+                    // Save relative path segments (e.g. ["auth", "login"])
+                    val relativeSegments = request.url.pathSegments.filter { it.isNotEmpty() }
+                    // Set full base URL (protocol, host, port, path)
+                    request.url.takeFrom(baseUrl)
+                    // Append relative path back
+                    if (relativeSegments.isNotEmpty()) {
+                        request.url.appendPathSegments(relativeSegments)
                     }
                 }
             }
