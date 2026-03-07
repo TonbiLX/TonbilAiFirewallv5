@@ -82,10 +82,22 @@ class MainActivity : ComponentActivity() {
                             .verticalScroll(rememberScrollState()),
                     ) {
                         Text(
-                            text = "CRASH LOG (onceki oturum):",
+                            text = "HATA",
                             color = androidx.compose.ui.graphics.Color.Red,
-                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                            style = androidx.compose.material3.MaterialTheme.typography.headlineLarge,
                         )
+                        // Extract first exception line for easy reading
+                        val lines = crash.lines()
+                        val exceptionLine = lines.firstOrNull { it.contains("Exception") || it.contains("Error") } ?: ""
+                        if (exceptionLine.isNotBlank()) {
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(8.dp))
+                            Text(
+                                text = exceptionLine.trim(),
+                                color = androidx.compose.ui.graphics.Color.Yellow,
+                                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            )
+                        }
                         androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(8.dp))
                         Text(
                             text = crash,
