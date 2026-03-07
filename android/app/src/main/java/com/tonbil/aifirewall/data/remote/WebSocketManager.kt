@@ -27,7 +27,7 @@ class WebSocketManager(
     private val tokenManager: TokenManager,
     private val networkMonitor: NetworkMonitor,
 ) {
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
 
     private val _messages = MutableSharedFlow<RealtimeUpdateDto>(
         replay = 1,

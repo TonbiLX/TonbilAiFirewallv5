@@ -24,6 +24,7 @@ fun createHttpClient(
             json(Json {
                 ignoreUnknownKeys = true
                 isLenient = true
+                coerceInputValues = true
                 prettyPrint = false
             })
         }
@@ -61,6 +62,7 @@ fun createTestHttpClient(): HttpClient {
             json(Json {
                 ignoreUnknownKeys = true
                 isLenient = true
+                coerceInputValues = true
             })
         }
 

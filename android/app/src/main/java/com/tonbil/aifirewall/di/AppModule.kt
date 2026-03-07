@@ -21,6 +21,7 @@ import com.tonbil.aifirewall.feature.security.SecurityViewModel
 import com.tonbil.aifirewall.feature.settings.SettingsViewModel
 import io.ktor.client.HttpClient
 import org.koin.core.module.dsl.viewModel
+import org.koin.core.module.dsl.viewModelOf
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -32,21 +33,21 @@ val appModule = module {
     single(named("test")) { createTestHttpClient() }
     single { ServerDiscovery(get<ServerConfig>(), get<HttpClient>(named("test"))) }
     single { createHttpClient(get<ServerDiscovery>(), get<TokenManager>()) }
-    single { AuthRepository(get(), get<TokenManager>()) }
-    single { WebSocketManager(get(), get<ServerDiscovery>(), get<TokenManager>(), get<NetworkMonitor>()) }
-    single { DashboardRepository(get()) }
-    single { DeviceRepository(get()) }
-    single { ProfileRepository(get()) }
-    single { SecurityRepository(get()) }
+    single { AuthRepository(get<HttpClient>(), get<TokenManager>()) }
+    single { WebSocketManager(get<HttpClient>(), get<ServerDiscovery>(), get<TokenManager>(), get<NetworkMonitor>()) }
+    single { DashboardRepository(get<HttpClient>()) }
+    single { DeviceRepository(get<HttpClient>()) }
+    single { ProfileRepository(get<HttpClient>()) }
+    single { SecurityRepository(get<HttpClient>()) }
 }
 
 val featureModules = module {
-    viewModel { DashboardViewModel(get(), get()) }
-    viewModel { DevicesViewModel(get(), get()) }
-    viewModel { params -> DeviceDetailViewModel(params.get(), get(), get(), get()) }
-    viewModel { SecurityViewModel(get()) }
-    viewModel { SettingsViewModel(get(), get()) }
+    viewModelOf(::DashboardViewModel)
+    viewModelOf(::DevicesViewModel)
+    viewModel { params -> DeviceDetailViewModel(params.get(), get<DeviceRepository>(), get<ProfileRepository>(), get<WebSocketManager>()) }
+    viewModelOf(::SecurityViewModel)
+    viewModelOf(::SettingsViewModel)
     // Auth
-    viewModel { LoginViewModel(get(), get(), get()) }
-    viewModel { ServerSettingsViewModel(get(), get()) }
+    viewModelOf(::LoginViewModel)
+    viewModelOf(::ServerSettingsViewModel)
 }

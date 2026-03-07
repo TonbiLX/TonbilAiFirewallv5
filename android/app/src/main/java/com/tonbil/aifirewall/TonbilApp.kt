@@ -18,12 +18,31 @@ class TonbilApp : Application() {
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                val sw = StringWriter()
-                throwable.printStackTrace(PrintWriter(sw))
-                val crashLog = sw.toString()
-                Log.e("TonbilCrash", "UNCAUGHT EXCEPTION on ${thread.name}:\n$crashLog")
+                val sb = StringBuilder()
+                sb.appendLine("=== CRASH on ${thread.name} ===")
+                sb.appendLine("Time: ${System.currentTimeMillis()}")
+                sb.appendLine()
+
+                // Build full cause chain explicitly
+                var current: Throwable? = throwable
+                var depth = 0
+                while (current != null && depth < 10) {
+                    if (depth > 0) sb.appendLine("\n--- Caused by (depth $depth) ---")
+                    sb.appendLine("${current.javaClass.name}: ${current.message}")
+                    current.stackTrace.take(15).forEach { frame ->
+                        sb.appendLine("  at $frame")
+                    }
+                    if ((current.stackTrace.size) > 15) {
+                        sb.appendLine("  ... ${current.stackTrace.size - 15} more")
+                    }
+                    current = current.cause
+                    depth++
+                }
+
+                val crashLog = sb.toString()
+                Log.e("TonbilCrash", crashLog)
                 val file = File(filesDir, "crash_log.txt")
-                file.writeText("${System.currentTimeMillis()}\n${thread.name}\n$crashLog")
+                file.writeText(crashLog)
             } catch (_: Exception) { /* best effort */ }
             defaultHandler?.uncaughtException(thread, throwable)
         }
