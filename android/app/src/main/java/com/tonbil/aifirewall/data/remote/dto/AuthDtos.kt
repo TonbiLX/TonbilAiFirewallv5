@@ -7,7 +7,8 @@ import kotlinx.serialization.Serializable
 data class LoginRequest(
     val username: String,
     val password: String,
-    @SerialName("remember_me") val rememberMe: Boolean = true
+    @SerialName("remember_me") val rememberMe: Boolean = true,
+    val platform: String = "android",
 )
 
 @Serializable

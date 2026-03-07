@@ -22,6 +22,7 @@ class UserLogin(BaseModel):
     username: str
     password: str
     remember_me: bool = False
+    platform: str | None = None  # "android", "ios" etc. — mobil icin IP binding atlanir
 
 
 class UserCreate(BaseModel):

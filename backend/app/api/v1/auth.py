@@ -67,10 +67,11 @@ def create_access_token(
     payload = {
         "sub": str(user_id),
         "username": username,
-        "ip": client_ip,
         "exp": expire,
         "iat": datetime.utcnow(),
     }
+    if client_ip:
+        payload["ip"] = client_ip
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -208,9 +209,10 @@ async def login(
     # Başarılı giriş - sayacı sıfırla
     await clear_failed_attempts(redis, client_ip)
 
-    # IP bagli token oluştur
+    # Mobil platform icin IP binding atlanir (CGNAT, WiFi/Mobil gecis sorunlari)
+    use_ip = client_ip if not data.platform else ""
     token = create_access_token(
-        user.id, user.username, client_ip, remember_me=data.remember_me
+        user.id, user.username, use_ip, remember_me=data.remember_me
     )
 
     # Oturum bilgisini Redis'e kaydet (aktif oturum takibi)

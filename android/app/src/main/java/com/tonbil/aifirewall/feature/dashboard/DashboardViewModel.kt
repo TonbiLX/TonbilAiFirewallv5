@@ -103,10 +103,16 @@ class DashboardViewModel(
             }
         }
 
-        // Collect connection state
+        // Collect connection state + auto-refresh when reconnected
         viewModelScope.launch {
+            var wasDisconnected = true
             webSocketManager.connectionState.collect { wsState ->
                 _uiState.update { it.copy(connectionStatus = wsState) }
+                // When transitioning to CONNECTED, reload summary data
+                if (wsState == WebSocketState.CONNECTED && wasDisconnected) {
+                    loadSummary()
+                }
+                wasDisconnected = wsState != WebSocketState.CONNECTED
             }
         }
     }

@@ -74,10 +74,13 @@ class WebSocketManager(
                 Log.d(TAG, "Network event: $event")
                 when (event) {
                     NetworkEvent.CONNECTED, NetworkEvent.NETWORK_CHANGED -> {
-                        // Network changed — always rediscover (WiFi↔Mobile switch changes reachable URLs)
+                        // Network changed — rediscover and WAIT for it before reconnecting
                         Log.d(TAG, "Network event: $event, rediscovering...")
-                        serverDiscovery.resetAndRediscover()
-                        forceReconnect()
+                        val newUrl = serverDiscovery.resetAndRediscover()
+                        Log.d(TAG, "Discovery result: $newUrl")
+                        if (newUrl != null) {
+                            forceReconnect()
+                        }
                     }
                     NetworkEvent.DISCONNECTED -> {
                         _connectionState.value = WebSocketState.DISCONNECTED
@@ -90,7 +93,10 @@ class WebSocketManager(
     private fun reconnect() {
         wsJob?.cancel()
         val currentScope = scope ?: return
-        val token = tokenManager.getToken() ?: return
+        val token = tokenManager.getToken() ?: run {
+            Log.d(TAG, "No token available, skipping WebSocket connect")
+            return
+        }
 
         wsJob = currentScope.launch {
             while (isActive) {
@@ -108,6 +114,7 @@ class WebSocketManager(
                     if (serverDiscovery.activeUrl.isEmpty()) {
                         val discovered = serverDiscovery.discoverServer()
                         if (discovered == null) {
+                            Log.d(TAG, "Server discovery failed, retrying in ${retryDelay}ms")
                             delay(retryDelay)
                             retryDelay = (retryDelay * 2).coerceAtMost(MAX_RETRY_DELAY)
                             continue
@@ -115,11 +122,12 @@ class WebSocketManager(
                     }
 
                     val wsUrl = ApiRoutes.wsUrl(serverDiscovery, token)
+                    Log.d(TAG, "Connecting WebSocket to: $wsUrl")
                     client.webSocket(wsUrl) {
                         _connectionState.value = WebSocketState.CONNECTED
                         retryDelay = INITIAL_RETRY_DELAY
                         consecutiveFailures = 0
-                        Log.d(TAG, "WebSocket connected to $wsUrl")
+                        Log.d(TAG, "WebSocket connected")
 
                         for (frame in incoming) {
                             if (frame is Frame.Text) {
@@ -128,7 +136,9 @@ class WebSocketManager(
                                     if (update.type == "realtime_update") {
                                         _messages.emit(update)
                                     }
-                                } catch (_: Exception) { /* skip malformed */ }
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to parse WS frame: ${e.message}")
+                                }
                             }
                         }
                     }
@@ -140,7 +150,8 @@ class WebSocketManager(
                     // After several failures, try rediscovering
                     if (consecutiveFailures >= 3) {
                         Log.d(TAG, "Multiple failures, rediscovering server...")
-                        serverDiscovery.resetAndRediscover()
+                        val newUrl = serverDiscovery.resetAndRediscover()
+                        Log.d(TAG, "Rediscovery result: $newUrl")
                         consecutiveFailures = 0
                     }
                 }

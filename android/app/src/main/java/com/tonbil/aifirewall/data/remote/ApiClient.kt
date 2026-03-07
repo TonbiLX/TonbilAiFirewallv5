@@ -66,6 +66,10 @@ fun createHttpClient(
 
         val dynamicBaseUrlPlugin = createClientPlugin("DynamicBaseUrl") {
             onRequest { request, _ ->
+                // Skip WebSocket requests — they already have full URLs from wsUrl()
+                val proto = request.url.protocol.name
+                if (proto == "ws" || proto == "wss") return@onRequest
+
                 var baseUrl = serverDiscovery.activeUrl
                 if (baseUrl.isEmpty()) {
                     baseUrl = serverDiscovery.getActiveUrl()
