@@ -1126,24 +1126,33 @@ private fun SystemTab(overview: SystemOverviewDto?, services: List<ServiceStatus
                 )
             }
             items(services) { svc ->
+                val isRunning = svc.activeState == "active" && svc.subState == "running"
+                val displayStatus = when {
+                    svc.activeState == "active" && svc.subState == "running" -> "running"
+                    svc.activeState == "active" && svc.subState == "exited" -> "exited"
+                    svc.activeState == "failed" -> "failed"
+                    svc.activeState == "error" -> "error"
+                    else -> "stopped"
+                }
                 GlassCard(modifier = Modifier.fillMaxWidth()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        StatusDot(isActive = svc.status == "running")
+                        StatusDot(isActive = isRunning)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = svc.displayName.ifBlank { svc.serviceName },
+                            text = svc.label.ifBlank { svc.name },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f),
                         )
-                        val statusColor = when (svc.status) {
+                        val statusColor = when (displayStatus) {
                             "running" -> colors.neonGreen
+                            "exited" -> colors.neonAmber
                             "stopped" -> colors.neonRed
-                            "failed" -> colors.neonRed
+                            "failed", "error" -> colors.neonRed
                             else -> colors.neonAmber
                         }
                         Text(
-                            text = svc.status,
+                            text = displayStatus,
                             style = MaterialTheme.typography.labelSmall,
                             color = statusColor,
                         )

@@ -219,25 +219,69 @@ data class TelegramConfigDto(
     @SerialName("notify_ddos") val notifyDdos: Boolean = true,
 )
 
-// System Monitor
+// System Monitor — backend /system-monitor/metrics response
 @Serializable
-data class SystemOverviewDto(
-    val uptime: String = "",
-    @SerialName("cpu_percent") val cpuPercent: Float = 0f,
-    @SerialName("memory_percent") val memoryPercent: Float = 0f,
-    @SerialName("memory_used_mb") val memoryUsedMb: Int = 0,
-    @SerialName("memory_total_mb") val memoryTotalMb: Int = 0,
-    @SerialName("disk_percent") val diskPercent: Float = 0f,
-    @SerialName("disk_used_gb") val diskUsedGb: Float = 0f,
-    @SerialName("disk_total_gb") val diskTotalGb: Float = 0f,
-    @SerialName("cpu_temp") val cpuTemp: Float = 0f,
+data class SystemMetricsCpuDto(
+    @SerialName("usage_percent") val usagePercent: Float = 0f,
+    @SerialName("temperature_c") val temperatureC: Float = 0f,
+    @SerialName("frequency_mhz") val frequencyMhz: Float = 0f,
 )
 
 @Serializable
+data class SystemMetricsMemoryDto(
+    @SerialName("used_mb") val usedMb: Float = 0f,
+    @SerialName("total_mb") val totalMb: Float = 0f,
+    @SerialName("available_mb") val availableMb: Float = 0f,
+    @SerialName("usage_percent") val usagePercent: Float = 0f,
+)
+
+@Serializable
+data class SystemMetricsDiskDto(
+    @SerialName("used_gb") val usedGb: Float = 0f,
+    @SerialName("total_gb") val totalGb: Float = 0f,
+    @SerialName("free_gb") val freeGb: Float = 0f,
+    @SerialName("usage_percent") val usagePercent: Float = 0f,
+)
+
+@Serializable
+data class SystemMetricsSnapshotDto(
+    val timestamp: String = "",
+    val cpu: SystemMetricsCpuDto = SystemMetricsCpuDto(),
+    val memory: SystemMetricsMemoryDto = SystemMetricsMemoryDto(),
+    val disk: SystemMetricsDiskDto = SystemMetricsDiskDto(),
+    @SerialName("uptime_seconds") val uptimeSeconds: Float = 0f,
+)
+
+@Serializable
+data class SystemMetricsResponseDto(
+    val current: SystemMetricsSnapshotDto = SystemMetricsSnapshotDto(),
+)
+
+// Flattened DTO for UI consumption (built from SystemMetricsResponseDto)
+data class SystemOverviewDto(
+    val uptime: String = "",
+    val cpuPercent: Float = 0f,
+    val memoryPercent: Float = 0f,
+    val memoryUsedMb: Int = 0,
+    val memoryTotalMb: Int = 0,
+    val diskPercent: Float = 0f,
+    val diskUsedGb: Float = 0f,
+    val diskTotalGb: Float = 0f,
+    val cpuTemp: Float = 0f,
+)
+
+// System Management — backend /system-management/services response
+@Serializable
 data class ServiceStatusDto(
-    @SerialName("service_name") val serviceName: String = "",
-    val status: String = "", // "running", "stopped", "failed"
-    @SerialName("display_name") val displayName: String = "",
+    val name: String = "",
+    val label: String = "",
+    @SerialName("active_state") val activeState: String = "", // "active", "inactive", "failed", "error"
+    @SerialName("sub_state") val subState: String = "", // "running", "dead", "exited", etc.
+    val pid: Int? = null,
+    @SerialName("memory_mb") val memoryMb: Float? = null,
+    @SerialName("uptime_seconds") val uptimeSeconds: Int? = null,
+    val critical: Boolean = false,
+    @SerialName("restart_count") val restartCount: Int? = null,
 )
 
 // Chat

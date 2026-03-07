@@ -53,6 +53,12 @@ fun createHttpClient(
                     request.url.protocol = parsed.protocol
                     request.url.host = parsed.host
                     request.url.port = parsed.port
+                    // Prepend base path (e.g. /api/v1/) to request path
+                    val basePath = parsed.encodedPath.trimEnd('/')
+                    val currentPath = request.url.encodedPath
+                    if (basePath.isNotEmpty() && !currentPath.startsWith(basePath)) {
+                        request.url.encodedPath = "$basePath/$currentPath"
+                    }
                 }
             }
         }
@@ -72,6 +78,12 @@ fun createHttpClient(
                     request.url.protocol = parsed.protocol
                     request.url.host = parsed.host
                     request.url.port = parsed.port
+                    // Prepend base path (e.g. /api/v1/) to request path
+                    val basePath = parsed.encodedPath.trimEnd('/')
+                    val currentPath = request.url.encodedPath
+                    if (basePath.isNotEmpty() && !currentPath.startsWith(basePath)) {
+                        request.url.encodedPath = "$basePath/$currentPath"
+                    }
                 }
             }
         }

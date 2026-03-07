@@ -17,7 +17,7 @@ import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Shield
+import com.tonbil.aifirewall.ui.components.FirewallLogo
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
@@ -122,11 +122,8 @@ fun LoginScreen(
             verticalArrangement = Arrangement.Center,
         ) {
             // Logo
-            Icon(
-                imageVector = Icons.Default.Shield,
-                contentDescription = "TonbilAiOS",
-                tint = NeonCyan,
-                modifier = Modifier.size(72.dp),
+            FirewallLogo(
+                size = 100.dp,
             )
 
             Spacer(modifier = Modifier.height(12.dp))

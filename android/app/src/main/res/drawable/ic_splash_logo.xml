@@ -2,13 +2,96 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108"
-    android:tint="@color/neon_cyan">
+    android:viewportWidth="512"
+    android:viewportHeight="512">
 
-    <!-- Shield / firewall icon in neon cyan -->
+    <!-- Shield body -->
     <path
+        android:pathData="M256,28L462,120C462,120 472,300 256,484C40,300 50,120 50,120Z"
+        android:fillColor="#0A0A1A"
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="6"/>
+
+    <!-- Inner shield outline -->
+    <path
+        android:pathData="M256,62L430,140C430,140 438,290 256,450C74,290 82,140 82,140Z"
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="1.5"
+        android:strokeAlpha="0.25"/>
+
+    <!-- AI eye outer ring -->
+    <path
+        android:pathData="M256,230m-52,0a52,52 0,1 1,104 0a52,52 0,1 1,-104 0"
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="3"/>
+
+    <!-- AI eye middle ring (magenta) -->
+    <path
+        android:pathData="M256,230m-36,0a36,36 0,1 1,72 0a36,36 0,1 1,-72 0"
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF00E5"
+        android:strokeWidth="2"/>
+
+    <!-- AI eye inner fill -->
+    <path
+        android:pathData="M256,230m-18,0a18,18 0,1 1,36 0a18,18 0,1 1,-36 0"
+        android:fillColor="#00F0FF"/>
+
+    <!-- AI eye center dot -->
+    <path
+        android:pathData="M256,230m-8,0a8,8 0,1 1,16 0a8,8 0,1 1,-16 0"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- Circuit node up -->
+    <path
+        android:pathData="M256,178L256,155"
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="2"/>
+    <path
+        android:pathData="M256,152m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0"
+        android:fillColor="#00F0FF"/>
+
+    <!-- Circuit node down -->
+    <path
+        android:pathData="M256,282L256,310"
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="2"/>
+    <path
+        android:pathData="M256,313m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0"
+        android:fillColor="#00F0FF"/>
+
+    <!-- Circuit node left -->
+    <path
+        android:pathData="M204,230L175,230"
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="2"/>
+    <path
+        android:pathData="M172,230m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0"
+        android:fillColor="#00F0FF"/>
+
+    <!-- Circuit node right -->
+    <path
+        android:pathData="M308,230L337,230"
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="2"/>
+    <path
+        android:pathData="M340,230m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0"
+        android:fillColor="#00F0FF"/>
+
+    <!-- Lock circle -->
+    <path
+        android:pathData="M256,358m-12,0a12,12 0,1 1,24 0a12,12 0,1 1,-24 0"
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="2.5"
+        android:strokeAlpha="0.5"/>
+
+    <!-- Lock keyhole -->
+    <path
+        android:pathData="M248,360L264,360L264,380L248,380Z"
         android:fillColor="#00F0FF"
-        android:pathData="M54,16L22,30v18c0,17.7 13.6,34.2 32,38 18.4,-3.8 32,-20.3 32,-38V30L54,16zM54,53.99h24c-1.7,12.6 -10.8,23.8 -24,27.3V54H30V34.3l24,-10.7v30.39z" />
+        android:fillAlpha="0.5"/>
 
 </vector>

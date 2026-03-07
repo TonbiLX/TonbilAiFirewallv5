@@ -74,7 +74,7 @@ object ApiRoutes {
     const val TELEGRAM_TEST = "telegram/test"
 
     // System
-    const val SYSTEM_OVERVIEW = "system-management/overview"
+    const val SYSTEM_METRICS = "system-monitor/metrics"
     const val SYSTEM_SERVICES = "system-management/services"
 
     // Chat

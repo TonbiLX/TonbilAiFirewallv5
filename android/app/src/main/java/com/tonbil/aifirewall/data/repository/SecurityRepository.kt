@@ -222,7 +222,29 @@ class SecurityRepository(private val client: HttpClient) {
     // ========== SYSTEM ==========
 
     suspend fun getSystemOverview(): Result<SystemOverviewDto> = runCatching {
-        client.get(ApiRoutes.SYSTEM_OVERVIEW).body()
+        val resp: SystemMetricsResponseDto = client.get(ApiRoutes.SYSTEM_METRICS).body()
+        val c = resp.current
+        val uptimeSec = c.uptimeSeconds.toLong()
+        val hours = uptimeSec / 3600
+        val minutes = (uptimeSec % 3600) / 60
+        val uptimeStr = if (hours > 24) {
+            val days = hours / 24
+            val remHours = hours % 24
+            "${days}g ${remHours}s ${minutes}dk"
+        } else {
+            "${hours}s ${minutes}dk"
+        }
+        SystemOverviewDto(
+            uptime = uptimeStr,
+            cpuPercent = c.cpu.usagePercent,
+            memoryPercent = c.memory.usagePercent,
+            memoryUsedMb = c.memory.usedMb.toInt(),
+            memoryTotalMb = c.memory.totalMb.toInt(),
+            diskPercent = c.disk.usagePercent,
+            diskUsedGb = c.disk.usedGb,
+            diskTotalGb = c.disk.totalGb,
+            cpuTemp = c.cpu.temperatureC,
+        )
     }
 
     suspend fun getSystemServices(): Result<List<ServiceStatusDto>> = runCatching {
