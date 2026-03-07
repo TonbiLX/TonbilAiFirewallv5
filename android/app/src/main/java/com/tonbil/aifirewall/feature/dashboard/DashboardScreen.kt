@@ -48,6 +48,7 @@ import com.tonbil.aifirewall.ui.components.GlassCard
 import com.tonbil.aifirewall.ui.components.PulsingDot
 import com.tonbil.aifirewall.ui.navigation.DevicesRoute
 import com.tonbil.aifirewall.ui.navigation.SecurityRoute
+import com.tonbil.aifirewall.ui.components.FirewallLogo
 import com.tonbil.aifirewall.ui.theme.CyberpunkTheme
 import org.koin.androidx.compose.koinViewModel
 
@@ -107,6 +108,27 @@ fun DashboardScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // Logo header
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        FirewallLogo(size = 28.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "TonbilAi",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = colors.neonCyan.copy(alpha = 0.5f),
+                        )
+                        Text(
+                            text = "Firewall",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = colors.neonMagenta.copy(alpha = 0.5f),
+                        )
+                    }
+                }
+
                 // Connection status banner
                 item {
                     ConnectionStatusBanner(state = uiState.connectionStatus)
@@ -421,8 +443,8 @@ private fun BandwidthChart(
                     )
                 }
 
-                drawLine(downloadValues, cyanColor)
-                drawLine(uploadValues, magentaColor)
+                drawLine(uploadValues, cyanColor)
+                drawLine(downloadValues, magentaColor)
             }
 
             // Legend
@@ -435,7 +457,7 @@ private fun BandwidthChart(
                     modifier = Modifier
                         .size(10.dp)
                         .clip(CircleShape)
-                        .background(cyanColor),
+                        .background(magentaColor),
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
@@ -448,7 +470,7 @@ private fun BandwidthChart(
                     modifier = Modifier
                         .size(10.dp)
                         .clip(CircleShape)
-                        .background(magentaColor),
+                        .background(cyanColor),
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
