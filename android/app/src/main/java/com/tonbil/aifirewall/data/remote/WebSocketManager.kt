@@ -74,11 +74,9 @@ class WebSocketManager(
                 Log.d(TAG, "Network event: $event")
                 when (event) {
                     NetworkEvent.CONNECTED, NetworkEvent.NETWORK_CHANGED -> {
-                        // Network changed — rediscover only if not already discovered
-                        Log.d(TAG, "Network event: $event")
-                        if (serverDiscovery.activeUrl.isEmpty()) {
-                            serverDiscovery.discoverServer()
-                        }
+                        // Network changed — always rediscover (WiFi↔Mobile switch changes reachable URLs)
+                        Log.d(TAG, "Network event: $event, rediscovering...")
+                        serverDiscovery.resetAndRediscover()
                         forceReconnect()
                     }
                     NetworkEvent.DISCONNECTED -> {

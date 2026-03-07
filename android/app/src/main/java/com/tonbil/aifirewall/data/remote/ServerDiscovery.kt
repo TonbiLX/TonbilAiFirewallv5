@@ -5,6 +5,8 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,20 +60,18 @@ class ServerDiscovery(
                 return lastUrl
             }
 
-            // 3. Try local network (192.168.1.2)
-            if (testConnection(ApiRoutes.LOCAL_URL)) {
-                activeUrl = ApiRoutes.LOCAL_URL
-                serverConfig.setLastConnectedUrl(ApiRoutes.LOCAL_URL)
-                _isDiscovered.value = true
-                return ApiRoutes.LOCAL_URL
+            // 3. Try local and remote in parallel (saves up to 5s vs sequential)
+            val parallelResult = coroutineScope {
+                val localDeferred = async { if (testConnection(ApiRoutes.LOCAL_URL)) ApiRoutes.LOCAL_URL else null }
+                val remoteDeferred = async { if (testConnection(ApiRoutes.BASE_URL)) ApiRoutes.BASE_URL else null }
+                // Prefer local over remote
+                localDeferred.await() ?: remoteDeferred.await()
             }
-
-            // 4. Try remote (wall.tonbilx.com)
-            if (testConnection(ApiRoutes.BASE_URL)) {
-                activeUrl = ApiRoutes.BASE_URL
-                serverConfig.setLastConnectedUrl(ApiRoutes.BASE_URL)
+            if (parallelResult != null) {
+                activeUrl = parallelResult
+                serverConfig.setLastConnectedUrl(parallelResult)
                 _isDiscovered.value = true
-                return ApiRoutes.BASE_URL
+                return parallelResult
             }
 
             return null
@@ -85,6 +85,11 @@ class ServerDiscovery(
         _isDiscovered.value = true
         serverConfig.setServerUrl(url)
         serverConfig.setLastConnectedUrl(url)
+    }
+
+    fun invalidateUrl() {
+        activeUrl = ""
+        _isDiscovered.value = false
     }
 
     suspend fun resetAndRediscover(): String? {

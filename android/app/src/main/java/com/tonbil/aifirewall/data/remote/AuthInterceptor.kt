@@ -14,7 +14,10 @@ fun authInterceptorPlugin(tokenManager: TokenManager) = createClientPlugin("Auth
 
     onResponse { response ->
         if (response.status == HttpStatusCode.Unauthorized) {
-            tokenManager.clearToken()
+            val requestUrl = response.call.request.url.toString()
+            if (requestUrl.contains("auth/login")) {
+                tokenManager.clearToken()
+            }
         }
     }
 }
