@@ -46,9 +46,10 @@ fun createHttpClient(
             retryOnException(maxRetries = 2, retryOnTimeout = true)
             exponentialDelay()
             modifyRequest { request ->
-                val newUrl = serverDiscovery.getActiveUrl()
-                if (newUrl.isNotEmpty()) {
-                    val parsed = Url(newUrl)
+                // Use current activeUrl (non-suspend) — DynamicBaseUrl plugin handles discovery
+                val currentUrl = serverDiscovery.activeUrl
+                if (currentUrl.isNotEmpty()) {
+                    val parsed = Url(currentUrl)
                     request.url.protocol = parsed.protocol
                     request.url.host = parsed.host
                     request.url.port = parsed.port
