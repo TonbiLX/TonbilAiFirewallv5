@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 
 class MainActivity : ComponentActivity() {
@@ -114,6 +115,15 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentDestination = navBackStackEntry?.destination
+
+                    // Observe forced logout events (401 from API)
+                    LaunchedEffect(Unit) {
+                        tokenManager.logoutEvent.collect {
+                            navController.navigate(LoginRoute) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                    }
 
                     // Hide bottom nav on auth/splash screens
                     val isAuthScreen = currentDestination?.hasRoute(LoginRoute::class) == true ||

@@ -10,14 +10,13 @@ fun authInterceptorPlugin(tokenManager: TokenManager) = createClientPlugin("Auth
         if (token != null) {
             request.headers.append("Authorization", "Bearer $token")
         }
+        request.headers.append("User-Agent", "TonbilAiOS-Android/5.0.0")
     }
 
     onResponse { response ->
         if (response.status == HttpStatusCode.Unauthorized) {
-            val requestUrl = response.call.request.url.toString()
-            if (requestUrl.contains("auth/login")) {
-                tokenManager.clearToken()
-            }
+            // Any 401 means token is invalid/expired — clear and force re-login
+            tokenManager.clearToken()
         }
     }
 }

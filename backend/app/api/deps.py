@@ -139,9 +139,12 @@ async def get_current_user(
         pass  # Redis hatasi durumunda auth'u engellemiyoruz
 
     # IP doğrulama: Token'daki IP ile istemci IP'si karsilastirilir
+    # Mobil uygulamalar Bearer token kullanir ve IP sik degisir (CGNAT, WiFi/Mobil gecis)
+    # IP binding sadece cookie tabanli web oturumlari icin uygulanir
     token_ip = payload.get("ip")
     client_ip = _get_client_ip(request)
-    if token_ip and token_ip != client_ip:
+    is_bearer_auth = credentials and credentials.credentials
+    if token_ip and token_ip != client_ip and not is_bearer_auth:
         logger.warning(
             f"IP uyumsuzlugu: token_ip={token_ip}, client_ip={client_ip}, "
             f"user_id={user_id}"
@@ -149,6 +152,11 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Oturum güvenlik ihlali: IP adresi degisti. Tekrar giriş yapin.",
+        )
+    elif token_ip and token_ip != client_ip and is_bearer_auth:
+        logger.info(
+            f"Mobil IP degisimi (izin verildi): token_ip={token_ip}, "
+            f"client_ip={client_ip}, user_id={user_id}"
         )
 
     user = await db.get(User, user_id)
@@ -177,10 +185,11 @@ async def optional_auth(
         )
         user_id = int(payload.get("sub", 0))
 
-        # IP doğrulama
+        # IP doğrulama - Bearer token (mobil) icin atla
         token_ip = payload.get("ip")
         client_ip = _get_client_ip(request)
-        if token_ip and token_ip != client_ip:
+        is_bearer_auth = credentials and credentials.credentials
+        if token_ip and token_ip != client_ip and not is_bearer_auth:
             return None
 
         return await db.get(User, user_id)

@@ -4,9 +4,15 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import java.time.LocalDate
 
 class TokenManager(context: Context) {
+
+    private val _logoutEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val logoutEvent: SharedFlow<Unit> = _logoutEvent.asSharedFlow()
 
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -29,11 +35,15 @@ class TokenManager(context: Context) {
     }
 
     fun clearToken() {
+        val hadToken = getToken() != null
         prefs.edit()
             .remove(KEY_TOKEN)
             .remove(KEY_USERNAME)
             .remove(KEY_DISPLAY_NAME)
             .apply()
+        if (hadToken) {
+            _logoutEvent.tryEmit(Unit)
+        }
     }
 
     fun saveUserInfo(username: String, displayName: String?) {
