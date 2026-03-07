@@ -18,12 +18,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.ShieldMoon
+import androidx.compose.material.icons.outlined.SortByAlpha
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -106,6 +110,8 @@ fun DevicesScreen(
             }
             else -> {
                 val onlineCount = uiState.devices.count { it.isOnline }
+                val offlineCount = uiState.devices.size - onlineCount
+                val displayDevices = uiState.filteredDevices
 
                 LazyColumn(
                     modifier = Modifier
@@ -140,9 +146,76 @@ fun DevicesScreen(
                         }
                     }
 
+                    // Filter chips
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            FilterChip(
+                                selected = uiState.filter == DeviceFilter.ALL,
+                                onClick = { viewModel.setFilter(DeviceFilter.ALL) },
+                                label = { Text("Tumu (${uiState.devices.size})") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = colors.neonCyan.copy(alpha = 0.2f),
+                                    selectedLabelColor = colors.neonCyan,
+                                ),
+                            )
+                            FilterChip(
+                                selected = uiState.filter == DeviceFilter.ONLINE,
+                                onClick = { viewModel.setFilter(DeviceFilter.ONLINE) },
+                                label = { Text("Online ($onlineCount)") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = colors.neonGreen.copy(alpha = 0.2f),
+                                    selectedLabelColor = colors.neonGreen,
+                                ),
+                            )
+                            FilterChip(
+                                selected = uiState.filter == DeviceFilter.OFFLINE,
+                                onClick = { viewModel.setFilter(DeviceFilter.OFFLINE) },
+                                label = { Text("Offline ($offlineCount)") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = colors.neonRed.copy(alpha = 0.2f),
+                                    selectedLabelColor = colors.neonRed,
+                                ),
+                            )
+                        }
+                    }
+
+                    // Sort chips
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.SortByAlpha,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                modifier = Modifier.size(16.dp),
+                            )
+                            FilterChip(
+                                selected = uiState.sort == DeviceSort.NAME,
+                                onClick = { viewModel.setSort(DeviceSort.NAME) },
+                                label = { Text("Isim") },
+                            )
+                            FilterChip(
+                                selected = uiState.sort == DeviceSort.LAST_SEEN,
+                                onClick = { viewModel.setSort(DeviceSort.LAST_SEEN) },
+                                label = { Text("Son Gorulme") },
+                            )
+                            FilterChip(
+                                selected = uiState.sort == DeviceSort.IP,
+                                onClick = { viewModel.setSort(DeviceSort.IP) },
+                                label = { Text("IP") },
+                            )
+                        }
+                    }
+
                     // Device cards
                     items(
-                        items = uiState.devices,
+                        items = displayDevices,
                         key = { it.id },
                     ) { device ->
                         DeviceCard(

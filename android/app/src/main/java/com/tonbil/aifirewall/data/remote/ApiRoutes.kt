@@ -87,7 +87,7 @@ object ApiRoutes {
     fun deviceUnblock(id: Int) = "$DEVICES/$id/unblock"
     fun deviceConnectionHistory(id: Int) = "$DEVICES/$id/connection-history"
     fun deviceDnsQueries(deviceId: Int) = "traffic/per-device/$deviceId/dns-queries"
-    fun deviceTrafficSummary(deviceId: Int) = "traffic/per-device/$deviceId/connections"
+    fun deviceTrafficSummary(deviceId: Int) = "traffic/flows/device/$deviceId/summary"
 
     // DNS management
     fun blocklistToggle(id: Int) = "$DNS_BLOCKLISTS/$id/toggle"

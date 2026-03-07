@@ -412,10 +412,10 @@ private fun TrafficTab(
 
                 val summary = uiState.trafficSummary
                 if (summary != null) {
-                    InfoRow("Toplam Akis", "${summary.totalFlows}")
+                    InfoRow("Toplam Akis", "${summary.totalFlowsPeriod}")
                     InfoRow("Aktif Akis", "${summary.activeFlows}")
-                    InfoRow("Gelen", formatBytes(summary.totalBytesIn))
-                    InfoRow("Giden", formatBytes(summary.totalBytesOut))
+                    InfoRow("Gelen", formatBytes(summary.totalBytesReceived))
+                    InfoRow("Giden", formatBytes(summary.totalBytesSent))
                 } else {
                     Text(
                         text = "Trafik verisi yok",
@@ -426,33 +426,81 @@ private fun TrafficTab(
             }
         }
 
-        // Top services
-        val topServices = uiState.trafficSummary?.topServices ?: emptyList()
-        if (topServices.isNotEmpty()) {
+        // Top domains
+        val topDomains = uiState.trafficSummary?.topDomains ?: emptyList()
+        if (topDomains.isNotEmpty()) {
             item {
                 Text(
-                    text = "En Cok Kullanilan Servisler",
+                    text = "En Cok Erisilen Domainler",
                     style = MaterialTheme.typography.titleMedium,
                     color = colors.neonCyan,
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
             }
-            items(topServices) { service ->
+            items(topDomains) { domain ->
                 GlassCard(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = domain.domain,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                            )
+                            Text(
+                                text = "${domain.flowCount} akis",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            )
+                        }
                         Text(
-                            text = service.service,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = formatBytes(service.bytes),
+                            text = formatBytes(domain.bytesTotal),
                             style = MaterialTheme.typography.bodyMedium,
                             color = colors.neonMagenta,
+                        )
+                    }
+                }
+            }
+        }
+
+        // Top ports
+        val topPorts = uiState.trafficSummary?.topPorts ?: emptyList()
+        if (topPorts.isNotEmpty()) {
+            item {
+                Text(
+                    text = "En Cok Kullanilan Portlar",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = colors.neonAmber,
+                    modifier = Modifier.padding(bottom = 4.dp, top = 8.dp),
+                )
+            }
+            items(topPorts) { port ->
+                GlassCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "${port.protocol}/${port.port}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = "${port.flowCount} akis",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            )
+                        }
+                        Text(
+                            text = formatBytes(port.bytesTotal),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.neonAmber,
                         )
                     }
                 }

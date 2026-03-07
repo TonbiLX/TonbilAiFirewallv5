@@ -44,6 +44,8 @@ data class DashboardUiState(
     val topQueriedDomains: List<TopDomainDto> = emptyList(),
     val topBlockedDomains: List<TopDomainDto> = emptyList(),
     val topClients: List<TopClientDto> = emptyList(),
+    // IP -> Hostname mapping (from WS devices)
+    val ipToHostname: Map<String, String> = emptyMap(),
 )
 
 private const val MAX_BANDWIDTH_POINTS = 60 // Son 3 dakika (3sn aralik)
@@ -71,6 +73,14 @@ class DashboardViewModel(
                     )
                     val history = (state.bandwidthHistory + newPoint).takeLast(MAX_BANDWIDTH_POINTS)
 
+                    // Build IP -> hostname map from WS device list
+                    val newIpMap = state.ipToHostname.toMutableMap()
+                    update.devices.forEach { d ->
+                        if (d.ip.isNotBlank() && !d.hostname.isNullOrBlank()) {
+                            newIpMap[d.ip] = d.hostname
+                        }
+                    }
+
                     state.copy(
                         onlineDevices = update.deviceCount,
                         // DNS
@@ -86,6 +96,8 @@ class DashboardViewModel(
                         vpnEnabled = update.vpn.enabled,
                         vpnConnectedPeers = update.vpn.connectedPeers,
                         vpnTotalPeers = update.vpn.totalPeers,
+                        // IP -> hostname
+                        ipToHostname = newIpMap,
                     )
                 }
             }

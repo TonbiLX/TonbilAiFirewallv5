@@ -12,13 +12,32 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class DeviceFilter { ALL, ONLINE, OFFLINE }
+enum class DeviceSort { NAME, IP, LAST_SEEN }
+
 data class DevicesUiState(
     val devices: List<DeviceResponseDto> = emptyList(),
     val bandwidthMap: Map<String, WsDeviceBandwidthDto> = emptyMap(),
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val error: String? = null,
-)
+    val filter: DeviceFilter = DeviceFilter.ALL,
+    val sort: DeviceSort = DeviceSort.NAME,
+) {
+    val filteredDevices: List<DeviceResponseDto>
+        get() {
+            val filtered = when (filter) {
+                DeviceFilter.ALL -> devices
+                DeviceFilter.ONLINE -> devices.filter { it.isOnline }
+                DeviceFilter.OFFLINE -> devices.filter { !it.isOnline }
+            }
+            return when (sort) {
+                DeviceSort.NAME -> filtered.sortedBy { it.hostname?.lowercase() ?: "zzz" }
+                DeviceSort.IP -> filtered.sortedBy { it.ipAddress ?: "255.255.255.255" }
+                DeviceSort.LAST_SEEN -> filtered.sortedByDescending { it.lastSeen ?: "" }
+            }
+        }
+}
 
 class DevicesViewModel(
     private val deviceRepository: DeviceRepository,
@@ -69,6 +88,14 @@ class DevicesViewModel(
     fun refresh() {
         _uiState.update { it.copy(isRefreshing = true) }
         loadDevices()
+    }
+
+    fun setFilter(filter: DeviceFilter) {
+        _uiState.update { it.copy(filter = filter) }
+    }
+
+    fun setSort(sort: DeviceSort) {
+        _uiState.update { it.copy(sort = sort) }
     }
 
     fun toggleBlock(device: DeviceResponseDto) {

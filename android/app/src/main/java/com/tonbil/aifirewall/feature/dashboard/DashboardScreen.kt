@@ -165,6 +165,59 @@ fun DashboardScreen(
                     }
                 }
 
+                // Bandwidth speed card
+                item {
+                    GlassCard(modifier = Modifier.fillMaxWidth(), glowColor = colors.neonCyan) {
+                        Text(
+                            text = "Anlik Bant Genisligi",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = colors.neonCyan,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                        ) {
+                            // Download
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "⬇",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = colors.neonCyan,
+                                )
+                                Text(
+                                    text = formatBps(uiState.totalDownloadBps),
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = colors.neonCyan,
+                                )
+                                Text(
+                                    text = "Indirme",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                )
+                            }
+                            // Upload
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "⬆",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = colors.neonMagenta,
+                                )
+                                Text(
+                                    text = formatBps(uiState.totalUploadBps),
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = colors.neonMagenta,
+                                )
+                                Text(
+                                    text = "Yukleme",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Bandwidth chart
                 item {
                     BandwidthChart(
@@ -220,6 +273,7 @@ fun DashboardScreen(
                     item {
                         TopClientCard(
                             clients = uiState.topClients.take(5),
+                            ipToHostname = uiState.ipToHostname,
                         )
                     }
                 }
@@ -464,7 +518,10 @@ private fun TopDomainCard(
 }
 
 @Composable
-private fun TopClientCard(clients: List<TopClientDto>) {
+private fun TopClientCard(
+    clients: List<TopClientDto>,
+    ipToHostname: Map<String, String> = emptyMap(),
+) {
     val colors = CyberpunkTheme.colors
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -474,10 +531,11 @@ private fun TopClientCard(clients: List<TopClientDto>) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         clients.forEachIndexed { index, item ->
+            val hostname = ipToHostname[item.clientIp]
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 3.dp),
+                    .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -486,16 +544,31 @@ private fun TopClientCard(clients: List<TopClientDto>) {
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                     modifier = Modifier.width(20.dp),
                 )
-                Text(
-                    text = item.clientIp,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    if (hostname != null) {
+                        Text(
+                            text = hostname,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                        )
+                    }
+                    Text(
+                        text = item.clientIp,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (hostname != null) 0.5f else 1f),
+                    )
+                }
                 Text(
                     text = formatCount(item.queryCount),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium,
                     color = colors.neonMagenta,
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "sorgu",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 )
             }
         }
