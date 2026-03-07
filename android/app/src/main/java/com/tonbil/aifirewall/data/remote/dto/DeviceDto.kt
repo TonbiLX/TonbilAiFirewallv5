@@ -5,14 +5,14 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class DeviceResponseDto(
-    val id: Int,
-    @SerialName("mac_address") val macAddress: String,
+    val id: Int = 0,
+    @SerialName("mac_address") val macAddress: String = "",
     @SerialName("ip_address") val ipAddress: String? = null,
     val hostname: String? = null,
     val manufacturer: String? = null,
     @SerialName("profile_id") val profileId: Int? = null,
-    @SerialName("is_blocked") val isBlocked: Boolean,
-    @SerialName("is_online") val isOnline: Boolean,
+    @SerialName("is_blocked") val isBlocked: Boolean = false,
+    @SerialName("is_online") val isOnline: Boolean = false,
     @SerialName("first_seen") val firstSeen: String? = null,
     @SerialName("last_seen") val lastSeen: String? = null,
     @SerialName("total_online_seconds") val totalOnlineSeconds: Int = 0,
@@ -30,6 +30,6 @@ data class DeviceUpdateDto(
 
 @Serializable
 data class BlockResponseDto(
-    val status: String,
-    val mac: String,
+    val status: String = "",
+    val mac: String = "",
 )

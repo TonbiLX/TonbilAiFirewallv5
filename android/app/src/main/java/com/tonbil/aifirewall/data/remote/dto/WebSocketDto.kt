@@ -16,12 +16,12 @@ data class RealtimeUpdateDto(
 
 @Serializable
 data class WsDeviceDto(
-    val id: Int,
-    val mac: String,
-    val ip: String,
+    val id: Int = 0,
+    val mac: String = "",
+    val ip: String = "",
     val hostname: String? = null,
     val manufacturer: String? = null,
-    @SerialName("is_online") val isOnline: Boolean,
+    @SerialName("is_online") val isOnline: Boolean = false,
 )
 
 @Serializable
@@ -41,10 +41,10 @@ data class WsBandwidthDto(
 
 @Serializable
 data class WsDeviceBandwidthDto(
-    @SerialName("upload_bps") val uploadBps: Long,
-    @SerialName("download_bps") val downloadBps: Long,
-    @SerialName("upload_total") val uploadTotal: Long,
-    @SerialName("download_total") val downloadTotal: Long,
+    @SerialName("upload_bps") val uploadBps: Long = 0,
+    @SerialName("download_bps") val downloadBps: Long = 0,
+    @SerialName("upload_total") val uploadTotal: Long = 0,
+    @SerialName("download_total") val downloadTotal: Long = 0,
 )
 
 @Serializable
@@ -56,7 +56,7 @@ data class WsVpnDto(
 
 @Serializable
 data class WsVpnClientDto(
-    val connected: Boolean,
-    @SerialName("transfer_rx") val transferRx: Long,
-    @SerialName("transfer_tx") val transferTx: Long,
+    val connected: Boolean = false,
+    @SerialName("transfer_rx") val transferRx: Long = 0,
+    @SerialName("transfer_tx") val transferTx: Long = 0,
 )

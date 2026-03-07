@@ -62,9 +62,6 @@ dependencies {
     implementation(libs.ktor.client.logging)
     implementation(libs.ktor.client.websockets)
 
-    // Charting
-    implementation(libs.vico.compose.m3)
-
     // AndroidX
     implementation(libs.core.ktx)
     implementation(libs.core.splashscreen)

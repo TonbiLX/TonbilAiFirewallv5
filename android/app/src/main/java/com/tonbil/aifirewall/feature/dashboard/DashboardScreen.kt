@@ -27,7 +27,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -37,14 +36,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
-import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLine
-import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
-import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
-import com.patrykandpatrick.vico.compose.common.fill
-import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
-import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
-import com.patrykandpatrick.vico.core.cartesian.layer.LineCartesianLayer
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import com.tonbil.aifirewall.data.remote.WebSocketState
 import com.tonbil.aifirewall.data.remote.dto.TopClientDto
 import com.tonbil.aifirewall.data.remote.dto.TopDomainDto
@@ -313,18 +309,8 @@ private fun BandwidthChart(
     currentDownload: Long,
 ) {
     val colors = CyberpunkTheme.colors
-    val modelProducer = remember { CartesianChartModelProducer() }
-
-    LaunchedEffect(history) {
-        if (history.isNotEmpty()) {
-            modelProducer.runTransaction {
-                lineSeries {
-                    series(history.map { it.downloadBps.toFloat() / 1_000_000f })
-                    series(history.map { it.uploadBps.toFloat() / 1_000_000f })
-                }
-            }
-        }
-    }
+    val cyanColor = Color(0xFF00F0FF)
+    val magentaColor = Color(0xFFFF00E5)
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Text(
@@ -340,25 +326,83 @@ private fun BandwidthChart(
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (history.isNotEmpty()) {
-            CartesianChartHost(
-                chart = rememberCartesianChart(
-                    rememberLineCartesianLayer(
-                        lineProvider = LineCartesianLayer.LineProvider.series(
-                            LineCartesianLayer.rememberLine(
-                                fill = remember { LineCartesianLayer.LineFill.single(fill(Color(0xFF00F0FF))) },
-                            ),
-                            LineCartesianLayer.rememberLine(
-                                fill = remember { LineCartesianLayer.LineFill.single(fill(Color(0xFFFF00E5))) },
-                            ),
-                        ),
-                    ),
-                ),
-                modelProducer = modelProducer,
+        if (history.size >= 2) {
+            // Simple Canvas-based line chart
+            val downloadValues = remember(history) { history.map { it.downloadBps.toFloat() } }
+            val uploadValues = remember(history) { history.map { it.uploadBps.toFloat() } }
+            val maxVal = remember(history) {
+                (downloadValues + uploadValues).maxOrNull()?.coerceAtLeast(1f) ?: 1f
+            }
+
+            Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp),
-            )
+            ) {
+                val w = size.width
+                val h = size.height
+                val padding = 4f
+                val chartH = h - padding * 2
+                val stepX = w / (downloadValues.size - 1).coerceAtLeast(1)
+
+                fun drawLine(values: List<Float>, color: Color) {
+                    if (values.size < 2) return
+                    val path = Path()
+                    values.forEachIndexed { i, v ->
+                        val x = i * stepX
+                        val y = padding + chartH * (1f - v / maxVal)
+                        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                    }
+                    drawPath(path, color, style = Stroke(width = 3f, cap = StrokeCap.Round))
+                }
+
+                // Grid lines
+                for (i in 0..4) {
+                    val y = padding + chartH * i / 4f
+                    drawLine(
+                        start = Offset(0f, y),
+                        end = Offset(w, y),
+                        color = Color.White.copy(alpha = 0.06f),
+                        strokeWidth = 1f,
+                    )
+                }
+
+                drawLine(downloadValues, cyanColor)
+                drawLine(uploadValues, magentaColor)
+            }
+
+            // Legend
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(cyanColor),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Indirme",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(magentaColor),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Yukleme",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
+            }
         } else {
             Box(
                 modifier = Modifier

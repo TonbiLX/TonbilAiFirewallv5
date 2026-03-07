@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ConnectionHistoryDto(
-    @SerialName("device_id") val deviceId: Int,
+    @SerialName("device_id") val deviceId: Int = 0,
     @SerialName("connected_at") val connectedAt: String? = null,
     @SerialName("disconnected_at") val disconnectedAt: String? = null,
     val timestamp: String? = null,
