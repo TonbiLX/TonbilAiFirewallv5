@@ -309,10 +309,19 @@ async def list_dns_queries(
     blocked_only: bool = False,
     domain_search: Optional[str] = None,
     device_id: Optional[int] = None,
+    source_type: Optional[str] = Query(default=None, description="INTERNAL, EXTERNAL, DOT filtresi"),
+    client_ip: Optional[str] = Query(default=None, description="Kaynak IP filtresi"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """DNS sorgu loglarını filtrele ve listele."""
+    """DNS sorgu loglarını filtrele ve listele.
+
+    Filtreler:
+    - blocked_only: sadece engellenen sorgular
+    - source_type: INTERNAL (LAN), EXTERNAL (dışarıdan), DOT (DNS-over-TLS)
+    - client_ip: belirli bir kaynak IP'nin sorguları
+    - domain_search: domain içerik araması
+    """
     query = select(DnsQueryLog).order_by(desc(DnsQueryLog.timestamp))
     if blocked_only:
         query = query.where(DnsQueryLog.blocked == True)  # noqa: E712
@@ -320,9 +329,60 @@ async def list_dns_queries(
         query = query.where(DnsQueryLog.domain.contains(escape_like(domain_search)))
     if device_id:
         query = query.where(DnsQueryLog.device_id == device_id)
+    if source_type:
+        query = query.where(DnsQueryLog.source_type == source_type.upper())
+    if client_ip:
+        query = query.where(DnsQueryLog.client_ip == client_ip)
     query = query.offset(offset).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
+
+
+@router.get("/queries/external-summary")
+async def external_queries_summary(
+    hours: int = Query(default=24, ge=1, le=168, description="Kaç saat geriye bakılsın"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Dışarıdan gelen DNS sorgularının özeti (son N saat)."""
+    since = datetime.now() - timedelta(hours=hours)
+
+    # Toplam dış sorgu sayısı
+    total_external = await db.scalar(
+        select(func.count(DnsQueryLog.id)).where(
+            and_(
+                DnsQueryLog.timestamp >= since,
+                DnsQueryLog.source_type == "EXTERNAL",
+            )
+        )
+    ) or 0
+
+    # En çok sorgu yapan dış IP'ler
+    top_external_ips_q = await db.execute(
+        select(DnsQueryLog.client_ip, func.count(DnsQueryLog.id).label("count"))
+        .where(and_(DnsQueryLog.timestamp >= since, DnsQueryLog.source_type == "EXTERNAL"))
+        .group_by(DnsQueryLog.client_ip)
+        .order_by(desc("count"))
+        .limit(10)
+    )
+    top_ips = [{"client_ip": r[0], "count": r[1]} for r in top_external_ips_q.all()]
+
+    # Dışarıdan en çok sorgulanan domainler
+    top_external_domains_q = await db.execute(
+        select(DnsQueryLog.domain, func.count(DnsQueryLog.id).label("count"))
+        .where(and_(DnsQueryLog.timestamp >= since, DnsQueryLog.source_type == "EXTERNAL"))
+        .group_by(DnsQueryLog.domain)
+        .order_by(desc("count"))
+        .limit(10)
+    )
+    top_domains = [{"domain": r[0], "count": r[1]} for r in top_external_domains_q.all()]
+
+    return {
+        "hours": hours,
+        "total_external_queries": total_external,
+        "top_external_ips": top_ips,
+        "top_external_domains": top_domains,
+    }
 
 
 # ===== DNS ISTATISTIKLER =====
@@ -391,6 +451,13 @@ async def dns_stats(
         for r in top_clients_q.all()
     ]
 
+    # Dışarıdan gelen sorgu sayısı (EXTERNAL source_type)
+    external_24h = await db.scalar(
+        select(func.count(DnsQueryLog.id)).where(
+            and_(DnsQueryLog.timestamp >= day_ago, DnsQueryLog.source_type == "EXTERNAL")
+        )
+    ) or 0
+
     block_pct = round((blocked_24h / max(total_24h, 1)) * 100, 1)
 
     return DnsStatsResponse(
@@ -402,6 +469,7 @@ async def dns_stats(
         top_blocked_domains=top_blocked,
         top_queried_domains=top_queried,
         top_clients=top_clients,
+        external_queries_24h=external_24h,
     )
 
 

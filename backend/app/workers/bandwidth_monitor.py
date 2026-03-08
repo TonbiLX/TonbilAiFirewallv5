@@ -292,12 +292,8 @@ async def start_bandwidth_monitor():
             logger.error("Bandwidth monitor: Redis'e baglanamadi, isci durduruluyor.")
             return
 
-    # Eski bridge accounting chain'lerini temizle (TC mark korunur)
-    try:
-        await nft.cleanup_bridge_accounting()
-        logger.info("Eski bridge accounting chain'leri temizlendi")
-    except Exception as e:
-        logger.warning(f"Bridge accounting temizligi basarisiz (onemsiz): {e}")
+    # NOT: Bridge accounting temizligi artik yapilmiyor.
+    # Bridge chain'leri daha onceden kaldirildi, inet bw_accounting kullaniliyor.
 
     # Yeni inet bw_accounting tablosu olustur
     try:

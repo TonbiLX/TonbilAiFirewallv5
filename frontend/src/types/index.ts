@@ -161,6 +161,7 @@ export interface DnsQueryLog {
   block_reason: string | null;
   upstream_response_ms: number | null;
   answer_ip: string | null;
+  source_type: string | null;  // INTERNAL | EXTERNAL | DOT
 }
 
 export interface DnsStats {
@@ -172,6 +173,7 @@ export interface DnsStats {
   top_blocked_domains: Array<{ domain: string; count: number }>;
   top_queried_domains: Array<{ domain: string; count: number }>;
   top_clients: Array<{ device_id: number; client_ip: string; query_count: number }>;
+  external_queries_24h: number;
 }
 
 export interface DomainLookup {

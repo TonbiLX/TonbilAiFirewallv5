@@ -17,6 +17,7 @@ class DnsQueryLogResponse(BaseModel):
     block_reason: Optional[str] = None
     upstream_response_ms: Optional[int] = None
     answer_ip: Optional[str] = None
+    source_type: Optional[str] = "INTERNAL"   # INTERNAL / EXTERNAL / DOT
 
     class Config:
         from_attributes = True
@@ -42,3 +43,4 @@ class DnsStatsResponse(BaseModel):
     top_blocked_domains: List[DomainCountItem] = []
     top_queried_domains: List[DomainCountItem] = []
     top_clients: List[ClientCountItem] = []
+    external_queries_24h: int = 0   # Dışarıdan gelen sorgu sayısı

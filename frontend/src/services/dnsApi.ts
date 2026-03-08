@@ -66,8 +66,20 @@ export async function fetchDnsQueries(params?: {
   blocked_only?: boolean;
   domain_search?: string;
   device_id?: number;
+  source_type?: string;  // INTERNAL | EXTERNAL | DOT
+  client_ip?: string;
 }): Promise<DnsQueryLog[]> {
   const { data } = await api.get("/dns/queries", { params });
+  return data;
+}
+
+export async function fetchExternalQueriesSummary(hours?: number): Promise<{
+  hours: number;
+  total_external_queries: number;
+  top_external_ips: Array<{ client_ip: string; count: number }>;
+  top_external_domains: Array<{ domain: string; count: number }>;
+}> {
+  const { data } = await api.get("/dns/queries/external-summary", { params: { hours } });
   return data;
 }
 

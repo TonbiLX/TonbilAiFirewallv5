@@ -26,3 +26,6 @@ class DnsQueryLog(Base):
     mac_address = Column(String(17), nullable=True)         # Cihaz MAC adresi (denormalize)
     destination_port = Column(Integer, nullable=True)        # Hedef port (DNS=53, DoT=853)
     wan_ip = Column(String(45), nullable=True)               # Dış IP (NAT ceviri için)
+
+    # Kaynak tipi: INTERNAL (yerel LAN), EXTERNAL (dışarıdan gelen), DOT (DNS-over-TLS)
+    source_type = Column(String(20), nullable=True, default="INTERNAL", index=True)

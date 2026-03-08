@@ -23,6 +23,8 @@ import {
   Download,
   TrendingUp,
   TrendingDown,
+  Globe,
+  Filter,
 } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { StatCard } from "../components/common/StatCard";
@@ -44,11 +46,14 @@ import {
   createDnsRule,
   deleteDnsRule,
   refreshAllBlocklists,
+  fetchDnsQueries,
+  fetchExternalQueriesSummary,
 } from "../services/dnsApi";
 import { fetchDevices, blockDevice } from "../services/deviceApi";
 import type { Blocklist, BlocklistRefreshResult, BulkRefreshResult } from "../types";
 
 type Tab = "overview" | "blocklists" | "rules" | "device_rules" | "queries";
+type QueryFilter = "all" | "blocked" | "allowed" | "external" | "dot";
 
 const tabs: { key: Tab; label: string; icon: typeof ShieldBan }[] = [
   { key: "overview", label: "Genel Bakış", icon: ShieldBan },
@@ -100,6 +105,18 @@ export function DnsBlockingPage() {
   >({});
   const [submitting, setSubmitting] = useState(false);
 
+  // Sorgu log filtresi
+  const [queryFilter, setQueryFilter] = useState<QueryFilter>("all");
+  const [filteredQueries, setFilteredQueries] = useState<typeof recentQueries>([]);
+  const [filterLoading, setFilterLoading] = useState(false);
+
+  // Dış sorgu özeti
+  const [externalSummary, setExternalSummary] = useState<{
+    total_external_queries: number;
+    top_external_ips: Array<{ client_ip: string; count: number }>;
+    top_external_domains: Array<{ domain: string; count: number }>;
+  } | null>(null);
+
   // Anlik yenileme durumu
   const [refreshing, setRefreshing] = useState(false);
 
@@ -110,8 +127,44 @@ export function DnsBlockingPage() {
     setRefreshing(true);
     try {
       await refresh();
+      await applyQueryFilter(queryFilter);
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  // Filtre uygulandığında sorguları yeniden çek
+  const applyQueryFilter = async (filter: QueryFilter) => {
+    setFilterLoading(true);
+    try {
+      let params: Parameters<typeof fetchDnsQueries>[0] = { limit: 100 };
+      if (filter === "blocked") params = { ...params, blocked_only: true };
+      else if (filter === "allowed") params = { ...params };
+      else if (filter === "external") params = { ...params, source_type: "EXTERNAL" };
+      else if (filter === "dot") params = { ...params, source_type: "DOT" };
+
+      const q = await fetchDnsQueries(params);
+
+      // "allowed" filtresi için client tarafında filtrele
+      const result = filter === "allowed" ? q.filter((x) => !x.blocked) : q;
+      setFilteredQueries(result);
+    } catch {
+      setFilteredQueries([]);
+    } finally {
+      setFilterLoading(false);
+    }
+  };
+
+  // queryFilter değiştiğinde uygula
+  const handleFilterChange = async (f: QueryFilter) => {
+    setQueryFilter(f);
+    await applyQueryFilter(f);
+    // Dışarıdan gelen seçilince özet verisini de çek
+    if (f === "external" && !externalSummary) {
+      try {
+        const s = await fetchExternalQueriesSummary(24);
+        setExternalSummary(s);
+      } catch { /* ignore */ }
     }
   };
 
@@ -129,6 +182,14 @@ export function DnsBlockingPage() {
       return () => clearTimeout(timer);
     }
   }, [feedback]);
+
+  // --- Sorgu logu sekmesine ilk geçişte filtreyi uygula ---
+  useEffect(() => {
+    if (activeTab === "queries") {
+      applyQueryFilter(queryFilter);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   if (loading) return <LoadingSpinner />;
 
@@ -429,6 +490,31 @@ export function DnsBlockingPage() {
             />
           </div>
 
+          {/* Dışarıdan gelen sorgu uyarısı */}
+          {stats.external_queries_24h > 0 && (
+            <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-neon-red/10 border border-neon-red/30">
+              <Globe size={20} className="text-neon-red flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-neon-red">
+                  Dışarıdan Gelen DNS Sorguları Tespit Edildi
+                </p>
+                <p className="text-xs text-gray-300 mt-0.5">
+                  Son 24 saatte dışarıdan (WAN) <strong className="text-neon-red">{formatNumber(stats.external_queries_24h)}</strong> DNS sorgusu
+                  geldi ve reddedildi. DNS portunuz (53) internete açık olabilir.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setActiveTab("queries");
+                  handleFilterChange("external");
+                }}
+                className="flex-shrink-0 text-xs px-3 py-1.5 bg-neon-red/20 text-neon-red border border-neon-red/30 rounded-lg hover:bg-neon-red/30 transition-colors"
+              >
+                Logları Gör
+              </button>
+            </div>
+          )}
+
           <DnsStatsChart stats={stats} />
           <DomainSearch />
         </div>
@@ -609,48 +695,124 @@ export function DnsBlockingPage() {
       {/* SORGU LOGLARI */}
       {activeTab === "queries" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-gray-400 text-sm">
-              Son {recentQueries.length} DNS sorgusu
-            </p>
-            <button
-              onClick={handleManualRefresh}
-              disabled={refreshing}
-              className="flex items-center gap-2 px-4 py-2.5 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 rounded-xl text-sm font-medium hover:bg-neon-cyan/20 hover:shadow-[0_0_20px_rgba(0,240,255,0.15)] transition-all disabled:opacity-50"
-            >
-              <RotateCw size={16} className={refreshing ? "animate-spin" : ""} />
-              Simdi Yenile
-            </button>
+          {/* Üst satır: filtreler + yenile */}
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            {/* Filtre butonları */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Filter size={14} className="text-gray-500" />
+              {(
+                [
+                  { key: "all", label: "Tümü" },
+                  { key: "blocked", label: "Engellenen" },
+                  { key: "allowed", label: "İzin Verilen" },
+                  { key: "external", label: "Dışarıdan Gelen", icon: Globe },
+                  { key: "dot", label: "DNS-over-TLS" },
+                ] as Array<{ key: QueryFilter; label: string; icon?: typeof Globe }>
+              ).map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => handleFilterChange(f.key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    queryFilter === f.key
+                      ? f.key === "external"
+                        ? "bg-neon-red/20 text-neon-red border border-neon-red/40"
+                        : f.key === "blocked"
+                        ? "bg-neon-amber/20 text-neon-amber border border-neon-amber/40"
+                        : "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40"
+                      : "bg-glass-light text-gray-400 border border-glass-border hover:text-white"
+                  }`}
+                >
+                  {f.icon && <f.icon size={12} />}
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <p className="text-gray-500 text-xs">
+                {filterLoading ? "Yükleniyor..." : `${filteredQueries.length} kayıt`}
+              </p>
+              <button
+                onClick={handleManualRefresh}
+                disabled={refreshing}
+                className="flex items-center gap-2 px-4 py-2.5 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 rounded-xl text-sm font-medium hover:bg-neon-cyan/20 hover:shadow-[0_0_20px_rgba(0,240,255,0.15)] transition-all disabled:opacity-50"
+              >
+                <RotateCw size={16} className={refreshing ? "animate-spin" : ""} />
+                Yenile
+              </button>
+            </div>
           </div>
+
+          {/* Dışarıdan gelen filtre seçiliyse özet kutu göster */}
+          {queryFilter === "external" && externalSummary && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <GlassCard>
+                <h4 className="text-xs font-semibold text-neon-red mb-2 flex items-center gap-1">
+                  <Globe size={12} />
+                  En Çok Sorgu Yapan Dış IP'ler (24s)
+                </h4>
+                <div className="space-y-1">
+                  {externalSummary.top_external_ips.slice(0, 8).map((item) => (
+                    <div key={item.client_ip} className="flex items-center justify-between text-xs">
+                      <span className="font-mono text-gray-300">{item.client_ip}</span>
+                      <span className="text-neon-red font-medium">{formatNumber(item.count)}</span>
+                    </div>
+                  ))}
+                  {externalSummary.top_external_ips.length === 0 && (
+                    <p className="text-gray-500 text-xs">Veri yok</p>
+                  )}
+                </div>
+              </GlassCard>
+              <GlassCard>
+                <h4 className="text-xs font-semibold text-neon-amber mb-2">
+                  En Çok Sorgulanan Domainler (Dış)
+                </h4>
+                <div className="space-y-1">
+                  {externalSummary.top_external_domains.slice(0, 8).map((item) => (
+                    <div key={item.domain} className="flex items-center justify-between text-xs">
+                      <span className="font-mono text-gray-300 truncate max-w-[180px]">{item.domain}</span>
+                      <span className="text-neon-amber font-medium">{formatNumber(item.count)}</span>
+                    </div>
+                  ))}
+                  {externalSummary.top_external_domains.length === 0 && (
+                    <p className="text-gray-500 text-xs">Veri yok</p>
+                  )}
+                </div>
+              </GlassCard>
+            </div>
+          )}
+
           <DnsQueryTable
-          queries={recentQueries}
-          onBlockDomain={async (domain: string) => {
-            await createDnsRule({ domain, rule_type: "block" });
-            setFeedback({ type: "success", message: `"${domain}" engellendi.` });
-            refresh();
-          }}
-          onAllowDomain={async (domain: string) => {
-            await createDnsRule({ domain, rule_type: "allow" });
-            setFeedback({ type: "success", message: `"${domain}" için izin verildi.` });
-            refresh();
-          }}
-          onBlockClient={async (clientIp: string) => {
-            try {
-              const res = await fetchDevices();
-              const device = res.data?.find(
-                (d: { ip_address: string | null }) => d.ip_address === clientIp
-              );
-              if (device) {
-                await blockDevice(device.id);
-                setFeedback({ type: "success", message: `${clientIp} istemcisi engellendi.` });
-              } else {
-                setFeedback({ type: "error", message: `${clientIp} için cihaz bulunamadı.` });
+            queries={filteredQueries.length > 0 || queryFilter !== "all" ? filteredQueries : recentQueries}
+            onBlockDomain={async (domain: string) => {
+              await createDnsRule({ domain, rule_type: "block" });
+              setFeedback({ type: "success", message: `"${domain}" engellendi.` });
+              refresh();
+              applyQueryFilter(queryFilter);
+            }}
+            onAllowDomain={async (domain: string) => {
+              await createDnsRule({ domain, rule_type: "allow" });
+              setFeedback({ type: "success", message: `"${domain}" için izin verildi.` });
+              refresh();
+              applyQueryFilter(queryFilter);
+            }}
+            onBlockClient={async (clientIp: string) => {
+              try {
+                const res = await fetchDevices();
+                const device = res.data?.find(
+                  (d: { ip_address: string | null }) => d.ip_address === clientIp
+                );
+                if (device) {
+                  await blockDevice(device.id);
+                  setFeedback({ type: "success", message: `${clientIp} istemcisi engellendi.` });
+                } else {
+                  setFeedback({ type: "error", message: `${clientIp} için cihaz bulunamadı.` });
+                }
+              } catch {
+                setFeedback({ type: "error", message: "İstemci engellenirken hata oluştu." });
               }
-            } catch {
-              setFeedback({ type: "error", message: "İstemci engellenirken hata oluştu." });
-            }
-          }}
-        />
+            }}
+          />
         </div>
       )}
 

@@ -103,13 +103,18 @@ async def flush_attacker_sets() -> dict:
 
 
 async def _ensure_attacker_sets():
-    """Saldırgan IP takip set'lerini oluştur (yoksa)."""
+    """Saldırgan IP takip set'lerini oluştur (yoksa).
+
+    NOT: ddos_syn_meter / ddos_udp_meter / ddos_icmp_meter named meter'larini
+    burada set olarak OLUSTURMA. nftables'da 'meter NAME { key limit rate ... }'
+    szdizimi named meter'i otomatik olusturur. Eger onceden 'add set' ile
+    timeout/dynamic flagli bir set varsa, ayni isimde meter kullanan kural
+    'existing set has timeout flag' hatasini verir. Bu nedenle meter set'leri
+    bu fonksiyondan kaldirildi — sadece saldirgan IP takip set'leri olusturulur.
+    """
     lines = []
     for name in ATTACKER_SETS:
-        lines.append(f'add set {TABLE} {name} {{ type ipv4_addr; timeout 30m; size 4096; flags dynamic; }}')
-    # Meter'ları oluştur (per-IP rate limiting için)
-    for meter_name in ["ddos_syn_meter", "ddos_udp_meter", "ddos_icmp_meter"]:
-        lines.append(f'add set {TABLE} {meter_name} {{ type ipv4_addr; timeout 30m; size 65536; flags dynamic; }}')
+        lines.append(f'add set {TABLE} {name} {{ type ipv4_addr; timeout 30m; size 4096; flags dynamic,timeout; }}')
     ok, err = await _run_nft_stdin("\n".join(lines) + "\n")
     if not ok:
         for line in lines:
@@ -121,7 +126,14 @@ async def _ensure_attacker_sets():
 # ============================================================================
 
 async def _flush_ddos_rules():
-    """Mevcut ddos_ comment'li tum kurallari sil."""
+    """Mevcut ddos_ comment'li tum kurallari sil.
+
+    ONEMLI: named meter set'leri (ddos_syn_meter vb.) kurallar silindikten
+    sonra OTOMATIK olarak nftables tarafından temizlenir — eger set olarak
+    onceden olusturulmamislarse. Eger bu set'ler yanlislikla 'add set ... timeout'
+    ile olusturulduysa, kurallari silmeden once onlari silmeye calisiyoruz;
+    ancak referans hatasi alinirsak kurallari once sil sonra set'leri sil.
+    """
     for chain in ("input", "forward"):
         out = await _run_nft(["-a", "list", "chain", "inet", "tonbilai", chain])
         for line in out.splitlines():
@@ -134,12 +146,15 @@ async def _flush_ddos_rules():
                     )
                     logger.debug(f"DDoS kural silindi: chain={chain} handle={handle}")
 
-    # Meter'ları temizle
+    # Named meter set'lerini temizle (eski 'add set ... timeout flags' ile olusturulmus olabilir)
+    # Bu set'ler kurallar silinince otomatik temizlenir ama persist edilmisse yeniden yuklenir.
+    # Explicit delete ile kalici olarak temizliyoruz.
     for meter_name in ["ddos_syn_meter", "ddos_udp_meter", "ddos_icmp_meter"]:
         try:
-            await _run_nft(["flush", "meter", "inet", "tonbilai", meter_name])
+            await _run_nft(["delete", "set", "inet", "tonbilai", meter_name])
+            logger.debug(f"DDoS meter set silindi: {meter_name}")
         except Exception:
-            pass
+            pass  # Set yoksa veya hata olursa sessizce gec
 
 
 async def apply_ddos_nft_rules(config) -> int:
@@ -348,23 +363,29 @@ limit_req_zone $binary_remote_addr zone=ddos_limit:10m rate={rate};
 
 async def apply_uvicorn_workers(config) -> dict:
     """Systemd override ile uvicorn worker sayısıni değiştir.
-    Restart kullanıcı onayiyla yapilacak — sadece config yazilir."""
+    Restart kullanıcı onayiyla yapilacak — sadece config yazilir.
+    NOT: Mevcut dosya zaten dogru icerige sahipse needs_restart=False döner
+    (startup sırasında sonsuz restart döngüsünü önlemek için)."""
     result = {"config_written": False, "needs_restart": False}
 
     if not config.uvicorn_workers_enabled or config.uvicorn_workers <= 1:
-        # Override dosyasini sil
-        await _run_cmd(["sudo", "rm", "-f", UVICORN_OVERRIDE_FILE])
-        await _run_cmd(["sudo", "systemctl", "daemon-reload"])
-        result["config_written"] = True
-        logger.info("Uvicorn worker override kaldırıldı")
+        # Override dosyasini sil — önce mevcut durumu kontrol et
+        rc_test, _, _ = await _run_cmd(["sudo", "test", "-f", UVICORN_OVERRIDE_FILE])
+        if rc_test == 0:
+            # Dosya vardı, şimdi siliyoruz → restart gerekli
+            await _run_cmd(["sudo", "rm", "-f", UVICORN_OVERRIDE_FILE])
+            await _run_cmd(["sudo", "systemctl", "daemon-reload"])
+            result["config_written"] = True
+            result["needs_restart"] = True
+            logger.info("Uvicorn worker override kaldırıldı (restart gerekli)")
+        else:
+            result["config_written"] = True
+            logger.info("Uvicorn worker override zaten yok, islem atlandi")
         return result
 
     # Override dizini oluştur
     await _run_cmd(["sudo", "mkdir", "-p", UVICORN_OVERRIDE_DIR])
 
-    # Mevcut ExecStart'i oku
-    rc, out, _ = await _run_cmd(["sudo", "systemctl", "show", "tonbilaios-backend", "--property=ExecStart"])
-    # Default: uvicorn app.main:app --host 0.0.0.0 --port 8000
     workers = config.uvicorn_workers
 
     content = f"""# TonbilAiOS DDoS — Uvicorn Worker Override
@@ -374,6 +395,14 @@ ExecStart=
 ExecStart=/opt/tonbilaios/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers {workers}
 """
 
+    # Mevcut dosya içeriğini oku — değişmediyse yazmaktan kaçın
+    rc_read, existing, _ = await _run_cmd(["sudo", "cat", UVICORN_OVERRIDE_FILE])
+    if rc_read == 0 and existing.strip() == content.strip():
+        result["config_written"] = True
+        result["needs_restart"] = False
+        logger.info(f"Uvicorn worker override zaten güncel ({workers} worker), restart atlandı")
+        return result
+
     rc, _, _ = await _run_cmd(["sudo", "tee", UVICORN_OVERRIDE_FILE], input_data=content)
     if rc != 0:
         logger.error("uvicorn override dosyasi yazilamadi")
@@ -382,7 +411,7 @@ ExecStart=/opt/tonbilaios/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 -
     await _run_cmd(["sudo", "systemctl", "daemon-reload"])
     result["config_written"] = True
     result["needs_restart"] = True
-    logger.info(f"Uvicorn worker override yazildi: {workers} worker")
+    logger.info(f"Uvicorn worker override yazildi: {workers} worker (restart gerekli)")
     return result
 
 

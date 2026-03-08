@@ -596,13 +596,32 @@ class DnsProxyProtocol(asyncio.DatagramProtocol):
             self.stats["threat_blocked"] += 1
             return
 
+        # Kaynak tipi belirleme
+        _is_external = not is_local_ip(client_ip)
+        _source_type = "EXTERNAL" if _is_external else "INTERNAL"
+
         # Dış IP kontrolü - yerel ag disindaki sorgulari reddet
         # ama guvenilir IP'leri yerel gibi isle (sorguyu ilet)
-        if not is_local_ip(client_ip):
+        if _is_external:
             if not is_trusted_ip(client_ip):
                 asyncio.ensure_future(
                     report_external_query(client_ip, domain, qtype_name)
                 )
+                # Dış IP'yi logla (yanıtsız bırakılıyor ama loglanıyor)
+                logger.info(f"EXTERNAL REJECTED {domain} ({qtype_name}) from {client_ip}")
+                self.query_log.append({
+                    "client_ip": client_ip,
+                    "domain": domain,
+                    "query_type": qtype_name,
+                    "blocked": True,
+                    "block_reason": "external_rejected",
+                    "upstream_response_ms": 0,
+                    "answer_ip": "",
+                    "timestamp": datetime.utcnow(),
+                    "destination_port": 53,
+                    "wan_ip": get_wan_ip(),
+                    "source_type": "EXTERNAL",
+                })
                 return  # Dış IP, sorguyu yanitsiz birak
             # Guvenilir dis IP: yerel gibi isle, sorguyu upstream'e ilet
             logger.debug(f"Guvenilir dis IP sorgusu kabul edildi: {client_ip} -> {domain}")
@@ -746,6 +765,7 @@ class DnsProxyProtocol(asyncio.DatagramProtocol):
             "timestamp": datetime.utcnow(),
             "destination_port": 53,       # 5651: UDP DNS port
             "wan_ip": get_wan_ip(),        # 5651: NAT dis IP
+            "source_type": _source_type,  # INTERNAL veya EXTERNAL
         })
 
 
@@ -835,6 +855,8 @@ async def flush_query_logs(query_log: deque, db_url: str):
                         mac_address=mac_address,
                         destination_port=entry.get("destination_port", 53),
                         wan_ip=entry.get("wan_ip", ""),
+                        # Kaynak tipi
+                        source_type=entry.get("source_type", "INTERNAL"),
                     )
                     session.add(log)
                 await session.commit()
@@ -1033,6 +1055,7 @@ async def handle_dot_client(
                 )
 
             # Log kuyruguna ekle
+            _dot_source = "EXTERNAL" if not _is_local_client(client_ip) else "DOT"
             query_log.append({
                 "client_ip": client_ip,
                 "domain": domain,
@@ -1044,6 +1067,7 @@ async def handle_dot_client(
                 "timestamp": datetime.utcnow(),
                 "destination_port": 853,      # 5651: DoT port
                 "wan_ip": get_wan_ip(),        # 5651: NAT dis IP
+                "source_type": _dot_source,   # DOT (yerel) veya EXTERNAL (dışarıdan DoT)
             })
 
     except (asyncio.IncompleteReadError, asyncio.TimeoutError, ConnectionResetError):

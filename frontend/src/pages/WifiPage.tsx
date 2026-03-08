@@ -115,6 +115,39 @@ export function WifiPage() {
     }
   }, [feedback]);
 
+  // Form state'i config verisinden doldur (sadece ilk yükleme ve kayıt sonrasında çağrılır)
+  const applyConfigToForm = useCallback((c: WifiConfig) => {
+    setFormSsid(c.ssid || "");
+    setFormPassword(c.password || "");
+    setFormChannel(c.channel || 6);
+    setFormBand(c.band || "2.4GHz");
+    setFormTxPower(c.tx_power || 20);
+    setFormHidden(c.hidden_ssid || false);
+    setGuestEnabled(c.guest_enabled || false);
+    setGuestSsid(c.guest_ssid || "");
+    setGuestPassword(c.guest_password || "");
+    setScheduleEnabled(c.schedule_enabled || false);
+    setScheduleStart(c.schedule_start || "08:00");
+    setScheduleStop(c.schedule_stop || "23:00");
+    setMacMode(c.mac_filter_mode || "disabled");
+    setMacList(c.mac_filter_list || []);
+  }, []);
+
+  // Durum + istemci + kanal güncelleme (periyodik, formu EZMEz)
+  const loadStatus = useCallback(async () => {
+    try {
+      const [statusRes, clientsRes] = await Promise.all([
+        fetchWifiStatus(),
+        fetchWifiClients(),
+      ]);
+      setStatus(statusRes.data);
+      setClients(clientsRes.data);
+    } catch (err) {
+      console.error("WiFi durum yukleme hatasi:", err);
+    }
+  }, []);
+
+  // Tam veri yükle + formu doldur (ilk açılış ve kayıt sonrası)
   const loadData = useCallback(async () => {
     try {
       const [statusRes, configRes, clientsRes, channelsRes] = await Promise.all([
@@ -128,22 +161,8 @@ export function WifiPage() {
       setClients(clientsRes.data);
       setChannels(channelsRes.data);
 
-      // Form state'i config'den doldur
-      const c = configRes.data as WifiConfig;
-      setFormSsid(c.ssid || "");
-      setFormPassword(c.password || "");
-      setFormChannel(c.channel || 6);
-      setFormBand(c.band || "2.4GHz");
-      setFormTxPower(c.tx_power || 20);
-      setFormHidden(c.hidden_ssid || false);
-      setGuestEnabled(c.guest_enabled || false);
-      setGuestSsid(c.guest_ssid || "");
-      setGuestPassword(c.guest_password || "");
-      setScheduleEnabled(c.schedule_enabled || false);
-      setScheduleStart(c.schedule_start || "08:00");
-      setScheduleStop(c.schedule_stop || "23:00");
-      setMacMode(c.mac_filter_mode || "disabled");
-      setMacList(c.mac_filter_list || []);
+      // Form state'i yalnizca tam yüklemede doldur
+      applyConfigToForm(configRes.data as WifiConfig);
 
       setError(null);
     } catch (err) {
@@ -152,13 +171,14 @@ export function WifiPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyConfigToForm]);
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 15000);
+    // Periyodik güncelleme: sadece durum/istemci verisi, formu EZMEZ
+    const interval = setInterval(loadStatus, 15000);
     return () => clearInterval(interval);
-  }, [loadData]);
+  }, [loadData, loadStatus]);
 
   // --- Anahtar islemler ---
 
