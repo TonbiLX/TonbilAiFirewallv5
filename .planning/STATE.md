@@ -51,7 +51,7 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 Phase: 9 of 15 (Device Management) - COMPLETE
 Plan: 2 of 2 complete
 Status: Phase Complete, sistem bakim oturumu tamamlandi
-Last activity: 2026-03-09 - Completed quick task 11: IP Reputation stabilite testi 25/25 PASS
+Last activity: 2026-03-09 - Completed quick task 12: Guvenlik denetimi — 5 iyilestirme deploy edildi
 
 Progress: [██████░░░░] 40%
 
@@ -135,6 +135,7 @@ Progress: [██████░░░░] 40%
 | 9 | Welford Z-score + AbuseIPDB/GeoIP + LLM prompt ozet + Gunluk Telegram raporu — 4 paralel ajan | 2026-03-08 | affedce | [9-welford-z-score](./quick/9-welford-z-score-abuseipdb-geoip-llm-prom/) |
 | 10 | IP Reputation frontend — AbuseIPDB key, ulke siniri, toggle + Guvenlik Duvari tab | 2026-03-09 | - | [10-ip-reputation](./quick/10-ip-reputation-frontend-abuseipdb-key-ulk/) |
 | 11 | IP Reputation stabilite testi — 25/25 PASS: AbuseIPDB API, Redis keys, ulke round-trip, worker logs, frontend build | 2026-03-09 | 8213c95 | [11-ip-reputation-stabilite](./quick/11-ip-reputation-sistemi-stabilite-testi-ap/) |
+| 12 | Guvenlik denetimi — reboot confirm, username rate limit, session invalidation, ozel karakter, WS per-IP limit | 2026-03-09 | 7642f2a | [12-guvenlik-denetimi](./quick/12-guvenlik-denetimi-bruteforce-koruma-auth/) |
 
 ## Session Continuity
 
