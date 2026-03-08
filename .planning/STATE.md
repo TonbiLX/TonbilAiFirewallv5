@@ -44,14 +44,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-06)
 
 **Core value:** TonbilAiOS v5'in tum ozelliklerini Samsung S24 Ultra uzerinden yonetme ve izleme
-**Current focus:** Phase 9 — Device Management
+**Current focus:** Phase 10 — DNS Filtering (sonraki planlama asamasi)
 
 ## Current Position
 
 Phase: 9 of 15 (Device Management) - COMPLETE
 Plan: 2 of 2 complete
-Status: Phase Complete
-Last activity: 2026-03-06 — Plan 09-02 completed (Device Management UI)
+Status: Phase Complete, sistem bakim oturumu tamamlandi
+Last activity: 2026-03-08 — 10 kritik sistem duzeltmesi (commit 75ea0c9)
 
 Progress: [██████░░░░] 40%
 
@@ -114,17 +114,28 @@ Progress: [██████░░░░] 40%
 
 ### Pending Todos
 
-None yet.
+- Phase 10 (DNS Filtering) planlama bekliyor
+- WebSocket backend ping/pong eklenmeli (baglanti birikimini onlemek icin)
 
 ### Blockers/Concerns
 
-None yet.
+- WebSocket baglanti birikimi: Ayni tarayicidan 10-15 WS baglantisi acilebiliyor (backend pong timeout eksik)
+- WAN input filter EKSIK: nft inet filter input policy accept, eth0 icin kural yok (KRITIK)
+- DB retention mekanizmasi YOK: connection_flows 646MB, dns_query_logs 318MB, traffic_logs 167MB (sinir yok)
+- Forward chain ct state established kurali 16+ subnet kuralindan sonra (performans)
+- DDoS restart dongusu hala tetiklenebilir (needs_restart: True)
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 6 | Pi sistem denetimi: log, guvenlik, firewall, DDoS, API, servis izleme | 2026-03-08 | - | [6-pi-sistem-denetimi](./quick/6-pi-sistem-denetimi-log-analizi-g-venlik-/) |
 
 ## Session Continuity
 
-Last session: 2026-03-06
-Stopped at: Completed 09-02-PLAN.md (Phase 09 complete)
-Resume file: .planning/phases/09-device-management/09-02-SUMMARY.md
+Last session: 2026-03-08
+Stopped at: Quick task 6 (sistem denetimi) tamamlandi. Kritik bulgular rapor edildi.
+Resume file: .planning/phases/09-device-management/.continue-here-app-improvements.md
 
 ## Post-Milestone Work (GSD disi)
 
@@ -137,3 +148,12 @@ Resume file: .planning/phases/09-device-management/09-02-SUMMARY.md
 | 5 | Bandwidth: bridge→inet forward hook + 3s poll | 804195d | 2026-03-05 | TAMAMLANDI + DEPLOY |
 | 6 | Trafik tablolari: zaman sutunu + tiklanabilir siralama | 804195d | 2026-03-05 | TAMAMLANDI + DEPLOY |
 | 7 | VPN client outbound: rp_filter fix (LAN→VPN tunel) | 37a841a | 2026-03-05 | TAMAMLANDI + DEPLOY |
+| 8 | DDoS meter set timeout flag conflict fix | 75ea0c9 | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 9 | DDoS uvicorn workers idempotency (restart loop fix) | 75ea0c9 | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 10 | DNS source_type loglama (INTERNAL/EXTERNAL/DOT) | 75ea0c9 | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 11 | DNS engelleme sayfasi: kaynak filtreleri + dis sorgu paneli | 75ea0c9 | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 12 | WebSocket exponential backoff + 5s disconnect debounce | 75ea0c9 | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 13 | WiFi AP form reset bug fix (loadData/loadStatus split) | 75ea0c9 | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 14 | Bandwidth monitor dead code temizligi | 75ea0c9 | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 15 | Pi: Redis 256→512MB, IRQ/RPS tuning, workers=1 | - | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 16 | Pi: systemd watchdog fix + hostapd/NM WiFi conflict fix | - | 2026-03-08 | TAMAMLANDI + DEPLOY |
