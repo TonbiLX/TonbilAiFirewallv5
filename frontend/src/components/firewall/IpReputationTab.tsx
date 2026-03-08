@@ -34,10 +34,9 @@ interface ReputationConfig {
   enabled: boolean;
   abuseipdb_key: string;
   abuseipdb_key_set: boolean;
-  abuseipdb_key_masked: string;
   blocked_countries: string[];
-  min_score_to_flag: number;
-  daily_checks_used: number;
+  check_interval: number;
+  max_checks_per_cycle: number;
   daily_limit: number;
 }
 
@@ -163,7 +162,7 @@ export function IpReputationTab() {
       ]);
       setConfig(cfgRes.data);
       setSummary(sumRes.data);
-      setIps(ipsRes.data ?? []);
+      setIps(ipsRes.data?.ips ?? []);
     } catch {
       showFeedback("Veriler yüklenemedi.", false);
     } finally {
@@ -174,7 +173,7 @@ export function IpReputationTab() {
   const loadIps = useCallback(async () => {
     try {
       const res = await fetchReputationIps(filterFlagged ? 50 : undefined);
-      setIps(res.data ?? []);
+      setIps(res.data?.ips ?? []);
     } catch {
       showFeedback("IP listesi yüklenemedi.", false);
     }
@@ -190,8 +189,7 @@ export function IpReputationTab() {
       const payload: any = {
         enabled: config.enabled,
         blocked_countries: config.blocked_countries,
-        min_score_to_flag: config.min_score_to_flag,
-      };
+              };
       if (apiKeyInput.trim()) {
         payload.abuseipdb_key = apiKeyInput.trim();
       }
@@ -370,22 +368,12 @@ export function IpReputationTab() {
             </button>
           </div>
 
-          {/* Minimum skor */}
+          {/* Kontrol bilgisi */}
           <div>
             <label className="block text-xs text-gray-400 mb-2 uppercase tracking-wider">
-              Minimum İşaretleme Skoru
+              Kontrol Aralığı
             </label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={config?.min_score_to_flag ?? 50}
-              onChange={(e) =>
-                config && setConfig({ ...config, min_score_to_flag: Number(e.target.value) })
-              }
-              className="w-full bg-surface-800 border border-glass-border rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-neon-cyan/50 transition-colors"
-            />
-            <p className="text-xs text-gray-500 mt-1">Bu değer ve üzeri skorlar işaretlenir (0–100)</p>
+            <p className="text-sm text-white">{config?.check_interval ?? 300}s — döngü başına max {config?.max_checks_per_cycle ?? 10} IP</p>
           </div>
 
           {/* AbuseIPDB API Anahtarı */}
@@ -398,7 +386,7 @@ export function IpReputationTab() {
                 <CheckCircle className="w-3.5 h-3.5 text-[#39FF14]" />
                 Kayıtlı anahtar:
                 <code className="text-[#00F0FF] font-mono">
-                  {maskApiKey(config.abuseipdb_key_masked || "••••••••")}
+                  {config.abuseipdb_key || "••••••••"}
                 </code>
               </div>
             )}
