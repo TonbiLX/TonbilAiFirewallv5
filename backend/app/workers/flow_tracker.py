@@ -319,7 +319,7 @@ async def _run_conntrack() -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
         return stdout.decode("utf-8", errors="replace")
     except asyncio.TimeoutError:
         logger.error("conntrack zaman asimi")

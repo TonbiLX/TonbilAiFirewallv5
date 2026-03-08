@@ -21,8 +21,8 @@ from app.services.timezone_service import now_local
 
 logger = logging.getLogger("tonbilai.bandwidth_monitor")
 
-# Polling aralığı (saniye) — 3s ile peak yakalama hassasiyeti artar
-POLL_INTERVAL = 3
+# Polling aralığı (saniye) — 10s optimal: yeterli hassasiyet, düşük overhead
+POLL_INTERVAL = 10
 
 # Saatlik snapshot aralığı (saniye)
 HOURLY_SNAPSHOT_INTERVAL = 3600
@@ -33,7 +33,7 @@ REDIS_PREFIX_TOTAL = "bw:total"          # HASH: upload_bps, download_bps
 REDIS_PREFIX_HISTORY = "bw:history:"     # LIST: son 300 JSON kayit
 REDIS_HISTORY_TOTAL = "bw:history:total"
 REDIS_KEY_TTL = 120  # 2 dakika TTL
-HISTORY_MAX_LEN = 600  # ~30 dk (3s aralikla)
+HISTORY_MAX_LEN = 300  # ~50 dk (10s aralikla)
 
 # nft reset semantigi: her read_ip_counters() cagrisi counter'lari sifirlar ve
 # delta deger dondurur. Onceki counter takibine gerek kalmaz.
@@ -320,9 +320,9 @@ async def start_bandwidth_monitor():
         try:
             loop_start = time.monotonic()
 
-            # Her 20 dongu (60s) bir IP listesini yenile
+            # Her 6 dongu (~60s) bir IP listesini yenile
             ip_refresh_counter += 1
-            if ip_refresh_counter >= 20:
+            if ip_refresh_counter >= 6:
                 ip_refresh_counter = 0
                 new_ip_to_id = await _get_known_device_ips(redis_client)
                 if new_ip_to_id != ip_to_id:
