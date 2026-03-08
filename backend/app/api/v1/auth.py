@@ -111,12 +111,12 @@ def _cleanup_memory_attempts():
         del _in_memory_attempts[ip]
 
 
-def _check_memory_rate_limit(client_ip: str):
+def _check_memory_rate_limit(client_ip: str, username: str | None = None):
     """In-memory rate limit kontrolü (Redis arizasi fallback)."""
     _cleanup_memory_attempts()
     now = _time.monotonic()
+    # IP bazli kontrol
     attempts = _in_memory_attempts.get(client_ip, [])
-    # Son LOCKOUT_SECONDS içindeki denemeleri filtrele
     recent = [t for t in attempts if now - t < LOCKOUT_SECONDS]
     _in_memory_attempts[client_ip] = recent
     if len(recent) >= MAX_LOGIN_ATTEMPTS:
@@ -125,60 +125,100 @@ def _check_memory_rate_limit(client_ip: str):
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Cok fazla başarısız giriş denemesi. {remaining} saniye sonra tekrar deneyin.",
         )
+    # Username bazli kontrol
+    if username:
+        user_key = f"user:{username}"
+        user_attempts = _in_memory_attempts.get(user_key, [])
+        user_recent = [t for t in user_attempts if now - t < LOCKOUT_SECONDS]
+        _in_memory_attempts[user_key] = user_recent
+        if len(user_recent) >= MAX_LOGIN_ATTEMPTS:
+            remaining = int(LOCKOUT_SECONDS - (now - user_recent[0]))
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Cok fazla başarısız giriş denemesi. {remaining} saniye sonra tekrar deneyin.",
+            )
 
 
-def _record_memory_attempt(client_ip: str):
+def _record_memory_attempt(client_ip: str, username: str | None = None):
     """In-memory başarısız deneme kaydi (Redis arizasi fallback)."""
     now = _time.monotonic()
     if client_ip not in _in_memory_attempts:
         _in_memory_attempts[client_ip] = []
     _in_memory_attempts[client_ip].append(now)
+    if username:
+        user_key = f"user:{username}"
+        if user_key not in _in_memory_attempts:
+            _in_memory_attempts[user_key] = []
+        _in_memory_attempts[user_key].append(now)
 
 
-async def check_rate_limit(redis: aioredis.Redis, client_ip: str):
-    """Brute force koruması: Başarısız giriş denemelerini kontrol et."""
+async def check_rate_limit(redis: aioredis.Redis, client_ip: str, username: str | None = None):
+    """Brute force koruması: Başarısız giriş denemelerini kontrol et (IP + username)."""
     try:
-        key = f"auth:failed:{client_ip}"
-        attempts = await redis.get(key)
-        if attempts and int(attempts) >= MAX_LOGIN_ATTEMPTS:
-            ttl = await redis.ttl(key)
-            logger.warning(f"Rate limit asildi: {client_ip} ({attempts} başarısız deneme)")
+        # IP bazli kontrol
+        ip_key = f"auth:failed:{client_ip}"
+        ip_attempts = await redis.get(ip_key)
+        if ip_attempts and int(ip_attempts) >= MAX_LOGIN_ATTEMPTS:
+            ttl = await redis.ttl(ip_key)
+            logger.warning(f"IP rate limit asildi: {client_ip} ({ip_attempts} başarısız deneme)")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"Cok fazla başarısız giriş denemesi. {ttl} saniye sonra tekrar deneyin.",
             )
+        # Username bazli kontrol (ek katman)
+        if username:
+            user_key = f"auth:failed:user:{username}"
+            user_attempts = await redis.get(user_key)
+            if user_attempts and int(user_attempts) >= MAX_LOGIN_ATTEMPTS:
+                ttl = await redis.ttl(user_key)
+                logger.warning(f"Username rate limit asildi: {username} ({user_attempts} başarısız deneme)")
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Cok fazla başarısız giriş denemesi. {ttl} saniye sonra tekrar deneyin.",
+                )
     except HTTPException:
         raise
     except Exception:
         # Redis arizasi - in-memory fallback kullan
         logger.warning(f"Redis ariza, in-memory rate limit kullanılıyor: {client_ip}")
-        _check_memory_rate_limit(client_ip)
+        _check_memory_rate_limit(client_ip, username)
 
 
-async def record_failed_attempt(redis: aioredis.Redis, client_ip: str):
-    """Başarısız giriş denemesini kaydet."""
+async def record_failed_attempt(redis: aioredis.Redis, client_ip: str, username: str | None = None):
+    """Başarısız giriş denemesini kaydet (IP + username)."""
     try:
-        key = f"auth:failed:{client_ip}"
+        # IP bazli kayit
+        ip_key = f"auth:failed:{client_ip}"
         pipe = redis.pipeline()
-        pipe.incr(key)
-        pipe.expire(key, LOCKOUT_SECONDS)
+        pipe.incr(ip_key)
+        pipe.expire(ip_key, LOCKOUT_SECONDS)
+        # Username bazli kayit
+        if username:
+            user_key = f"auth:failed:user:{username}"
+            pipe.incr(user_key)
+            pipe.expire(user_key, LOCKOUT_SECONDS)
         await pipe.execute()
-        count = await redis.get(key)
-        logger.warning(f"Başarısız giriş denemesi: {client_ip} (toplam: {count})")
+        count = await redis.get(ip_key)
+        logger.warning(f"Başarısız giriş denemesi: {client_ip} / user={username} (IP toplam: {count})")
     except Exception:
         # Redis arizasi - in-memory fallback
-        _record_memory_attempt(client_ip)
-        logger.warning(f"Redis ariza, in-memory kayit: {client_ip}")
+        _record_memory_attempt(client_ip, username)
+        logger.warning(f"Redis ariza, in-memory kayit: {client_ip} / user={username}")
 
 
-async def clear_failed_attempts(redis: aioredis.Redis, client_ip: str):
-    """Başarılı girişten sonra başarısız deneme sayacıni sıfırla."""
+async def clear_failed_attempts(redis: aioredis.Redis, client_ip: str, username: str | None = None):
+    """Başarılı girişten sonra başarısız deneme sayacıni sıfırla (IP + username)."""
     try:
-        await redis.delete(f"auth:failed:{client_ip}")
+        keys_to_delete = [f"auth:failed:{client_ip}"]
+        if username:
+            keys_to_delete.append(f"auth:failed:user:{username}")
+        await redis.delete(*keys_to_delete)
     except Exception:
         pass
     # In-memory'den de temizle
     _in_memory_attempts.pop(client_ip, None)
+    if username:
+        _in_memory_attempts.pop(f"user:{username}", None)
 
 
 @router.post("/login")
@@ -191,23 +231,23 @@ async def login(
     """Kullanıcı girişi - JWT token + httpOnly cookie + IP binding."""
     client_ip = get_client_ip(request)
 
-    # Rate limiting kontrolü
-    await check_rate_limit(redis, client_ip)
+    # Rate limiting kontrolü (hem IP hem username bazli)
+    await check_rate_limit(redis, client_ip, username=data.username)
 
     result = await db.execute(
         select(User).where(User.username == data.username)
     )
     user = result.scalar_one_or_none()
     if not user or not user.verify_password(data.password):
-        # Başarısız denemeyi kaydet
-        await record_failed_attempt(redis, client_ip)
+        # Başarısız denemeyi kaydet (hem IP hem username)
+        await record_failed_attempt(redis, client_ip, username=data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Kullanıcı adi veya şifre hatali",
         )
 
-    # Başarılı giriş - sayacı sıfırla
-    await clear_failed_attempts(redis, client_ip)
+    # Başarılı giriş - sayacı sıfırla (hem IP hem username)
+    await clear_failed_attempts(redis, client_ip, username=data.username)
 
     # Mobil platform icin IP binding atlanir (CGNAT, WiFi/Mobil gecis sorunlari)
     use_ip = client_ip if not data.platform else ""
@@ -313,10 +353,12 @@ async def check_setup(db: AsyncSession = Depends(get_db)):
 @router.post("/change-password")
 async def change_password(
     data: PasswordChange,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: aioredis.Redis = Depends(get_redis_dep),
 ):
-    """Şifre değiştir (JWT token gerekli)."""
+    """Şifre değiştir (JWT token gerekli). Tüm aktif oturumlar kapatılır."""
     if not current_user.verify_password(data.current_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -324,7 +366,19 @@ async def change_password(
         )
     current_user.password_hash = User.hash_password(data.new_password)
     await db.flush()
-    return {"message": "Şifre değiştirildi"}
+
+    # Tüm aktif oturumları kapat (auth:session:{user_id}:* pattern)
+    deleted = 0
+    try:
+        pattern = f"auth:session:{current_user.id}:*"
+        async for key in redis.scan_iter(match=pattern, count=100):
+            await redis.delete(key)
+            deleted += 1
+        logger.info(f"Şifre değiştirildi, {deleted} oturum kapatildi: {current_user.username}")
+    except Exception as e:
+        logger.warning(f"Oturum temizleme hatasi (devam edilecek): {e}")
+
+    return {"message": f"Şifre değiştirildi, {deleted} aktif oturum kapatildi"}
 
 
 @router.put("/profile", response_model=UserResponse)

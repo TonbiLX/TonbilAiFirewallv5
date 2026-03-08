@@ -6,7 +6,7 @@ from pydantic import BaseModel, field_validator
 
 
 def _validate_password_strength(password: str) -> str:
-    """Şifre karmasiklik kontrolü: en az 8 karakter, buyuk/kucuk harf, rakam."""
+    """Şifre karmasiklik kontrolü: en az 8 karakter, buyuk/kucuk harf, rakam, ozel karakter."""
     if len(password) < 8:
         raise ValueError("Şifre en az 8 karakter olmalıdır")
     if not re.search(r"[A-Z]", password):
@@ -15,6 +15,8 @@ def _validate_password_strength(password: str) -> str:
         raise ValueError("Şifre en az bir kucuk harf icermelidir")
     if not re.search(r"\d", password):
         raise ValueError("Şifre en az bir rakam icermelidir")
+    if not re.search(r"[!@#$%^&*()\-_=+\[\]{};':\"\\|,.<>/?`~]", password):
+        raise ValueError("Şifre en az bir ozel karakter icermelidir (!@#$%^&* vb.)")
     return password
 
 

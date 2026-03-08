@@ -3,6 +3,7 @@
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from app.api.deps import get_current_user
 from app.models.user import User
 from app.services import system_management_service as sms
@@ -10,6 +11,10 @@ from app.services import system_management_service as sms
 logger = logging.getLogger("tonbilai.api.system_management")
 
 router = APIRouter()
+
+
+class ConfirmAction(BaseModel):
+    confirm: bool = False
 
 
 # ============================================================================
@@ -87,9 +92,15 @@ async def stop_service(
 
 @router.post("/reboot")
 async def reboot_system(
+    data: ConfirmAction,
     current_user: User = Depends(get_current_user),
 ):
-    """Sistemi 3sn içinde yeniden başlat."""
+    """Sistemi 3sn içinde yeniden başlat. confirm=true gereklidir."""
+    if not data.confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="Onay gerekli: confirm=true gonderilmelidir",
+        )
     result = await sms.reboot_system()
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["message"])
@@ -98,9 +109,15 @@ async def reboot_system(
 
 @router.post("/shutdown")
 async def shutdown_system(
+    data: ConfirmAction,
     current_user: User = Depends(get_current_user),
 ):
-    """Sistemi 3sn içinde kapat."""
+    """Sistemi 3sn içinde kapat. confirm=true gereklidir."""
+    if not data.confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="Onay gerekli: confirm=true gonderilmelidir",
+        )
     result = await sms.shutdown_system()
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["message"])

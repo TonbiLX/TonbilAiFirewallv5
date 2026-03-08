@@ -24,7 +24,8 @@ router = APIRouter()
 logger = logging.getLogger("tonbilai.ws")
 
 
-MAX_WS_CONNECTIONS = 100  # Maksimum esanli WebSocket bağlantısi
+MAX_WS_CONNECTIONS = 100       # Maksimum esanli WebSocket bağlantısi
+MAX_CONNECTIONS_PER_IP = 5    # Tek IP'den maksimum esanli baglanti
 
 
 class ConnectionManager:
@@ -32,22 +33,48 @@ class ConnectionManager:
 
     def __init__(self):
         self.active_connections: list[WebSocket] = []
+        self._ip_counts: dict[str, int] = {}  # IP -> aktif baglanti sayisi
 
-    async def connect(self, websocket: WebSocket) -> bool:
-        """Bağlantı kabul et. Limit asildiysa False dondur."""
+    async def connect(self, websocket: WebSocket, client_ip: str = "") -> bool:
+        """Bağlantı kabul et. Global veya per-IP limit asildiysa False dondur."""
+        # Global limit kontrolü
         if len(self.active_connections) >= MAX_WS_CONNECTIONS:
-            logger.warning(f"WebSocket limit asildi ({MAX_WS_CONNECTIONS}), bağlantı reddedildi")
+            logger.warning(f"WebSocket global limit asildi ({MAX_WS_CONNECTIONS}), bağlantı reddedildi")
             await websocket.close(code=1013, reason="Server at capacity")
             return False
+
+        # Per-IP limit kontrolü
+        current_ip_count = self._ip_counts.get(client_ip, 0)
+        if client_ip and current_ip_count >= MAX_CONNECTIONS_PER_IP:
+            logger.warning(
+                f"WebSocket per-IP limit asildi: {client_ip} "
+                f"({current_ip_count}/{MAX_CONNECTIONS_PER_IP})"
+            )
+            await websocket.close(code=1013, reason="Too many connections from this IP")
+            return False
+
         await websocket.accept()
         self.active_connections.append(websocket)
-        logger.info(f"WebSocket baglandi. Aktif: {len(self.active_connections)}")
+        if client_ip:
+            self._ip_counts[client_ip] = current_ip_count + 1
+        logger.info(
+            f"WebSocket baglandi: {client_ip}. "
+            f"Aktif: {len(self.active_connections)}, "
+            f"IP count: {self._ip_counts.get(client_ip, 0)}"
+        )
         return True
 
-    def disconnect(self, websocket: WebSocket):
+    def disconnect(self, websocket: WebSocket, client_ip: str = ""):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-        logger.info(f"WebSocket koptu. Aktif: {len(self.active_connections)}")
+        if client_ip and client_ip in self._ip_counts:
+            self._ip_counts[client_ip] = max(0, self._ip_counts[client_ip] - 1)
+            if self._ip_counts[client_ip] == 0:
+                del self._ip_counts[client_ip]
+        logger.info(
+            f"WebSocket koptu: {client_ip}. "
+            f"Aktif: {len(self.active_connections)}"
+        )
 
 
 manager = ConnectionManager()
@@ -320,7 +347,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=No
         logger.warning(f"WebSocket auth başarısız, bağlantı reddedildi: {client_ip}")
         await websocket.close(code=1008, reason="Unauthorized")
         return
-    connected = await manager.connect(websocket)
+    connected = await manager.connect(websocket, client_ip=client_ip)
     if not connected:
         return
     try:
@@ -329,7 +356,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=No
             await websocket.send_json(data)
             await asyncio.sleep(3)
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        manager.disconnect(websocket, client_ip=client_ip)
     except Exception as e:
         logger.error(f"WebSocket hatasi: {e}")
-        manager.disconnect(websocket)
+        manager.disconnect(websocket, client_ip=client_ip)
