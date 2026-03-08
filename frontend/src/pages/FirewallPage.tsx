@@ -16,6 +16,7 @@ import {
   Globe,
   RefreshCw,
   ArrowUpDown,
+  Fingerprint,
 } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { StatCard } from "../components/common/StatCard";
@@ -25,6 +26,7 @@ import { LoadingSpinner } from "../components/common/LoadingSpinner";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { DdosProtectionTab } from "../components/firewall/DdosProtectionTab";
 import { SecuritySettingsTab } from "../components/firewall/SecuritySettingsTab";
+import { IpReputationTab } from "../components/firewall/IpReputationTab";
 import {
   fetchFirewallRules,
   createFirewallRule,
@@ -71,7 +73,7 @@ const emptyForm: RuleForm = {
   log_packets: false,
 };
 
-type ActiveTab = "rules" | "connections" | "scanner" | "ddos" | "security";
+type ActiveTab = "rules" | "connections" | "scanner" | "ddos" | "security" | "reputation";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -467,6 +469,15 @@ export function FirewallPage() {
           <div className="flex items-center gap-2">
             <Shield size={16} />
             Güvenlik Ayarları
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab("reputation")}
+          className={tabClass("reputation")}
+        >
+          <div className="flex items-center gap-2">
+            <Fingerprint size={16} />
+            IP İtibar
           </div>
         </button>
       </div>
@@ -1223,6 +1234,9 @@ export function FirewallPage() {
 
       {/* ===================== GÜVENLİK AYARLARI TAB ===================== */}
       {activeTab === "security" && <SecuritySettingsTab />}
+
+      {/* ===================== IP ITIBAR TAB ===================== */}
+      {activeTab === "reputation" && <IpReputationTab />}
     </div>
   );
 }

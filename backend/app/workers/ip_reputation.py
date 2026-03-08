@@ -45,6 +45,8 @@ REDIS_KEY_DAILY_CHECKS  = "reputation:daily_checks"
 REDIS_KEY_IP_PREFIX     = "reputation:ip:"
 REDIS_KEY_ACTIVE_IDS    = "flow:active_ids"
 REDIS_KEY_FLOW_PREFIX   = "flow:live:"
+REDIS_KEY_ENABLED       = "reputation:enabled"
+REDIS_KEY_COUNTRIES     = "reputation:blocked_countries"
 
 
 # ─── Yardimci fonksiyonlar ───────────────────────────────────────────────────
@@ -326,9 +328,57 @@ async def _process_ip(ip: str, api_key: str | None, redis) -> bool:
     return used_abuseipdb
 
 
+async def _get_blocked_countries(redis) -> list[str]:
+    """Redis'ten engellenen ulke kodlari listesini oku (JSON parse)."""
+    try:
+        raw = await redis.get(REDIS_KEY_COUNTRIES)
+        if raw:
+            return json.loads(raw)
+    except Exception as exc:
+        logger.warning(f"blocked_countries okunamadi: {exc}")
+    return []
+
+
+async def _check_country_block(ip: str, country_code: str, blocked_countries: list[str]) -> None:
+    """
+    IP'nin ulkesi engellenen ulkeler listesindeyse critical AiInsight yaz.
+    Bu kontrol AbuseIPDB skorundan bagimsiz calisir.
+    """
+    if not blocked_countries or not country_code:
+        return
+    if country_code.upper() not in [c.upper() for c in blocked_countries]:
+        return
+
+    message = (
+        f"Engellenen ulkeden baglanti tespit edildi: {ip} "
+        f"(Ulke: {country_code}) — Ulke engelleme listesinde mevcut."
+    )
+    action = (
+        f"'{ip}' adresini guvenlik duvarinda engelleyin. "
+        f"Bu IP engellenen ulke listesindeki '{country_code}' ulkesine ait."
+    )
+    logger.warning(f"[ULKE ENGEL] {message}")
+    await _write_ai_insight(Severity.CRITICAL, message, action, category="country_block")
+
+
 async def _run_reputation_cycle() -> None:
     """Tek bir itibar kontrol dongusunu calistir."""
     redis = await get_redis()
+
+    # ── Enabled bayragi kontrolu ──
+    try:
+        enabled_raw = await redis.get(REDIS_KEY_ENABLED)
+        # Key yoksa varsayilan olarak etkin; "0" ise devre disi
+        if enabled_raw == "0":
+            logger.debug("IP reputation worker devre disi (reputation:enabled=0). Dongu atlaniyor.")
+            return
+    except Exception as exc:
+        logger.warning(f"reputation:enabled okunamadi: {exc}")
+
+    # ── Engellenen ulkeler listesini al ──
+    blocked_countries = await _get_blocked_countries(redis)
+    if blocked_countries:
+        logger.debug(f"Engellenen ulkeler: {blocked_countries}")
 
     # AbuseIPDB API anahtarini Redis'ten al
     api_key: str | None = None
@@ -377,10 +427,16 @@ async def _run_reputation_cycle() -> None:
             await _process_ip(ip, api_key, redis)
             checked_count += 1
 
-            # Cache'den abuse_score oku (flagged sayisi icin)
-            cached = await redis.hget(f"{REDIS_KEY_IP_PREFIX}{ip}", "abuse_score")
-            if cached and int(cached) >= 50:
+            # Cache'den abuse_score ve country_code oku (flagged sayisi + ulke kontrolu icin)
+            cached_score = await redis.hget(f"{REDIS_KEY_IP_PREFIX}{ip}", "abuse_score")
+            cached_country = await redis.hget(f"{REDIS_KEY_IP_PREFIX}{ip}", "country_code")
+
+            if cached_score and int(cached_score) >= 50:
                 flagged_count += 1
+
+            # Ulke engelleme kontrolu (AbuseIPDB skorundan bagimsiz)
+            if blocked_countries and cached_country:
+                await _check_country_block(ip, cached_country, blocked_countries)
 
         except Exception as exc:
             logger.error(f"IP isleme hatasi {ip}: {exc}", exc_info=True)
