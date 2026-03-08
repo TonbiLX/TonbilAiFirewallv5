@@ -112,6 +112,37 @@ table inet tonbilai {
     # VPN masquerade için inet nat postrouting zincirini oluştur
     await ensure_nat_postrouting_chain()
 
+    # inet filter forward chain'ine ct state kuralini ekle (yoksa)
+    await ensure_inet_filter_forward()
+
+
+async def ensure_inet_filter_forward():
+    """inet filter forward chain'ine ct state established,related accept kuralini ekle.
+
+    inet filter tablosu sistem tarafindan yonetilir (nftables.service).
+    forward chain'i vardir ama genellikle bostur. Backend restart sonrasi
+    ct state kurali kaybolabilir. Bu fonksiyon idempotent sekilde ekler.
+
+    UYARI: inet filter input chain'indeki mevcut WAN koruma kurallarina dokunulmaz.
+    Sadece forward chain'e ct state kurali eklenir.
+    """
+    out = await run_nft(["list", "chain", "inet", "filter", "forward"], check=False)
+    if not out:
+        logger.warning("inet filter forward chain bulunamadi — atlaniyor")
+        return
+
+    if "ct state established,related accept" in out:
+        logger.debug("inet filter forward: ct state kurali zaten mevcut")
+        return
+
+    # insert ile en basa ekle (handle 0 yoksa add da ayni isi yapar)
+    await run_nft(
+        ["insert", "rule", "inet", "filter", "forward",
+         "ct", "state", "established,related", "accept"],
+        check=False,
+    )
+    logger.info("inet filter forward: ct state established,related accept kurali eklendi")
+
 
 async def ensure_nat_postrouting_chain():
     """inet nat postrouting zincirini oluştur (yoksa).
