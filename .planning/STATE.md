@@ -129,12 +129,12 @@ Progress: [██████░░░░] 40%
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 6 | Pi sistem denetimi: log, guvenlik, firewall, DDoS, API, servis izleme | 2026-03-08 | - | [6-pi-sistem-denetimi](./quick/6-pi-sistem-denetimi-log-analizi-g-venlik-/) |
+| 6 | Pi sistem denetimi + 7 duzeltme: WAN filter, forward chain, DB retention, DDoS LAN, wildcard IP, nginx rate limit, performans tuning | 2026-03-08 | 091a445, f24dc1c | [6-pi-sistem-denetimi](./quick/6-pi-sistem-denetimi-log-analizi-g-venlik-/) |
 
 ## Session Continuity
 
 Last session: 2026-03-08
-Stopped at: Quick task 6 (sistem denetimi) tamamlandi. Kritik bulgular rapor edildi.
+Stopped at: Sistem denetimi + 7 duzeltme ajan deploy edildi (091a445, f24dc1c). Dogrulama 11 PASS / 0 FAIL. Phase 10 planlamaya hazir.
 Resume file: .planning/phases/09-device-management/.continue-here-app-improvements.md
 
 ## Post-Milestone Work (GSD disi)
@@ -157,3 +157,9 @@ Resume file: .planning/phases/09-device-management/.continue-here-app-improvemen
 | 14 | Bandwidth monitor dead code temizligi | 75ea0c9 | 2026-03-08 | TAMAMLANDI + DEPLOY |
 | 15 | Pi: Redis 256→512MB, IRQ/RPS tuning, workers=1 | - | 2026-03-08 | TAMAMLANDI + DEPLOY |
 | 16 | Pi: systemd watchdog fix + hostapd/NM WiFi conflict fix | - | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 17 | WAN input filter: eth0 port whitelist + default drop | 091a445 | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 18 | Forward chain + DDoS LAN muafiyeti + ensure_inet_filter_forward | f24dc1c | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 19 | Firewall wildcard IP fix (_validate_ip graceful handle) | 091a445 | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 20 | Nginx: HTTP rate limit + /docs LAN-only + body 2m | - | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 21 | DB retention worker (flows 7g, dns 14g, traffic 30g) | 091a445 | 2026-03-08 | TAMAMLANDI + DEPLOY |
+| 22 | Pi: ring buffer 4096, conntrack 3600s, InnoDB 512MB, sysctl | - | 2026-03-08 | TAMAMLANDI + DEPLOY |
