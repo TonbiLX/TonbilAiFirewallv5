@@ -40,6 +40,7 @@ from app.workers.bandwidth_monitor import start_bandwidth_monitor
 from app.workers.flow_tracker import start_flow_tracker
 from app.services.system_monitor_service import start_system_monitor_worker
 from app.workers.wifi_monitor import start_wifi_monitor
+from app.workers.db_retention import start_db_retention_worker
 
 # Tum modelleri import et (tablo oluşturma için)
 from app.models import (  # noqa: F401
@@ -549,10 +550,13 @@ async def lifespan(app: FastAPI):
     # WiFi monitor worker - bagli istemci bilgilerini Redis'e yaz (30sn)
     wifi_monitor_task = asyncio.create_task(start_wifi_monitor())
 
+    # Veritabani retention worker - eski kayitlari periyodik temizler (6sa)
+    db_retention_task = asyncio.create_task(start_db_retention_worker())
+
     # systemd watchdog kick worker
     watchdog_task = asyncio.create_task(_watchdog_kick_worker())
 
-    logger.info("Arka plan iscileri başlatildi (blocklist + DNS proxy + cihaz kesfi + DHCP + tehdit analizci + telegram + sistem monitörü + LLM log analyzer + MAC resolver + 5651 log imzalama + trafik izleme + bandwidth monitor + flow tracker + DDoS monitor + WiFi schedule + WiFi monitor + watchdog).")
+    logger.info("Arka plan iscileri başlatildi (blocklist + DNS proxy + cihaz kesfi + DHCP + tehdit analizci + telegram + sistem monitörü + LLM log analyzer + MAC resolver + 5651 log imzalama + trafik izleme + bandwidth monitor + flow tracker + DDoS monitor + WiFi schedule + WiFi monitor + DB retention + watchdog).")
 
     # systemd'ye hazir sinyali gönder
     _sd_notify("READY=1")
@@ -578,6 +582,7 @@ async def lifespan(app: FastAPI):
     ddos_monitor_task.cancel()
     wifi_schedule_task.cancel()
     wifi_monitor_task.cancel()
+    db_retention_task.cancel()
     watchdog_task.cancel()
     await redis_pool.aclose()
     await engine.dispose()

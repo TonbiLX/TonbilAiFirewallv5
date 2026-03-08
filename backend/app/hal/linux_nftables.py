@@ -173,8 +173,15 @@ def _validate_mac(mac: str) -> str:
 
 
 def _validate_ip(ip: str) -> str:
-    """IP adresi veya CIDR formatini dogrula — command injection onlemi."""
+    """IP adresi veya CIDR formatini dogrula — command injection onlemi.
+
+    Wildcard degerler ('*', 'any', '') None dondurmez; cagiran kod ip=None
+    kontrolu yaparak nftables kural parcasini atlayabilir.
+    """
     import ipaddress
+    # Wildcard / any — nftables'da filtre eklenmez, None ile isin
+    if not ip or ip in ("*", "any"):
+        return None  # type: ignore[return-value]
     try:
         # CIDR veya tek IP
         if "/" in ip:
@@ -282,15 +289,17 @@ def build_nft_rule_expr(rule: Dict[str, Any]) -> str:
     elif protocol == "icmp":
         parts.append("ip protocol icmp")
 
-    # Kaynak IP (doğrulanmış)
+    # Kaynak IP (doğrulanmış) — '*' veya 'any' ise kural parçası eklenmez
     if source_ip:
         source_ip = _validate_ip(source_ip)
-        parts.append(f"ip saddr {source_ip}")
+        if source_ip:
+            parts.append(f"ip saddr {source_ip}")
 
-    # Hedef IP (doğrulanmış)
+    # Hedef IP (doğrulanmış) — '*' veya 'any' ise kural parçası eklenmez
     if dest_ip:
         dest_ip = _validate_ip(dest_ip)
-        parts.append(f"ip daddr {dest_ip}")
+        if dest_ip:
+            parts.append(f"ip daddr {dest_ip}")
 
     # Port
     if port and protocol not in ("icmp", "all"):
@@ -1001,23 +1010,24 @@ async def get_rule_hit_counts() -> Dict[int, Dict[str, int]]:
 async def add_blocked_subnet(subnet: str, timeout_seconds: int = 3600):
     """Subnet'i nftables forward+input zincirine kural olarak ekle.
     Set'e CIDR eklenemez, bu yuzden ayri kural olarak eklenir.
-    insert kullanilir (ct state established'dan ONCE gelmeli).
+    add kullanilir — ct state established,related accept kuralından SONRA eklenir.
+    Boylece mevcut baglantilar 16+ subnet kuralini taramaz, performans korunur.
     """
     comment = f"blocked_subnet_{subnet.replace('/', '_')}"
     # Forward zinciri
     await run_nft(
-        ["insert", "rule", "inet", "tonbilai", "forward",
+        ["add", "rule", "inet", "tonbilai", "forward",
          "ip", "saddr", subnet, "counter", "drop", "comment", f'"{comment}_fwd"'],
         check=False,
     )
     await run_nft(
-        ["insert", "rule", "inet", "tonbilai", "forward",
+        ["add", "rule", "inet", "tonbilai", "forward",
          "ip", "daddr", subnet, "counter", "drop", "comment", f'"{comment}_dst"'],
         check=False,
     )
     # Input zinciri
     await run_nft(
-        ["insert", "rule", "inet", "tonbilai", "input",
+        ["add", "rule", "inet", "tonbilai", "input",
          "ip", "saddr", subnet, "counter", "drop", "comment", f'"{comment}_in"'],
         check=False,
     )

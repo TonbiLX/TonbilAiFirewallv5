@@ -188,11 +188,16 @@ async def apply_ddos_nft_rules(config) -> int:
     # Bu yuzden her kural hem INPUT hem FORWARD chain'e eklenir.
     CHAINS = ["input", "forward"]
 
-    # 3. ICMP Flood — insert ile en basa ekle
+    # LAN subnet muafiyeti — LAN cihazlari DDoS meter'larina girmemeli
+    LAN_EXCLUDE = "ip saddr != 192.168.1.0/24"
+
+    # 3. ICMP Flood — add ile ekle (ct state established kuralından SONRA gelir,
+    # böylece established paketler 16+ subnet kuralını taramaz).
+    # LAN cihazları muaf tutulur.
     if config.icmp_flood_enabled:
         for chain in CHAINS:
             rules.append(
-                f'insert rule {TABLE} {chain} ip protocol icmp '
+                f'add rule {TABLE} {chain} {LAN_EXCLUDE} ip protocol icmp '
                 f'meter ddos_icmp_meter {{ ip saddr limit rate over {config.icmp_flood_rate}/second burst {config.icmp_flood_burst} packets }} '
                 f'add @ddos_icmp_attackers {{ ip saddr }} '
                 f'counter drop comment "{DDOS_COMMENT_PREFIX}icmp_flood"'
@@ -200,39 +205,39 @@ async def apply_ddos_nft_rules(config) -> int:
 
     # Geri kalan kurallar ct state established'tan sonra (add ile sona)
 
-    # 5. Geçersiz paket filtreleme
+    # 5. Geçersiz paket filtreleme — LAN muaf
     if config.invalid_packet_enabled:
         for chain in CHAINS:
-            rules.append(f'add rule {TABLE} {chain} ct state invalid add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}invalid_pkt"')
-            rules.append(f'add rule {TABLE} {chain} tcp flags & (fin | syn) == fin | syn add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}invalid_flags1"')
-            rules.append(f'add rule {TABLE} {chain} tcp flags & (syn | rst) == syn | rst add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}invalid_flags2"')
-            rules.append(f'add rule {TABLE} {chain} tcp flags & (fin | syn | rst | psh | ack | urg) == 0x0 add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}null_scan"')
+            rules.append(f'add rule {TABLE} {chain} {LAN_EXCLUDE} ct state invalid add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}invalid_pkt"')
+            rules.append(f'add rule {TABLE} {chain} {LAN_EXCLUDE} tcp flags & (fin | syn) == fin | syn add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}invalid_flags1"')
+            rules.append(f'add rule {TABLE} {chain} {LAN_EXCLUDE} tcp flags & (syn | rst) == syn | rst add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}invalid_flags2"')
+            rules.append(f'add rule {TABLE} {chain} {LAN_EXCLUDE} tcp flags & (fin | syn | rst | psh | ack | urg) == 0x0 add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}null_scan"')
 
-    # 1. SYN Flood
+    # 1. SYN Flood — LAN muaf
     if config.syn_flood_enabled:
         for chain in CHAINS:
             rules.append(
-                f'add rule {TABLE} {chain} tcp flags & (fin | syn | rst | ack) == syn '
+                f'add rule {TABLE} {chain} {LAN_EXCLUDE} tcp flags & (fin | syn | rst | ack) == syn '
                 f'meter ddos_syn_meter {{ ip saddr limit rate over {config.syn_flood_rate}/second burst {config.syn_flood_burst} packets }} '
                 f'add @ddos_syn_attackers {{ ip saddr }} '
                 f'counter drop comment "{DDOS_COMMENT_PREFIX}syn_flood"'
             )
 
-    # 2. UDP Flood
+    # 2. UDP Flood — LAN muaf
     if config.udp_flood_enabled:
         for chain in CHAINS:
             rules.append(
-                f'add rule {TABLE} {chain} ip protocol udp '
+                f'add rule {TABLE} {chain} {LAN_EXCLUDE} ip protocol udp '
                 f'meter ddos_udp_meter {{ ip saddr limit rate over {config.udp_flood_rate}/second burst {config.udp_flood_burst} packets }} '
                 f'add @ddos_udp_attackers {{ ip saddr }} '
                 f'counter drop comment "{DDOS_COMMENT_PREFIX}udp_flood"'
             )
 
-    # 4. Bağlantı Limiti (per-IP)
+    # 4. Bağlantı Limiti (per-IP) — LAN muaf
     if config.conn_limit_enabled:
         for chain in CHAINS:
             rules.append(
-                f'add rule {TABLE} {chain} ct state new '
+                f'add rule {TABLE} {chain} {LAN_EXCLUDE} ct state new '
                 f'meter ddos_connlimit {{ ip saddr ct count over {config.conn_limit_per_ip} }} '
                 f'counter reject comment "{DDOS_COMMENT_PREFIX}conn_limit"'
             )
