@@ -131,6 +131,7 @@ Progress: [██████░░░░] 40%
 |---|-------------|------|--------|-----------|
 | 6 | Pi sistem denetimi + 7 duzeltme: WAN filter, forward chain, DB retention, DDoS LAN, wildcard IP, nginx rate limit, performans tuning | 2026-03-08 | 091a445, f24dc1c | [6-pi-sistem-denetimi](./quick/6-pi-sistem-denetimi-log-analizi-g-venlik-/) |
 | 7 | IPTV performans: Redis pool singleton+timeout, poll interval 3→10s, eth1 ring buffer 4096 | 2026-03-08 | 91a095d, 8d6017f, a6d66d3 | [7-vestel-iptv](./quick/7-vestel-iptv-tak-lma-sorunu-ara-t-rma-son/) |
+| 8 | AI guvenlik sistemi arastirma: 5 paralel ajan ile DDoS ML, log analizi, API maliyet, Edge ML, mevcut sistem analizi | 2026-03-08 | - | [8-ai-guvenlik](./quick/8-ai-guvenlik-sistemi-arastirma-ddos-anali/) |
 
 ## Session Continuity
 
