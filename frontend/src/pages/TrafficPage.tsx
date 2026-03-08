@@ -34,6 +34,7 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
+  AlertTriangle,
 } from "lucide-react";
 
 // ─── Yardimci Fonksiyonlar ──────────────────────────────────
@@ -144,6 +145,7 @@ export function TrafficPage() {
   const [liveDirection, setLiveDirection] = useState("");
   const [liveSearchText, setLiveSearchText] = useState("");
   const [liveDomainFilter, setLiveDomainFilter] = useState("");
+  const [stateFilter, setStateFilter] = useState("");
 
   // Buyuk transferler
   const [largeTransfers, setLargeTransfers] = useState<LiveFlow[]>([]);
@@ -193,10 +195,11 @@ export function TrafficPage() {
 
   const loadLive = useCallback(async () => {
     try {
-      const params: Record<string, unknown> = { sort_by: "bytes_total", sort_order: "desc" };
+      const params: Record<string, unknown> = { sort_by: "bytes_total", sort_order: "desc", limit: 500 };
       if (liveProtocol) params.protocol = liveProtocol;
       if (liveDirection) params.direction = liveDirection;
       if (liveDomainFilter) params.dst_domain = liveDomainFilter;
+      if (stateFilter) params.state = stateFilter;
       const { data } = await fetchLiveFlows(
         params as Parameters<typeof fetchLiveFlows>[0]
       );
@@ -206,7 +209,7 @@ export function TrafficPage() {
     } finally {
       setLoading(false);
     }
-  }, [liveProtocol, liveDirection, liveDomainFilter]);
+  }, [liveProtocol, liveDirection, liveDomainFilter, stateFilter]);
 
   const loadLarge = useCallback(async () => {
     try {
@@ -618,6 +621,19 @@ export function TrafficPage() {
                   <option value="inbound">Gelen</option>
                   <option value="internal">Dahili</option>
                 </select>
+                <select
+                  value={stateFilter}
+                  onChange={(e) => setStateFilter(e.target.value)}
+                  className="bg-glass-light border border-glass-border text-white text-xs rounded-lg px-3 py-1.5 focus:border-neon-cyan/50 outline-none"
+                >
+                  <option value="">Tum Durumlar</option>
+                  <option value="ESTABLISHED">ESTABLISHED</option>
+                  <option value="SYN_RECV">SYN_RECV (Saldiri)</option>
+                  <option value="SYN_SENT">SYN_SENT</option>
+                  <option value="TIME_WAIT">TIME_WAIT</option>
+                  <option value="CLOSE_WAIT">CLOSE_WAIT</option>
+                  <option value="NONE">NONE (UDP)</option>
+                </select>
                 <input
                   type="text"
                   placeholder="Domain ara..."
@@ -635,6 +651,15 @@ export function TrafficPage() {
                   Yenile
                 </button>
               </div>
+
+              {stateFilter === "SYN_RECV" && liveFlows.length > 0 && (
+                <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 mb-3 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-400" />
+                  <span className="text-red-300 text-sm font-medium">
+                    {liveFlows.length} adet SYN_RECV baglantisi tespit edildi — Olasi SYN Flood saldirisi!
+                  </span>
+                </div>
+              )}
 
               {liveFlows.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">

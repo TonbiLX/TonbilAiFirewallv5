@@ -106,7 +106,10 @@ async def _ensure_attacker_sets():
     """Saldırgan IP takip set'lerini oluştur (yoksa)."""
     lines = []
     for name in ATTACKER_SETS:
-        lines.append(f'add set {TABLE} {name} {{ type ipv4_addr; timeout 5m; size 1024; flags dynamic; }}')
+        lines.append(f'add set {TABLE} {name} {{ type ipv4_addr; timeout 30m; size 4096; flags dynamic; }}')
+    # Meter'ları oluştur (per-IP rate limiting için)
+    for meter_name in ["ddos_syn_meter", "ddos_udp_meter", "ddos_icmp_meter"]:
+        lines.append(f'add set {TABLE} {meter_name} {{ type ipv4_addr; timeout 30m; size 65536; flags dynamic; }}')
     ok, err = await _run_nft_stdin("\n".join(lines) + "\n")
     if not ok:
         for line in lines:
@@ -130,6 +133,13 @@ async def _flush_ddos_rules():
                         ["delete", "rule", "inet", "tonbilai", chain, "handle", handle]
                     )
                     logger.debug(f"DDoS kural silindi: chain={chain} handle={handle}")
+
+    # Meter'ları temizle
+    for meter_name in ["ddos_syn_meter", "ddos_udp_meter", "ddos_icmp_meter"]:
+        try:
+            await _run_nft(["flush", "meter", "inet", "tonbilai", meter_name])
+        except Exception:
+            pass
 
 
 async def apply_ddos_nft_rules(config) -> int:
@@ -159,49 +169,58 @@ async def apply_ddos_nft_rules(config) -> int:
     # Cunku conntrack ICMP echo-request/reply ciftini "established" sayar
     # ve flood paketleri ct state kuralından gecip DDoS limitine ulasamaz.
 
+    # Bridge modda LAN cihazlarina yonelik saldirilar FORWARD chain uzerinden gecer.
+    # Bu yuzden her kural hem INPUT hem FORWARD chain'e eklenir.
+    CHAINS = ["input", "forward"]
+
     # 3. ICMP Flood — insert ile en basa ekle
     if config.icmp_flood_enabled:
-        rules.append(
-            f'insert rule {TABLE} input ip protocol icmp '
-            f'limit rate over {config.icmp_flood_rate}/second burst {config.icmp_flood_burst} packets '
-            f'add @ddos_icmp_attackers {{ ip saddr }} '
-            f'counter drop comment "{DDOS_COMMENT_PREFIX}icmp_flood"'
-        )
+        for chain in CHAINS:
+            rules.append(
+                f'insert rule {TABLE} {chain} ip protocol icmp '
+                f'meter ddos_icmp_meter {{ ip saddr limit rate over {config.icmp_flood_rate}/second burst {config.icmp_flood_burst} packets }} '
+                f'add @ddos_icmp_attackers {{ ip saddr }} '
+                f'counter drop comment "{DDOS_COMMENT_PREFIX}icmp_flood"'
+            )
 
     # Geri kalan kurallar ct state established'tan sonra (add ile sona)
 
     # 5. Geçersiz paket filtreleme
     if config.invalid_packet_enabled:
-        rules.append(f'add rule {TABLE} input ct state invalid add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}invalid_pkt"')
-        rules.append(f'add rule {TABLE} input tcp flags & (fin | syn) == fin | syn add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}invalid_flags1"')
-        rules.append(f'add rule {TABLE} input tcp flags & (syn | rst) == syn | rst add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}invalid_flags2"')
-        rules.append(f'add rule {TABLE} input tcp flags & (fin | syn | rst | psh | ack | urg) == 0x0 add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}null_scan"')
+        for chain in CHAINS:
+            rules.append(f'add rule {TABLE} {chain} ct state invalid add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}invalid_pkt"')
+            rules.append(f'add rule {TABLE} {chain} tcp flags & (fin | syn) == fin | syn add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}invalid_flags1"')
+            rules.append(f'add rule {TABLE} {chain} tcp flags & (syn | rst) == syn | rst add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}invalid_flags2"')
+            rules.append(f'add rule {TABLE} {chain} tcp flags & (fin | syn | rst | psh | ack | urg) == 0x0 add @ddos_invalid_attackers {{ ip saddr }} counter drop comment "{DDOS_COMMENT_PREFIX}null_scan"')
 
     # 1. SYN Flood
     if config.syn_flood_enabled:
-        rules.append(
-            f'add rule {TABLE} input tcp flags & (fin | syn | rst | ack) == syn '
-            f'limit rate over {config.syn_flood_rate}/second burst {config.syn_flood_burst} packets '
-            f'add @ddos_syn_attackers {{ ip saddr }} '
-            f'counter drop comment "{DDOS_COMMENT_PREFIX}syn_flood"'
-        )
+        for chain in CHAINS:
+            rules.append(
+                f'add rule {TABLE} {chain} tcp flags & (fin | syn | rst | ack) == syn '
+                f'meter ddos_syn_meter {{ ip saddr limit rate over {config.syn_flood_rate}/second burst {config.syn_flood_burst} packets }} '
+                f'add @ddos_syn_attackers {{ ip saddr }} '
+                f'counter drop comment "{DDOS_COMMENT_PREFIX}syn_flood"'
+            )
 
     # 2. UDP Flood
     if config.udp_flood_enabled:
-        rules.append(
-            f'add rule {TABLE} input ip protocol udp '
-            f'limit rate over {config.udp_flood_rate}/second burst {config.udp_flood_burst} packets '
-            f'add @ddos_udp_attackers {{ ip saddr }} '
-            f'counter drop comment "{DDOS_COMMENT_PREFIX}udp_flood"'
-        )
+        for chain in CHAINS:
+            rules.append(
+                f'add rule {TABLE} {chain} ip protocol udp '
+                f'meter ddos_udp_meter {{ ip saddr limit rate over {config.udp_flood_rate}/second burst {config.udp_flood_burst} packets }} '
+                f'add @ddos_udp_attackers {{ ip saddr }} '
+                f'counter drop comment "{DDOS_COMMENT_PREFIX}udp_flood"'
+            )
 
     # 4. Bağlantı Limiti (per-IP)
     if config.conn_limit_enabled:
-        rules.append(
-            f'add rule {TABLE} input ct state new '
-            f'meter ddos_connlimit {{ ip saddr ct count over {config.conn_limit_per_ip} }} '
-            f'counter reject comment "{DDOS_COMMENT_PREFIX}conn_limit"'
-        )
+        for chain in CHAINS:
+            rules.append(
+                f'add rule {TABLE} {chain} ct state new '
+                f'meter ddos_connlimit {{ ip saddr ct count over {config.conn_limit_per_ip} }} '
+                f'counter reject comment "{DDOS_COMMENT_PREFIX}conn_limit"'
+            )
 
     if not rules:
         logger.info("DDoS nft kurallari: hicbir koruma aktif degil")
@@ -400,8 +419,10 @@ async def get_ddos_status(config) -> list[dict]:
     """Her koruma için aktif durum kontrolü."""
     statuses = []
 
-    # nftables kurallari kontrol
-    nft_out = await _run_nft(["-a", "list", "chain", "inet", "tonbilai", "input"])
+    # nftables kurallari kontrol (hem input hem forward chain)
+    nft_out_input = await _run_nft(["-a", "list", "chain", "inet", "tonbilai", "input"])
+    nft_out_forward = await _run_nft(["-a", "list", "chain", "inet", "tonbilai", "forward"])
+    nft_out = nft_out_input + "\n" + nft_out_forward
 
     # 1. SYN Flood
     statuses.append({
@@ -492,24 +513,33 @@ async def get_ddos_status(config) -> list[dict]:
 # ============================================================================
 
 async def get_ddos_drop_counters() -> dict[str, dict]:
-    """nftables DDoS kurallarindaki counter degerlerini oku.
-    {rule_name: {"packets": int, "bytes": int}} dondurur."""
+    """nftables DDoS kurallarindaki counter degerlerini oku (input + forward).
+    {rule_name: {"packets": int, "bytes": int}} dondurur.
+    Ayni kural iki chain'de de varsa counter degerleri toplanir."""
     counters = {}
     try:
-        nft_out = await _run_nft(["-a", "list", "chain", "inet", "tonbilai", "input"])
-        for line in nft_out.splitlines():
-            # ddos_ comment'li kurallari bul
-            comment_match = re.search(r'comment "(' + DDOS_COMMENT_PREFIX + r'[^"]+)"', line)
-            if not comment_match:
-                continue
-            rule_name = comment_match.group(1)
-            # counter packets X bytes Y
-            counter_match = re.search(r'counter packets (\d+) bytes (\d+)', line)
-            if counter_match:
-                counters[rule_name] = {
-                    "packets": int(counter_match.group(1)),
-                    "bytes": int(counter_match.group(2)),
-                }
+        for chain in ("input", "forward"):
+            nft_out = await _run_nft(["-a", "list", "chain", "inet", "tonbilai", chain])
+            for line in nft_out.splitlines():
+                # ddos_ comment'li kurallari bul
+                comment_match = re.search(r'comment "(' + DDOS_COMMENT_PREFIX + r'[^"]+)"', line)
+                if not comment_match:
+                    continue
+                rule_name = comment_match.group(1)
+                # counter packets X bytes Y
+                counter_match = re.search(r'counter packets (\d+) bytes (\d+)', line)
+                if counter_match:
+                    pkt = int(counter_match.group(1))
+                    byt = int(counter_match.group(2))
+                    if rule_name in counters:
+                        # Ayni kural iki chain'de — topla
+                        counters[rule_name]["packets"] += pkt
+                        counters[rule_name]["bytes"] += byt
+                    else:
+                        counters[rule_name] = {
+                            "packets": pkt,
+                            "bytes": byt,
+                        }
     except Exception as e:
         logger.error(f"DDoS counter okuma hatasi: {e}")
     return counters
@@ -736,6 +766,25 @@ async def check_ddos_anomaly_and_alert():
             if real_alerts:
                 await _send_ddos_telegram_alert(real_alerts)
                 await _write_ddos_insight(real_alerts)
+
+                # Saldırgan IP'lerini Redis'e kalıcı kaydet (attack map geçmişi için)
+                try:
+                    import json as _json
+                    import time
+                    now = int(time.time())
+                    for alert in real_alerts:
+                        prot = alert["protection"]
+                        raw_ips = attacker_ips.get(prot, [])
+                        external_ips = [ip for ip in raw_ips if not _is_private_ip(ip)]
+                        for ip in external_ips[:20]:
+                            entry = _json.dumps({"ip": ip, "type": prot, "ts": now})
+                            await redis.zadd("ddos:attack_history", {entry: now})
+                    # 24 saat'ten eski kayıtları temizle
+                    cutoff = now - 86400
+                    await redis.zremrangebyscore("ddos:attack_history", 0, cutoff)
+                except Exception as e:
+                    logger.error(f"Saldırı geçmişi kayıt hatası: {e}")
+
                 # Cooldown ayarla
                 for alert in real_alerts:
                     cooldown_key = f"ddos:alert_cooldown:{alert['protection']}"
@@ -934,6 +983,24 @@ async def get_attack_map_data() -> dict:
         for ip in ips:
             if not _is_private_ip(ip):
                 all_ips.add(ip)
+
+    # Redis geçmişinden de IP'leri al (son 24 saat)
+    try:
+        from app.db.redis_client import get_redis
+        redis = await get_redis()
+        import time, json as _json
+        cutoff = int(time.time()) - 86400
+        history = await redis.zrangebyscore("ddos:attack_history", cutoff, "+inf")
+        for entry_bytes in history:
+            try:
+                entry = _json.loads(entry_bytes)
+                ip = entry.get("ip", "")
+                if ip and not _is_private_ip(ip):
+                    all_ips.add(ip)
+            except Exception:
+                pass
+    except Exception as e:
+        logger.error(f"Saldırı geçmişi okuma hatası: {e}")
 
     # GeoIP cozumle
     geo_data = await resolve_attacker_geoip(list(all_ips))

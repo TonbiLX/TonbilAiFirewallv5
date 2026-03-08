@@ -460,9 +460,10 @@ async def live_flows(
     dst_domain: Optional[str] = None,
     min_bytes: Optional[int] = None,
     direction: Optional[str] = None,
+    state: Optional[str] = Query(None, description="Filter by connection state (e.g. SYN_RECV, ESTABLISHED)"),
     sort_by: str = Query(default="bytes_total"),
     sort_order: str = Query(default="desc"),
-    limit: int = Query(default=200, le=500),
+    limit: int = Query(default=500, le=1000),
     current_user: User = Depends(get_current_user),
 ):
     """Canli aktif flow'lar (Redis'ten, gercek zamanli)."""
@@ -486,6 +487,8 @@ async def live_flows(
         flow = _redis_hash_to_flow(h)
 
         # Filtreler
+        if state and (flow.get("state") or "").upper() != state.upper():
+            continue
         if direction and flow.get("direction") != direction:
             continue
         if device_id is not None:
