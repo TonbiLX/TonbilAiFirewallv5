@@ -130,11 +130,12 @@ Progress: [██████░░░░] 40%
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 6 | Pi sistem denetimi + 7 duzeltme: WAN filter, forward chain, DB retention, DDoS LAN, wildcard IP, nginx rate limit, performans tuning | 2026-03-08 | 091a445, f24dc1c | [6-pi-sistem-denetimi](./quick/6-pi-sistem-denetimi-log-analizi-g-venlik-/) |
+| 7 | IPTV performans: Redis pool singleton+timeout, poll interval 3→10s, eth1 ring buffer 4096 | 2026-03-08 | 91a095d, 8d6017f, a6d66d3 | [7-vestel-iptv](./quick/7-vestel-iptv-tak-lma-sorunu-ara-t-rma-son/) |
 
 ## Session Continuity
 
 Last session: 2026-03-08
-Stopped at: Sistem denetimi + 7 duzeltme ajan deploy edildi (091a445, f24dc1c). Dogrulama 11 PASS / 0 FAIL. Phase 10 planlamaya hazir.
+Stopped at: Quick 7 tamamlandi — IPTV performans duzeltmeleri (Redis pool fix, poll interval, eth1 ring buffer) deploy edildi.
 Resume file: .planning/phases/09-device-management/.continue-here-app-improvements.md
 
 ## Post-Milestone Work (GSD disi)
