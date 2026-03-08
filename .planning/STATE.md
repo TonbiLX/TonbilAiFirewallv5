@@ -51,7 +51,7 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 Phase: 9 of 15 (Device Management) - COMPLETE
 Plan: 2 of 2 complete
 Status: Phase Complete, sistem bakim oturumu tamamlandi
-Last activity: 2026-03-08 — 10 kritik sistem duzeltmesi (commit 75ea0c9)
+Last activity: 2026-03-08 - Completed quick task 9: Welford Z-score + AbuseIPDB/GeoIP + LLM prompt + Telegram ozet
 
 Progress: [██████░░░░] 40%
 
@@ -132,6 +132,7 @@ Progress: [██████░░░░] 40%
 | 6 | Pi sistem denetimi + 7 duzeltme: WAN filter, forward chain, DB retention, DDoS LAN, wildcard IP, nginx rate limit, performans tuning | 2026-03-08 | 091a445, f24dc1c | [6-pi-sistem-denetimi](./quick/6-pi-sistem-denetimi-log-analizi-g-venlik-/) |
 | 7 | IPTV performans: Redis pool singleton+timeout, poll interval 3→10s, eth1 ring buffer 4096 | 2026-03-08 | 91a095d, 8d6017f, a6d66d3 | [7-vestel-iptv](./quick/7-vestel-iptv-tak-lma-sorunu-ara-t-rma-son/) |
 | 8 | AI guvenlik sistemi arastirma: 5 paralel ajan ile DDoS ML, log analizi, API maliyet, Edge ML, mevcut sistem analizi | 2026-03-08 | - | [8-ai-guvenlik](./quick/8-ai-guvenlik-sistemi-arastirma-ddos-anali/) |
+| 9 | Welford Z-score + AbuseIPDB/GeoIP + LLM prompt ozet + Gunluk Telegram raporu — 4 paralel ajan | 2026-03-08 | - | [9-welford-z-score](./quick/9-welford-z-score-abuseipdb-geoip-llm-prom/) |
 
 ## Session Continuity
 

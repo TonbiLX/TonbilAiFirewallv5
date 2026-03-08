@@ -1,16 +1,18 @@
 # --- Ajan: ANALIST (THE ANALYST) ---
 # Periyodik LLM DNS log analiz worker'i.
-# Son N DNS logunu LLM'e gönderir, bulguları AiInsight olarak yazar.
+# Son N DNS logunu istatistiksel ozet olarak LLM'e gönderir, bulguları AiInsight olarak yazar.
 
 import asyncio
 import json
 import logging
+import math
 import re
 import traceback
 import time
+from collections import Counter
 from datetime import datetime, timedelta
 
-from sqlalchemy import select, desc, func
+from sqlalchemy import select, desc, func, case
 
 from app.db.session import async_session_factory
 from app.models.dns_query_log import DnsQueryLog
@@ -20,8 +22,10 @@ from app.services.llm_providers import call_llm
 
 logger = logging.getLogger("tonbilai.llm_log_analyzer")
 
-LOG_ANALYSIS_PROMPT = """Asagida bir ev aginin son DNS sorgu loglari ve DDoS koruma istatistikleri bulunmaktadir.
+LOG_ANALYSIS_PROMPT = """Asagida bir ev aginin DNS analiz verileri ve DDoS koruma istatistikleri bulunmaktadir.
 Bu verileri analiz et ve bulgu varsa bildir.
+
+Asagidaki veriler istatistiksel ozet formatindadir. Ham log satiri yerine agregat veriler sunulmaktadir.
 
 Kontrol edilecek konular:
 1. Şüpheli trafik desenleri (DGA, DNS tuneli, flood)
@@ -30,6 +34,7 @@ Kontrol edilecek konular:
 4. Gereksiz tekrarlayan sorgular
 5. Belirli cihazlardan gelen anormal trafik
 6. DDoS saldırı göstergeleri (yuksek drop sayilari, ani artislar)
+7. Yuksek entropi degerine sahip domainler (DGA/DNS-tunnel adaylari)
 
 ONEMLI: Yanitini SADECE bir JSON dizisi olarak dondur. Baska açıklama veya yorum EKLEME.
 Eger bulgu yoksa sadece [] dondur.
@@ -47,7 +52,7 @@ JSON formati:
 Gecerli severity degerleri: info, warning, critical
 Gecerli category degerleri: security, privacy, optimization, anomaly
 
-DNS LOGLARI:
+DNS ANALIZ VERILERI:
 {log_data}
 
 DDOS KORUMA ISTATISTIKLERI:
@@ -92,6 +97,155 @@ async def _fetch_recent_logs(max_logs: int) -> list[dict]:
     except Exception as e:
         logger.error(f"DNS log getirme hatasi: {e}")
         return []
+
+
+def _shannon_entropy(s: str) -> float:
+    """Shannon entropy hesapla (DGA tespiti icin)."""
+    if not s:
+        return 0.0
+    freq = Counter(s)
+    length = len(s)
+    return -sum((c / length) * math.log2(c / length) for c in freq.values())
+
+
+async def _build_statistical_summary(interval_minutes: int, max_logs: int) -> str:
+    """DNS loglarindan istatistiksel ozet olustur.
+
+    Ham log satirlari yerine agregat veriler LLM'e gonderilir; bu sayede
+    token kullanimi %80-90 azalir.
+    """
+    async with async_session_factory() as session:
+        since = datetime.utcnow() - timedelta(minutes=interval_minutes)
+
+        # --- Toplam sorgu ve engelleme sayisi ---
+        total_result = await session.execute(
+            select(
+                func.count(DnsQueryLog.id).label("total"),
+                func.sum(case((DnsQueryLog.blocked == True, 1), else_=0)).label("blocked_count"),
+            ).where(DnsQueryLog.timestamp >= since)
+        )
+        total_row = total_result.one()
+        total = int(total_row.total or 0)
+        blocked_count = int(total_row.blocked_count or 0)
+        block_pct = (blocked_count / total * 100) if total else 0.0
+
+        lines = [
+            f"DNS ISTATISTIKSEL OZET (son {interval_minutes} dakika):",
+            f"Toplam sorgu: {total}, Engellenen: {blocked_count} (%{block_pct:.1f})",
+            "",
+        ]
+
+        # --- En cok sorgulanan 10 domain ---
+        top_domains_result = await session.execute(
+            select(DnsQueryLog.domain, func.count(DnsQueryLog.id).label("cnt"))
+            .where(DnsQueryLog.timestamp >= since)
+            .group_by(DnsQueryLog.domain)
+            .order_by(desc("cnt"))
+            .limit(10)
+        )
+        top_domains = top_domains_result.all()
+        if top_domains:
+            lines.append("EN COK SORGULANAN (Top 10):")
+            for i, row in enumerate(top_domains, 1):
+                lines.append(f"  {i}. {row.domain} ({row.cnt})")
+            lines.append("")
+
+        # --- En cok engellenen 10 domain ---
+        top_blocked_result = await session.execute(
+            select(DnsQueryLog.domain, func.count(DnsQueryLog.id).label("cnt"))
+            .where(DnsQueryLog.timestamp >= since, DnsQueryLog.blocked == True)
+            .group_by(DnsQueryLog.domain)
+            .order_by(desc("cnt"))
+            .limit(10)
+        )
+        top_blocked = top_blocked_result.all()
+        if top_blocked:
+            lines.append("EN COK ENGELLENEN (Top 10):")
+            for i, row in enumerate(top_blocked, 1):
+                lines.append(f"  {i}. {row.domain} ({row.cnt})")
+            lines.append("")
+
+        # --- Cihaz dagilimi: top 10 ---
+        device_result = await session.execute(
+            select(
+                DnsQueryLog.device_id,
+                func.count(DnsQueryLog.id).label("total"),
+                func.sum(case((DnsQueryLog.blocked == True, 1), else_=0)).label("blocked"),
+            )
+            .where(DnsQueryLog.timestamp >= since)
+            .group_by(DnsQueryLog.device_id)
+            .order_by(desc("total"))
+            .limit(10)
+        )
+        device_rows = device_result.all()
+        if device_rows:
+            lines.append("CIHAZ DAGILIMI (Top 10):")
+            for row in device_rows:
+                lines.append(f"  {row.device_id}: {row.total} sorgu, {int(row.blocked or 0)} engel")
+            lines.append("")
+
+        # --- Sorgu tipi dagilimi ---
+        qtype_result = await session.execute(
+            select(DnsQueryLog.query_type, func.count(DnsQueryLog.id).label("cnt"))
+            .where(DnsQueryLog.timestamp >= since)
+            .group_by(DnsQueryLog.query_type)
+            .order_by(desc("cnt"))
+        )
+        qtype_rows = qtype_result.all()
+        if qtype_rows:
+            parts = [f"{row.query_type}: {row.cnt}" for row in qtype_rows if row.query_type]
+            if parts:
+                lines.append("SORGU TIPLERI:")
+                lines.append("  " + ", ".join(parts))
+                lines.append("")
+
+        # --- Engelleme sebebi dagilimi ---
+        reason_result = await session.execute(
+            select(DnsQueryLog.block_reason, func.count(DnsQueryLog.id).label("cnt"))
+            .where(DnsQueryLog.timestamp >= since, DnsQueryLog.blocked == True)
+            .group_by(DnsQueryLog.block_reason)
+            .order_by(desc("cnt"))
+        )
+        reason_rows = reason_result.all()
+        if reason_rows:
+            parts = [f"{row.block_reason}: {row.cnt}" for row in reason_rows if row.block_reason]
+            if parts:
+                lines.append("ENGELLEME SEBEPLERI:")
+                lines.append("  " + ", ".join(parts))
+                lines.append("")
+
+        # --- Yuksek entropi domainler (DGA adaylari) ---
+        # Son 200 izin verilen sorgudan entropy hesapla; >= 3.5 olanlari raporla
+        entropy_sample_result = await session.execute(
+            select(DnsQueryLog.domain, DnsQueryLog.device_id)
+            .where(DnsQueryLog.timestamp >= since, DnsQueryLog.blocked == False)
+            .order_by(desc(DnsQueryLog.timestamp))
+            .limit(200)
+        )
+        entropy_rows = entropy_sample_result.all()
+        high_entropy = []
+        seen_domains: set[str] = set()
+        for row in entropy_rows:
+            domain = row.domain or ""
+            if not domain or domain in seen_domains:
+                continue
+            seen_domains.add(domain)
+            # Sadece subdomain kismindan entropy hesapla (TLD cikar)
+            parts = domain.split(".")
+            label = parts[0] if len(parts) >= 2 else domain
+            ent = _shannon_entropy(label)
+            if ent >= 3.5:
+                high_entropy.append((domain, ent, row.device_id or "?"))
+
+        # En yuksek entropi degerlerine gore sirala, max 10 goster
+        high_entropy.sort(key=lambda x: x[1], reverse=True)
+        if high_entropy:
+            lines.append("YUKSEK ENTROPILI DOMAINLER (DGA adayi):")
+            for domain, ent, device in high_entropy[:10]:
+                lines.append(f"  {domain} (entropy={ent:.2f}, cihaz={device})")
+            lines.append("")
+
+        return "\n".join(lines)
 
 
 def _parse_findings_json(response_text: str) -> list[dict]:
@@ -163,20 +317,30 @@ async def _fetch_ddos_counters() -> str:
 
 
 async def _analyze_logs(config: dict, logs: list[dict]) -> list[dict]:
-    """LLM'e loglari ve DDoS verilerini gönderip analiz sonuçlarini al."""
+    """LLM'e istatistiksel ozet (veya fallback: ham log satirlari) gonderip analiz sonuçlarini al."""
     if not logs:
         return []
 
-    # Log verisini metin formatina donustur
-    log_lines = []
-    for log in logs:
-        status = "ENGEL" if log["blocked"] else "IZIN"
-        reason = f" ({log['block_reason']})" if log["block_reason"] else ""
-        log_lines.append(
-            f"{log['timestamp']} | {log['device_ip']} | {log['domain']} | "
-            f"{log['query_type']} | {status}{reason}"
-        )
-    log_data = "\n".join(log_lines)
+    interval = config.get("log_analysis_interval_minutes", 60)
+    max_logs = config.get("log_analysis_max_logs", 100)
+
+    # Oncelikle istatistiksel ozet olusturmaya calis (token tasarrufu %80-90)
+    log_data: str
+    try:
+        log_data = await _build_statistical_summary(interval, max_logs)
+        logger.info("LLM analizi: istatistiksel ozet modu kullaniliyor.")
+    except Exception as e:
+        logger.warning(f"Istatistiksel ozet olusturulamadi, ham log moduna geciliyor: {e}")
+        # Fallback: eski ham log satiri formati
+        log_lines = []
+        for log in logs:
+            status = "ENGEL" if log["blocked"] else "IZIN"
+            reason = f" ({log['block_reason']})" if log["block_reason"] else ""
+            log_lines.append(
+                f"{log['timestamp']} | {log['device_ip']} | {log['domain']} | "
+                f"{log['query_type']} | {status}{reason}"
+            )
+        log_data = "\n".join(log_lines)
 
     # DDoS counter verilerini al
     ddos_data = await _fetch_ddos_counters()

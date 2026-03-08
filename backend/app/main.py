@@ -41,6 +41,9 @@ from app.workers.flow_tracker import start_flow_tracker
 from app.services.system_monitor_service import start_system_monitor_worker
 from app.workers.wifi_monitor import start_wifi_monitor
 from app.workers.db_retention import start_db_retention_worker
+from app.workers.traffic_baseline import start_traffic_baseline
+from app.workers.daily_summary import start_daily_summary
+from app.workers.ip_reputation import start_ip_reputation
 
 # Tum modelleri import et (tablo oluşturma için)
 from app.models import (  # noqa: F401
@@ -553,10 +556,19 @@ async def lifespan(app: FastAPI):
     # Veritabani retention worker - eski kayitlari periyodik temizler (6sa)
     db_retention_task = asyncio.create_task(start_db_retention_worker())
 
+    # Welford Z-score adaptif anomali tespiti (10s aralik, 120s baslangic gecikmesi)
+    baseline_task = asyncio.create_task(start_traffic_baseline())
+
+    # Gunluk Telegram guvenlik ozeti (her gun 08:00)
+    daily_summary_task = asyncio.create_task(start_daily_summary())
+
+    # IP itibar kontrolu — AbuseIPDB + GeoIP (5dk aralik, 180s baslangic gecikmesi)
+    ip_reputation_task = asyncio.create_task(start_ip_reputation())
+
     # systemd watchdog kick worker
     watchdog_task = asyncio.create_task(_watchdog_kick_worker())
 
-    logger.info("Arka plan iscileri başlatildi (blocklist + DNS proxy + cihaz kesfi + DHCP + tehdit analizci + telegram + sistem monitörü + LLM log analyzer + MAC resolver + 5651 log imzalama + trafik izleme + bandwidth monitor + flow tracker + DDoS monitor + WiFi schedule + WiFi monitor + DB retention + watchdog).")
+    logger.info("Arka plan iscileri başlatildi (blocklist + DNS proxy + cihaz kesfi + DHCP + tehdit analizci + telegram + sistem monitörü + LLM log analyzer + MAC resolver + 5651 log imzalama + trafik izleme + bandwidth monitor + flow tracker + DDoS monitor + WiFi schedule + WiFi monitor + DB retention + Welford baseline + gunluk ozet + IP reputation + watchdog).")
 
     # systemd'ye hazir sinyali gönder
     _sd_notify("READY=1")
@@ -583,6 +595,9 @@ async def lifespan(app: FastAPI):
     wifi_schedule_task.cancel()
     wifi_monitor_task.cancel()
     db_retention_task.cancel()
+    baseline_task.cancel()
+    daily_summary_task.cancel()
+    ip_reputation_task.cancel()
     watchdog_task.cancel()
     await redis_pool.aclose()
     await engine.dispose()
