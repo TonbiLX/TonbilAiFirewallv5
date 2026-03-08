@@ -50,11 +50,12 @@ interface ReputationSummary {
 
 interface ReputationIp {
   ip: string;
-  score: number;
-  country_code: string;
-  country_name: string;
+  abuse_score: number;
+  total_reports: number;
+  country: string;
   city: string;
   isp: string;
+  org: string;
   checked_at: string;
 }
 
@@ -77,7 +78,8 @@ const COUNTRY_FLAG_MAP: Record<string, string> = {
   US: "🇺🇸", DE: "🇩🇪", FR: "🇫🇷", TR: "🇹🇷",
 };
 
-function getFlag(code: string): string {
+function getFlag(code: string | undefined | null): string {
+  if (!code) return "🏳️";
   return COUNTRY_FLAG_MAP[code.toUpperCase()] ?? "🏳️";
 }
 
@@ -100,7 +102,7 @@ function maskApiKey(key: string): string {
 // ---- Skor Badge ----
 
 function ScoreBadge({ score }: { score: number }) {
-  if (score === 0) {
+  if (score == null || score === 0) {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-700/50 text-gray-400 border border-gray-600/30">
         BİLİNMİYOR
@@ -209,7 +211,7 @@ export function IpReputationTab() {
     setTesting(true);
     try {
       const res = await testAbuseipdbKey();
-      if (res.data?.success) {
+      if (res.data?.status === "ok") {
         showFeedback("API anahtarı geçerli.", true);
       } else {
         showFeedback(res.data?.message ?? "Test başarısız.", false);
@@ -267,7 +269,12 @@ export function IpReputationTab() {
     }
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-20 gap-4">
+      <LoadingSpinner />
+      <p className="text-gray-400 text-sm">IP İtibar verileri yükleniyor...</p>
+    </div>
+  );
 
   const dailyPct = summary && summary.daily_limit > 0
     ? Math.round((summary.daily_checks_used / summary.daily_limit) * 100)
@@ -586,9 +593,9 @@ export function IpReputationTab() {
                   <tr
                     key={ip.ip}
                     className={`transition-colors ${
-                      ip.score >= 80
+                      ip.abuse_score >= 80
                         ? "bg-neon-red/5 hover:bg-neon-red/8"
-                        : ip.score >= 50
+                        : ip.abuse_score >= 50
                         ? "bg-neon-amber/5 hover:bg-neon-amber/8"
                         : "hover:bg-white/3"
                     }`}
@@ -597,12 +604,12 @@ export function IpReputationTab() {
                       <code className="text-[#00F0FF] text-xs font-mono">{ip.ip}</code>
                     </td>
                     <td className="py-2.5 pr-4">
-                      <ScoreBadge score={ip.score} />
+                      <ScoreBadge score={ip.abuse_score} />
                     </td>
                     <td className="py-2.5 pr-4">
                       <span className="flex items-center gap-1.5 text-gray-300">
-                        <span>{getFlag(ip.country_code)}</span>
-                        <span className="text-xs">{ip.country_code || "—"}</span>
+                        <span>{getFlag(ip.country)}</span>
+                        <span className="text-xs">{ip.country || "—"}</span>
                       </span>
                     </td>
                     <td className="py-2.5 pr-4 text-gray-400 text-xs">{ip.city || "—"}</td>
