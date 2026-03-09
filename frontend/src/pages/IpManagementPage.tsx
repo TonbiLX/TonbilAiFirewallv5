@@ -12,6 +12,9 @@ import {
   Ban,
   Clock,
   ChevronDown,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { StatCard } from "../components/common/StatCard";
@@ -75,6 +78,13 @@ export function IpManagementPage() {
   });
 
   const [submitting, setSubmitting] = useState(false);
+
+  // Trusted IP siralama
+  const [trustedSortBy, setTrustedSortBy] = useState<"ip_address" | "description" | "created_at">("created_at");
+  const [trustedSortOrder, setTrustedSortOrder] = useState<"asc" | "desc">("desc");
+  // Blocked IP siralama
+  const [blockedSortBy, setBlockedSortBy] = useState<"ip_address" | "reason" | "blocked_at" | "is_manual">("blocked_at");
+  const [blockedSortOrder, setBlockedSortOrder] = useState<"asc" | "desc">("desc");
 
   // Sure değiştirme inline select state
   const [editingDurationIp, setEditingDurationIp] = useState<string | null>(null);
@@ -179,6 +189,18 @@ export function IpManagementPage() {
       console.error("Sure değiştirme hatasi:", err);
     }
   };
+
+  // --- Siralama fonksiyonlari ---
+
+  function handleTrustedSort(col: typeof trustedSortBy) {
+    if (trustedSortBy === col) setTrustedSortOrder(o => o === "asc" ? "desc" : "asc");
+    else { setTrustedSortBy(col); setTrustedSortOrder("asc"); }
+  }
+
+  function handleBlockedSort(col: typeof blockedSortBy) {
+    if (blockedSortBy === col) setBlockedSortOrder(o => o === "asc" ? "desc" : "asc");
+    else { setBlockedSortBy(col); setBlockedSortOrder("asc"); }
+  }
 
   // --- Yardimci fonksiyonlar ---
 
@@ -374,9 +396,45 @@ export function IpManagementPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-400 border-b border-glass-border">
-                    <th className="pb-3 pr-4">IP Adresi</th>
-                    <th className="pb-3 pr-4">Açıklama</th>
-                    <th className="pb-3 pr-4">Ekleme Tarihi</th>
+                    <th
+                      className="pb-3 pr-4 cursor-pointer select-none hover:text-white transition-colors"
+                      onClick={() => handleTrustedSort("ip_address")}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        IP Adresi
+                        {trustedSortBy === "ip_address" ? (
+                          trustedSortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 opacity-40" />
+                        )}
+                      </span>
+                    </th>
+                    <th
+                      className="pb-3 pr-4 cursor-pointer select-none hover:text-white transition-colors"
+                      onClick={() => handleTrustedSort("description")}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        Açıklama
+                        {trustedSortBy === "description" ? (
+                          trustedSortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 opacity-40" />
+                        )}
+                      </span>
+                    </th>
+                    <th
+                      className="pb-3 pr-4 cursor-pointer select-none hover:text-white transition-colors"
+                      onClick={() => handleTrustedSort("created_at")}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        Ekleme Tarihi
+                        {trustedSortBy === "created_at" ? (
+                          trustedSortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 opacity-40" />
+                        )}
+                      </span>
+                    </th>
                     <th className="pb-3 text-right">İşlem</th>
                   </tr>
                 </thead>
@@ -391,33 +449,41 @@ export function IpManagementPage() {
                       </td>
                     </tr>
                   )}
-                  {trustedIps.map((ip) => (
-                    <tr
-                      key={ip.id}
-                      className="border-b border-glass-border/50 hover:bg-glass-light transition-colors"
-                    >
-                      <td className="py-2.5 pr-4">
-                        <span className="font-mono text-neon-green">
-                          {ip.ip_address}
-                        </span>
-                      </td>
-                      <td className="py-2.5 pr-4 text-gray-300">
-                        {ip.description || "--"}
-                      </td>
-                      <td className="py-2.5 pr-4 text-xs text-gray-400">
-                        {formatDate(ip.created_at)}
-                      </td>
-                      <td className="py-2.5 text-right">
-                        <button
-                          onClick={() => handleDeleteTrustedIp(ip.id)}
-                          className="p-1.5 text-gray-500 hover:text-neon-red hover:bg-neon-red/10 rounded-lg transition-all"
-                          title="Güvenilir IP'yi Sil"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    const sortedTrustedIps = [...trustedIps].sort((a, b) => {
+                      const aVal = a[trustedSortBy] ?? "";
+                      const bVal = b[trustedSortBy] ?? "";
+                      const cmp = String(aVal).localeCompare(String(bVal));
+                      return trustedSortOrder === "asc" ? cmp : -cmp;
+                    });
+                    return sortedTrustedIps.map((ip) => (
+                      <tr
+                        key={ip.id}
+                        className="border-b border-glass-border/50 hover:bg-glass-light transition-colors"
+                      >
+                        <td className="py-2.5 pr-4">
+                          <span className="font-mono text-neon-green">
+                            {ip.ip_address}
+                          </span>
+                        </td>
+                        <td className="py-2.5 pr-4 text-gray-300">
+                          {ip.description || "--"}
+                        </td>
+                        <td className="py-2.5 pr-4 text-xs text-gray-400">
+                          {formatDate(ip.created_at)}
+                        </td>
+                        <td className="py-2.5 text-right">
+                          <button
+                            onClick={() => handleDeleteTrustedIp(ip.id)}
+                            className="p-1.5 text-gray-500 hover:text-neon-red hover:bg-neon-red/10 rounded-lg transition-all"
+                            title="Güvenilir IP'yi Sil"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ));
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -543,10 +609,58 @@ export function IpManagementPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-400 border-b border-glass-border">
-                    <th className="pb-3 pr-4">IP Adresi</th>
-                    <th className="pb-3 pr-4">Sebep</th>
-                    <th className="pb-3 pr-4">Engel Tarihi</th>
-                    <th className="pb-3 pr-4">Kaynak</th>
+                    <th
+                      className="pb-3 pr-4 cursor-pointer select-none hover:text-white transition-colors"
+                      onClick={() => handleBlockedSort("ip_address")}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        IP Adresi
+                        {blockedSortBy === "ip_address" ? (
+                          blockedSortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 opacity-40" />
+                        )}
+                      </span>
+                    </th>
+                    <th
+                      className="pb-3 pr-4 cursor-pointer select-none hover:text-white transition-colors"
+                      onClick={() => handleBlockedSort("reason")}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        Sebep
+                        {blockedSortBy === "reason" ? (
+                          blockedSortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 opacity-40" />
+                        )}
+                      </span>
+                    </th>
+                    <th
+                      className="pb-3 pr-4 cursor-pointer select-none hover:text-white transition-colors"
+                      onClick={() => handleBlockedSort("blocked_at")}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        Engel Tarihi
+                        {blockedSortBy === "blocked_at" ? (
+                          blockedSortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 opacity-40" />
+                        )}
+                      </span>
+                    </th>
+                    <th
+                      className="pb-3 pr-4 cursor-pointer select-none hover:text-white transition-colors"
+                      onClick={() => handleBlockedSort("is_manual")}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        Kaynak
+                        {blockedSortBy === "is_manual" ? (
+                          blockedSortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 opacity-40" />
+                        )}
+                      </span>
+                    </th>
                     <th className="pb-3 pr-4">Kalan Sure</th>
                     <th className="pb-3 text-right">İşlem</th>
                   </tr>
@@ -562,7 +676,18 @@ export function IpManagementPage() {
                       </td>
                     </tr>
                   )}
-                  {blockedIps.map((ip, idx) => (
+                  {(() => {
+                    const sortedBlockedIps = [...blockedIps].sort((a, b) => {
+                      if (blockedSortBy === "is_manual") {
+                        const cmp = (a.is_manual ? 1 : 0) - (b.is_manual ? 1 : 0);
+                        return blockedSortOrder === "asc" ? cmp : -cmp;
+                      }
+                      const aVal = a[blockedSortBy] ?? "";
+                      const bVal = b[blockedSortBy] ?? "";
+                      const cmp = String(aVal).localeCompare(String(bVal));
+                      return blockedSortOrder === "asc" ? cmp : -cmp;
+                    });
+                    return sortedBlockedIps.map((ip, idx) => (
                     <tr
                       key={ip.id ?? `redis-${idx}`}
                       className="border-b border-glass-border/50 hover:bg-glass-light transition-colors"
@@ -643,7 +768,8 @@ export function IpManagementPage() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    ));
+                  })()}
                 </tbody>
               </table>
             </div>
