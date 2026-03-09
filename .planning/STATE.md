@@ -51,7 +51,7 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 Phase: 9 of 15 (Device Management) - COMPLETE
 Plan: 2 of 2 complete
 Status: Phase Complete, sistem bakim oturumu tamamlandi
-Last activity: 2026-03-09 - Completed quick task 14: IP tablolarinda sutun siralama + zaman etiketi duzeltme
+Last activity: 2026-03-09 - Completed quick task 15: auto_block_ip zaman damgasi eksik duzeltme
 
 Progress: [██████░░░░] 40%
 
@@ -138,6 +138,7 @@ Progress: [██████░░░░] 40%
 | 12 | Guvenlik denetimi — reboot confirm, username rate limit, session invalidation, ozel karakter, WS per-IP limit | 2026-03-09 | 7642f2a | [12-guvenlik-denetimi](./quick/12-guvenlik-denetimi-bruteforce-koruma-auth/) |
 | 13 | IP engelleme/DDoS/AI Insight canli test + IP Reputation auto-block eklendi (skor>=80, ulke engeli) | 2026-03-09 | 0c7e15f | [13-ip-engelleme](./quick/13-ip-engelleme-ddos-koruma-ve-ai-insight-o/) |
 | 14 | IP tablolarinda sutun siralama: IpReputationTab 6 sutun + IpManagementPage 7 sutun (guvenilir+engellenen) | 2026-03-09 | 2925c87 | [14-ip-tablolarinda-sutun-siralama](./quick/14-ip-tablolarinda-sutun-siralama-zaman-eti/) |
+| 15 | auto_block_ip blocked_at timestamp eksik — otomatik engellenen IP'lerde tarih gozukmuyor fix | 2026-03-09 | ddd6260 | [15-auto-block-ip-timestamp](./quick/15-auto-block-ip-zaman-damgasi-eksik-engell/) |
 
 ## Session Continuity
 
