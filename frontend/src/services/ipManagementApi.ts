@@ -20,3 +20,9 @@ export const unblockIp = (ip_address: string) =>
   api.post('/ip-management/unblock', { ip_address });
 export const updateBlockedIpDuration = (data: { ip_address: string; duration_minutes: number | null }) =>
   api.put('/ip-management/blocked/duration', data);
+
+export const bulkUnblockIps = (ip_addresses: string[]) =>
+  api.put('/ip-management/blocked/bulk-unblock', { ip_addresses });
+
+export const bulkUpdateBlockedIpsDuration = (ip_addresses: string[], duration_minutes: number | null) =>
+  api.put('/ip-management/blocked/bulk-duration', { ip_addresses, duration_minutes });

@@ -19,6 +19,7 @@ from app.schemas.trusted_ip import TrustedIpCreate, TrustedIpResponse
 from app.schemas.blocked_ip import (
     BlockedIpCreate, BlockedIpResponse, BlockedIpUnblock,
     BlockedIpUpdateDuration, IpManagementStats,
+    BlockedIpBulkUnblock, BlockedIpBulkUpdateDuration, BulkOperationResult,
 )
 
 router = APIRouter()
@@ -340,6 +341,92 @@ async def unblock_ip(
         logger.info(f"IP engeli kaldırıldı: {data.ip_address}")
         return {"status": "ok", "message": f"{data.ip_address} engeli kaldırıldı."}
     raise HTTPException(status_code=404, detail="Bu IP engelli degil.")
+
+
+# ===== TOPLU ISLEMLER =====
+
+@router.put("/blocked/bulk-unblock", response_model=BulkOperationResult)
+async def bulk_unblock_ips(
+    data: BlockedIpBulkUnblock,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Birden fazla IP'nin engelini toplu kaldir."""
+    from app.workers.threat_analyzer import manual_unblock_ip
+
+    success = 0
+    failed_ips: list[str] = []
+
+    for ip in data.ip_addresses:
+        try:
+            # DB'den sil
+            existing = await db.scalar(
+                select(BlockedIp).where(BlockedIp.ip_address == ip)
+            )
+            if existing:
+                await db.delete(existing)
+                await db.flush()
+
+            # Redis'ten de kaldir
+            await manual_unblock_ip(ip)
+
+            logger.info(f"[Toplu] IP engeli kaldırıldı: {ip}")
+            success += 1
+        except Exception as e:
+            logger.warning(f"[Toplu] IP engel kaldirma hatasi {ip}: {e}")
+            failed_ips.append(ip)
+
+    return BulkOperationResult(
+        success_count=success,
+        failed_count=len(failed_ips),
+        failed_ips=failed_ips,
+    )
+
+
+@router.put("/blocked/bulk-duration", response_model=BulkOperationResult)
+async def bulk_update_duration(
+    data: BlockedIpBulkUpdateDuration,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Birden fazla IP'nin engel suresini toplu guncelle."""
+    from app.workers.threat_analyzer import update_block_ttl
+
+    # expires_at ve ttl hesapla
+    if data.duration_minutes is not None and data.duration_minutes > 0:
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=data.duration_minutes)
+        ttl_seconds = data.duration_minutes * 60
+    else:
+        expires_at = None
+        ttl_seconds = None
+
+    success = 0
+    failed_ips: list[str] = []
+
+    for ip in data.ip_addresses:
+        try:
+            # DB'de var mi?
+            blocked = await db.scalar(
+                select(BlockedIp).where(BlockedIp.ip_address == ip)
+            )
+            if blocked:
+                blocked.expires_at = expires_at
+                await db.flush()
+
+            # Redis TTL guncelle (DB kaydı olsun ya da olmasin)
+            await update_block_ttl(ip, ttl_seconds)
+
+            logger.info(f"[Toplu] IP engel suresi güncellendi: {ip} -> {data.duration_minutes or 'kalici'} dk")
+            success += 1
+        except Exception as e:
+            logger.warning(f"[Toplu] IP sure guncelleme hatasi {ip}: {e}")
+            failed_ips.append(ip)
+
+    return BulkOperationResult(
+        success_count=success,
+        failed_count=len(failed_ips),
+        failed_ips=failed_ips,
+    )
 
 
 # ===== YARDIMCI FONKSIYONLAR =====

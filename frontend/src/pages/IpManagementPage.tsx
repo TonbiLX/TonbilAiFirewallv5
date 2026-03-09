@@ -31,6 +31,8 @@ import {
   addBlockedIp,
   unblockIp,
   updateBlockedIpDuration,
+  bulkUnblockIps,
+  bulkUpdateBlockedIpsDuration,
 } from "../services/ipManagementApi";
 import type {
   TrustedIp,
@@ -89,6 +91,10 @@ export function IpManagementPage() {
   // Sure değiştirme inline select state
   const [editingDurationIp, setEditingDurationIp] = useState<string | null>(null);
 
+  // Toplu secim state
+  const [selectedBlockedIps, setSelectedBlockedIps] = useState<Set<string>>(new Set());
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
   const loadData = useCallback(async () => {
     try {
       const [statsRes, trustedRes, blockedRes] = await Promise.all([
@@ -99,6 +105,7 @@ export function IpManagementPage() {
       setStats(statsRes.data);
       setTrustedIps(trustedRes.data);
       setBlockedIps(blockedRes.data);
+      setSelectedBlockedIps(new Set());
       setError(null);
     } catch (err) {
       setError("IP yönetimi verileri yüklenemedi");
@@ -187,6 +194,44 @@ export function IpManagementPage() {
       const msg = err?.response?.data?.detail || "Süre değiştirilemedi";
       setError(msg);
       console.error("Sure değiştirme hatasi:", err);
+    }
+  };
+
+  // Sadece engellenen IP listesini yenile (secimi sifirlamadan)
+  const loadBlockedIps = async () => {
+    try {
+      const res = await fetchBlockedIps();
+      setBlockedIps(res.data);
+    } catch (err) {
+      console.error("Engellenen IP listesi yenileme hatasi:", err);
+    }
+  };
+
+  const handleBulkUnblock = async () => {
+    if (selectedBlockedIps.size === 0) return;
+    setBulkProcessing(true);
+    try {
+      await bulkUnblockIps(Array.from(selectedBlockedIps));
+      setSelectedBlockedIps(new Set());
+      await loadBlockedIps();
+    } catch (err) {
+      console.error("Toplu engel kaldirma hatasi:", err);
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
+  const handleBulkDuration = async (minutes: number | null) => {
+    if (selectedBlockedIps.size === 0) return;
+    setBulkProcessing(true);
+    try {
+      await bulkUpdateBlockedIpsDuration(Array.from(selectedBlockedIps), minutes);
+      setSelectedBlockedIps(new Set());
+      await loadBlockedIps();
+    } catch (err) {
+      console.error("Toplu sure guncelleme hatasi:", err);
+    } finally {
+      setBulkProcessing(false);
     }
   };
 
@@ -603,12 +648,82 @@ export function IpManagementPage() {
             </GlassCard>
           )}
 
+          {/* Toplu Islem Action Bar */}
+          {selectedBlockedIps.size > 0 && (
+            <div className="mb-3 flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 backdrop-blur">
+              <span className="text-sm text-[#00F0FF]">
+                {selectedBlockedIps.size} IP secildi
+              </span>
+              <button
+                onClick={handleBulkUnblock}
+                disabled={bulkProcessing}
+                className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium text-[#FF003C] border border-[#FF003C]/30 hover:bg-[#FF003C]/10 transition-colors disabled:opacity-50"
+              >
+                <Unlock className="h-3.5 w-3.5" />
+                Toplu Engel Kaldir
+              </button>
+              <select
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) return;
+                  handleBulkDuration(v === "null" ? null : parseInt(v));
+                  e.target.value = "";
+                }}
+                disabled={bulkProcessing}
+                className="rounded border border-[#FFB800]/30 bg-transparent px-2 py-1.5 text-xs text-[#FFB800] focus:outline-none focus:ring-1 focus:ring-[#FFB800]/50 cursor-pointer"
+                defaultValue=""
+              >
+                <option value="" disabled>Sure Belirle...</option>
+                <option value="30">30 dakika</option>
+                <option value="60">1 saat</option>
+                <option value="360">6 saat</option>
+                <option value="1440">1 gun</option>
+                <option value="10080">1 hafta</option>
+                <option value="null">Kalici</option>
+              </select>
+              <button
+                onClick={() => setSelectedBlockedIps(new Set())}
+                className="ml-auto text-xs text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                Secimi Temizle
+              </button>
+            </div>
+          )}
+
           {/* Engellenen IP Tablosu */}
           <GlassCard>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-400 border-b border-glass-border">
+                    <th className="pb-3 pr-2 w-8">
+                      {(() => {
+                        const sortedForSelect = [...blockedIps].sort((a, b) => {
+                          if (blockedSortBy === "is_manual") {
+                            const cmp = (a.is_manual ? 1 : 0) - (b.is_manual ? 1 : 0);
+                            return blockedSortOrder === "asc" ? cmp : -cmp;
+                          }
+                          const aVal = a[blockedSortBy] ?? "";
+                          const bVal = b[blockedSortBy] ?? "";
+                          const cmp = String(aVal).localeCompare(String(bVal));
+                          return blockedSortOrder === "asc" ? cmp : -cmp;
+                        });
+                        return (
+                          <input
+                            type="checkbox"
+                            checked={selectedBlockedIps.size === sortedForSelect.length && sortedForSelect.length > 0}
+                            onChange={() => {
+                              if (selectedBlockedIps.size === sortedForSelect.length) {
+                                setSelectedBlockedIps(new Set());
+                              } else {
+                                setSelectedBlockedIps(new Set(sortedForSelect.map(ip => ip.ip_address)));
+                              }
+                            }}
+                            className="rounded border-gray-600 bg-transparent text-[#00F0FF] focus:ring-[#00F0FF]/30 cursor-pointer"
+                          />
+                        );
+                      })()}
+                    </th>
                     <th
                       className="pb-3 pr-4 cursor-pointer select-none hover:text-white transition-colors"
                       onClick={() => handleBlockedSort("ip_address")}
@@ -669,7 +784,7 @@ export function IpManagementPage() {
                   {blockedIps.length === 0 && (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={7}
                         className="py-8 text-center text-gray-500"
                       >
                         Henüz engellenen IP yok
@@ -690,8 +805,21 @@ export function IpManagementPage() {
                     return sortedBlockedIps.map((ip, idx) => (
                     <tr
                       key={ip.id ?? `redis-${idx}`}
-                      className="border-b border-glass-border/50 hover:bg-glass-light transition-colors"
+                      className={`border-b border-glass-border/50 hover:bg-glass-light transition-colors ${selectedBlockedIps.has(ip.ip_address) ? "bg-white/5" : ""}`}
                     >
+                      <td className="py-2.5 pr-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedBlockedIps.has(ip.ip_address)}
+                          onChange={() => {
+                            const next = new Set(selectedBlockedIps);
+                            if (next.has(ip.ip_address)) next.delete(ip.ip_address);
+                            else next.add(ip.ip_address);
+                            setSelectedBlockedIps(next);
+                          }}
+                          className="rounded border-gray-600 bg-transparent text-[#00F0FF] focus:ring-[#00F0FF]/30 cursor-pointer"
+                        />
+                      </td>
                       <td className="py-2.5 pr-4">
                         <span className="font-mono text-neon-red">
                           {ip.ip_address}

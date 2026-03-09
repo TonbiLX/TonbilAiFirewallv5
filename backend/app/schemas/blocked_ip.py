@@ -40,3 +40,18 @@ class IpManagementStats(BaseModel):
     blocked_ip_count: int = 0
     manual_block_count: int = 0
     auto_block_count: int = 0
+
+
+class BlockedIpBulkUnblock(BaseModel):
+    ip_addresses: list[str]
+
+
+class BlockedIpBulkUpdateDuration(BaseModel):
+    ip_addresses: list[str]
+    duration_minutes: int | None = None  # None = kalici
+
+
+class BulkOperationResult(BaseModel):
+    success_count: int = 0
+    failed_count: int = 0
+    failed_ips: list[str] = []
