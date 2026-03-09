@@ -381,6 +381,117 @@ async def _process_ip(ip: str, api_key: str | None, redis) -> bool:
     return used_abuseipdb
 
 
+async def fetch_abuseipdb_blacklist(force: bool = False) -> dict:
+    """
+    AbuseIPDB blacklist endpoint'inden en tehlikeli IP'leri indir.
+    Gunluk 5 sorgu limiti var (ucretsiz hesap).
+    Returns: {"status": "ok"/"error", "count": N, "blocked": M, "message": "..."}
+    """
+    redis = await get_redis()
+
+    # API key kontrolu
+    api_key = await redis.get(REDIS_KEY_API_KEY)
+    if not api_key or not api_key.strip():
+        return {"status": "error", "count": 0, "blocked": 0, "message": "API anahtari ayarlanmamis"}
+    api_key = api_key.strip()
+
+    # Gunluk fetch limiti kontrolu
+    if not force:
+        daily_raw = await redis.get(REDIS_KEY_BLACKLIST_DAILY)
+        daily_fetches = int(daily_raw) if daily_raw else 0
+        if daily_fetches >= BLACKLIST_MAX_DAILY:
+            return {"status": "error", "count": 0, "blocked": 0, "message": f"Gunluk blacklist limiti doldu ({daily_fetches}/{BLACKLIST_MAX_DAILY})"}
+
+    # Ayarlari oku
+    min_score_raw = await redis.get(REDIS_KEY_BLACKLIST_MIN_SCORE)
+    limit_raw = await redis.get(REDIS_KEY_BLACKLIST_LIMIT)
+    auto_block_raw = await redis.get(REDIS_KEY_BLACKLIST_AUTO_BLOCK)
+
+    min_score = int(min_score_raw) if min_score_raw else 100
+    limit = int(limit_raw) if limit_raw else 10000
+    auto_block = (auto_block_raw != "0") if auto_block_raw is not None else True
+
+    # API cagirisi
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(
+                ABUSEIPDB_BLACKLIST_URL,
+                headers={"Key": api_key, "Accept": "application/json"},
+                params={"confidenceMinimum": min_score, "limit": limit},
+            )
+
+        if response.status_code != 200:
+            msg = f"AbuseIPDB blacklist hatasi: HTTP {response.status_code}"
+            logger.warning(msg)
+            return {"status": "error", "count": 0, "blocked": 0, "message": msg}
+
+        body = response.json()
+        ip_list = body.get("data", [])
+
+        # Eski blacklist verisini temizle
+        old_ips = await redis.smembers(REDIS_KEY_BLACKLIST_IPS)
+        if old_ips:
+            pipe = redis.pipeline()
+            for old_ip in old_ips:
+                pipe.delete(f"{REDIS_KEY_BLACKLIST_DATA_PREFIX}{old_ip}")
+            pipe.delete(REDIS_KEY_BLACKLIST_IPS)
+            await pipe.execute()
+
+        # Yeni verileri kaydet
+        blocked_count = 0
+        if ip_list:
+            pipe = redis.pipeline()
+            for item in ip_list:
+                ip_addr = item.get("ipAddress", "")
+                if not ip_addr:
+                    continue
+                pipe.sadd(REDIS_KEY_BLACKLIST_IPS, ip_addr)
+                pipe.hset(f"{REDIS_KEY_BLACKLIST_DATA_PREFIX}{ip_addr}", mapping={
+                    "ip": ip_addr,
+                    "abuse_score": str(item.get("abuseConfidenceScore", 0)),
+                    "country": item.get("countryCode", ""),
+                    "last_reported_at": item.get("lastReportedAt", ""),
+                })
+                pipe.expire(f"{REDIS_KEY_BLACKLIST_DATA_PREFIX}{ip_addr}", BLACKLIST_FETCH_INTERVAL * 2)
+            await pipe.execute()
+
+        count = len(ip_list)
+
+        # Auto-block
+        if auto_block and ip_list:
+            for item in ip_list[:500]:  # Max 500 IP auto-block (performans icin)
+                ip_addr = item.get("ipAddress", "")
+                score = item.get("abuseConfidenceScore", 0)
+                if ip_addr and score >= min_score:
+                    try:
+                        await auto_block_ip(ip_addr, f"AbuseIPDB blacklist (skor: {score})")
+                        blocked_count += 1
+                    except Exception:
+                        pass
+
+        # Meta veri guncelle
+        await redis.set(REDIS_KEY_BLACKLIST_LAST_FETCH, format_local_time())
+        await redis.set(REDIS_KEY_BLACKLIST_COUNT, str(count))
+        await redis.expire(REDIS_KEY_BLACKLIST_IPS, BLACKLIST_FETCH_INTERVAL * 2)
+
+        # Gunluk sayaci artir
+        fetch_count = await redis.incr(REDIS_KEY_BLACKLIST_DAILY)
+        if fetch_count == 1:
+            await redis.expire(REDIS_KEY_BLACKLIST_DAILY, CACHE_TTL)
+        ttl = await redis.ttl(REDIS_KEY_BLACKLIST_DAILY)
+        if ttl == -1:
+            await redis.expire(REDIS_KEY_BLACKLIST_DAILY, CACHE_TTL)
+
+        logger.info(f"AbuseIPDB blacklist: {count} IP indirildi, {blocked_count} otomatik engellendi")
+        return {"status": "ok", "count": count, "blocked": blocked_count, "message": f"{count} IP indirildi, {blocked_count} engellendi"}
+
+    except httpx.TimeoutException:
+        return {"status": "error", "count": 0, "blocked": 0, "message": "AbuseIPDB baglantisi zaman asimina ugradi"}
+    except Exception as exc:
+        logger.error(f"Blacklist fetch hatasi: {exc}")
+        return {"status": "error", "count": 0, "blocked": 0, "message": f"Hata: {exc}"}
+
+
 async def _get_blocked_countries(redis) -> list[str]:
     """Redis'ten engellenen ulke kodlari listesini oku (JSON parse)."""
     try:
@@ -429,6 +540,24 @@ async def _run_reputation_cycle() -> None:
             return
     except Exception as exc:
         logger.warning(f"reputation:enabled okunamadi: {exc}")
+
+    # ── Blacklist otomatik fetch (24 saatte 1) ──
+    try:
+        last_fetch_raw = await redis.get(REDIS_KEY_BLACKLIST_LAST_FETCH)
+        should_fetch = True
+        if last_fetch_raw:
+            # Son fetch'ten bu yana 24 saat gecti mi?
+            try:
+                last_dt = datetime.fromisoformat(last_fetch_raw.replace("+03:00", "").replace("Z", ""))
+                if (datetime.utcnow() - last_dt).total_seconds() < BLACKLIST_FETCH_INTERVAL:
+                    should_fetch = False
+            except Exception:
+                pass
+        if should_fetch:
+            logger.info("Blacklist otomatik fetch baslatiliyor...")
+            await fetch_abuseipdb_blacklist()
+    except Exception as exc:
+        logger.warning(f"Blacklist auto-fetch hatasi: {exc}")
 
     # ── Engellenen ulkeler listesini al ──
     blocked_countries = await _get_blocked_countries(redis)

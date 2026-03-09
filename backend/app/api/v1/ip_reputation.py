@@ -384,3 +384,95 @@ async def test_abuseipdb_key(
             "message": f"Test sırasında hata oluştu: {exc}",
             "data":    None,
         }
+
+
+@router.get("/blacklist")
+async def get_blacklist_ips(
+    current_user: User = Depends(get_current_user),
+):
+    """AbuseIPDB blacklist IP'lerini listele."""
+    redis = await get_redis()
+    ips = []
+    try:
+        ip_set = await redis.smembers("reputation:blacklist_ips")
+        for ip in ip_set:
+            data = await redis.hgetall(f"reputation:blacklist_data:{ip}")
+            if data:
+                ips.append({
+                    "ip": ip,
+                    "abuse_score": int(data.get("abuse_score", 0)),
+                    "country": data.get("country", ""),
+                    "last_reported_at": data.get("last_reported_at", ""),
+                })
+        ips.sort(key=lambda x: x["abuse_score"], reverse=True)
+    except Exception as exc:
+        logger.error(f"Blacklist listeleme hatasi: {exc}")
+
+    last_fetch = await redis.get("reputation:blacklist_last_fetch") or ""
+    total_count = await redis.get("reputation:blacklist_count") or "0"
+
+    return {
+        "ips": ips,
+        "total": len(ips),
+        "last_fetch": last_fetch,
+        "total_count": int(total_count),
+    }
+
+
+@router.post("/blacklist/fetch")
+async def trigger_blacklist_fetch(
+    current_user: User = Depends(get_current_user),
+):
+    """Manuel olarak AbuseIPDB blacklist fetch tetikle."""
+    from app.workers.ip_reputation import fetch_abuseipdb_blacklist
+    result = await fetch_abuseipdb_blacklist(force=False)
+    return result
+
+
+@router.get("/blacklist/config")
+async def get_blacklist_config(
+    current_user: User = Depends(get_current_user),
+):
+    """Blacklist ayarlarini dondur."""
+    redis = await get_redis()
+
+    auto_block_raw = await redis.get("reputation:blacklist_auto_block")
+    min_score_raw = await redis.get("reputation:blacklist_min_score")
+    limit_raw = await redis.get("reputation:blacklist_limit")
+    daily_raw = await redis.get("reputation:blacklist_daily_fetches")
+    last_fetch = await redis.get("reputation:blacklist_last_fetch") or ""
+    count = await redis.get("reputation:blacklist_count") or "0"
+
+    return {
+        "auto_block": (auto_block_raw != "0") if auto_block_raw is not None else True,
+        "min_score": int(min_score_raw) if min_score_raw else 100,
+        "limit": int(limit_raw) if limit_raw else 10000,
+        "daily_fetches": int(daily_raw) if daily_raw else 0,
+        "daily_limit": 5,
+        "last_fetch": last_fetch,
+        "total_count": int(count),
+    }
+
+
+@router.put("/blacklist/config")
+async def update_blacklist_config(
+    data: dict,
+    current_user: User = Depends(get_current_user),
+):
+    """Blacklist ayarlarini guncelle."""
+    redis = await get_redis()
+    updated = []
+
+    if "auto_block" in data:
+        await redis.set("reputation:blacklist_auto_block", "1" if data["auto_block"] else "0")
+        updated.append(f"auto_block={data['auto_block']}")
+    if "min_score" in data:
+        val = max(25, min(100, int(data["min_score"])))
+        await redis.set("reputation:blacklist_min_score", str(val))
+        updated.append(f"min_score={val}")
+    if "limit" in data:
+        val = max(100, min(10000, int(data["limit"])))
+        await redis.set("reputation:blacklist_limit", str(val))
+        updated.append(f"limit={val}")
+
+    return {"status": "ok", "updated": updated}
