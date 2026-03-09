@@ -143,12 +143,13 @@ Progress: [██████░░░░] 40%
 | 17 | AbuseIPDB blacklist entegrasyonu + gunluk limit API senkronizasyonu + kara liste UI | 2026-03-09 | 77ed2b6, d930922, bd6a0e5 | [17-abuseipdb-blacklist-entegrasyonu-gunluk-](./quick/17-abuseipdb-blacklist-entegrasyonu-gunluk-/) |
 | 18 | IP yonetimi engellenen IP sayfasina arama + sayfalama + dropdown tema fix | 2026-03-09 | 4f3789d | [18-ip-yonetimi-engellenen-ip-sayfasina-aram](./quick/18-ip-yonetimi-engellenen-ip-sayfasina-aram/) |
 | 19 | IP itibar sayfasi sorgulanan IP tablosuna arama + sayfalama + dropdown tema | 2026-03-09 | 3e06125 | [19-ip-itibar-sayfasi-sorgulanan-ip-tablosun](./quick/19-ip-itibar-sayfasi-sorgulanan-ip-tablosun/) |
+| 21 | AbuseIPDB blacklist UTC timezone fix + summary endpoint Redis key expire olunca canli limit sorgusu | 2026-03-09 | 68d9c24, ca05942 | [21-abuseipdb-limit-sync-blacklist-timezone-](./quick/21-abuseipdb-limit-sync-blacklist-timezone-/) |
 | 20 | IP reputation SQL migration — Redis-only'den SQL+Redis cache mimarisine gecis (2 model, migration SQL, dual-write worker, SQL-primary API) | 2026-03-09 | 2f8710e, 81ee466 | [20-ip-reputation-sql-migration-sorgulanan-i](./quick/20-ip-reputation-sql-migration-sorgulanan-i/) |
 
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Quick 20 tamamlandi — IP reputation SQL migration: dual-write worker + SQL-primary API eklendi.
+Stopped at: Quick 21 tamamlandi: AbuseIPDB blacklist UTC timezone fix + summary endpoint canli limit sorgusu
 Resume file: .planning/phases/09-device-management/.continue-here-app-improvements.md
 
 ## Post-Milestone Work (GSD disi)
