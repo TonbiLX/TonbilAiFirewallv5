@@ -145,11 +145,12 @@ Progress: [██████░░░░] 40%
 | 19 | IP itibar sayfasi sorgulanan IP tablosuna arama + sayfalama + dropdown tema | 2026-03-09 | 3e06125 | [19-ip-itibar-sayfasi-sorgulanan-ip-tablosun](./quick/19-ip-itibar-sayfasi-sorgulanan-ip-tablosun/) |
 | 21 | AbuseIPDB blacklist UTC timezone fix + summary endpoint Redis key expire olunca canli limit sorgusu | 2026-03-09 | 68d9c24, ca05942 | [21-abuseipdb-limit-sync-blacklist-timezone-](./quick/21-abuseipdb-limit-sync-blacklist-timezone-/) |
 | 20 | IP reputation SQL migration — Redis-only'den SQL+Redis cache mimarisine gecis (2 model, migration SQL, dual-write worker, SQL-primary API) | 2026-03-09 | 2f8710e, 81ee466 | [20-ip-reputation-sql-migration-sorgulanan-i](./quick/20-ip-reputation-sql-migration-sorgulanan-i/) |
+| 22 | IPTV cihaz destegi: is_iptv flag, DNS bypass (iptv:device_ids Redis SET), nftables raw_iptv multicast notrack + forward accept, frontend toggle + badge | 2026-03-09 | 257f7d0, 1eebe2a | [22-iptv-cihaz-destegi-device-iptv-toggle-mu](./quick/22-iptv-cihaz-destegi-device-iptv-toggle-mu/) |
 
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Quick 21 tamamlandi: AbuseIPDB blacklist UTC timezone fix + summary endpoint canli limit sorgusu
+Stopped at: Quick 22 tamamlandi: IPTV cihaz destegi — DNS bypass + nftables multicast/IGMP + frontend toggle/badge
 Resume file: .planning/phases/09-device-management/.continue-here-app-improvements.md
 
 ## Post-Milestone Work (GSD disi)
