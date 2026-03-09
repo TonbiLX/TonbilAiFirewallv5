@@ -15,6 +15,9 @@ import {
   AlertTriangle,
   CheckCircle,
   Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { GlassCard } from "../common/GlassCard";
 import { NeonBadge } from "../common/NeonBadge";
@@ -146,6 +149,8 @@ export function IpReputationTab() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [filterFlagged, setFilterFlagged] = useState(false);
+  const [sortBy, setSortBy] = useState<keyof ReputationIp>("checked_at");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [newCountry, setNewCountry] = useState("");
   const [feedback, setFeedback] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -260,6 +265,11 @@ export function IpReputationTab() {
     });
   };
 
+  function handleSort(col: keyof ReputationIp) {
+    if (sortBy === col) setSortOrder(o => o === "asc" ? "desc" : "asc");
+    else { setSortBy(col); setSortOrder("asc"); }
+  }
+
   const handlePresetCountry = (code: string) => {
     if (!config) return;
     if (config.blocked_countries.includes(code)) {
@@ -279,6 +289,19 @@ export function IpReputationTab() {
   const dailyPct = summary && summary.daily_limit > 0
     ? Math.round((summary.daily_checks_used / summary.daily_limit) * 100)
     : 0;
+
+  const filteredIps = ips.filter(ip =>
+    (!filterFlagged || ip.abuse_score >= 50)
+  );
+
+  const sortedIps = [...filteredIps].sort((a, b) => {
+    const aVal = a[sortBy] ?? "";
+    const bVal = b[sortBy] ?? "";
+    const cmp = typeof aVal === "number"
+      ? (aVal as number) - (bVal as number)
+      : String(aVal).localeCompare(String(bVal));
+    return sortOrder === "asc" ? cmp : -cmp;
+  });
 
   return (
     <div className="space-y-6">
@@ -580,16 +603,88 @@ export function IpReputationTab() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-glass-border text-xs text-gray-400 uppercase tracking-wider">
-                  <th className="text-left py-2 pr-4 font-medium">IP Adresi</th>
-                  <th className="text-left py-2 pr-4 font-medium">Skor</th>
-                  <th className="text-left py-2 pr-4 font-medium">Ülke</th>
-                  <th className="text-left py-2 pr-4 font-medium">Şehir</th>
-                  <th className="text-left py-2 pr-4 font-medium">ISP</th>
-                  <th className="text-left py-2 font-medium">Kontrol Tarihi</th>
+                  <th
+                    className="text-left py-2 pr-4 font-medium cursor-pointer select-none hover:text-white transition-colors"
+                    onClick={() => handleSort("ip")}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      IP Adresi
+                      {sortBy === "ip" ? (
+                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 opacity-40" />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    className="text-left py-2 pr-4 font-medium cursor-pointer select-none hover:text-white transition-colors"
+                    onClick={() => handleSort("abuse_score")}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      Skor
+                      {sortBy === "abuse_score" ? (
+                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 opacity-40" />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    className="text-left py-2 pr-4 font-medium cursor-pointer select-none hover:text-white transition-colors"
+                    onClick={() => handleSort("country")}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      Ülke
+                      {sortBy === "country" ? (
+                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 opacity-40" />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    className="text-left py-2 pr-4 font-medium cursor-pointer select-none hover:text-white transition-colors"
+                    onClick={() => handleSort("city")}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      Şehir
+                      {sortBy === "city" ? (
+                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 opacity-40" />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    className="text-left py-2 pr-4 font-medium cursor-pointer select-none hover:text-white transition-colors"
+                    onClick={() => handleSort("isp")}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      ISP
+                      {sortBy === "isp" ? (
+                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 opacity-40" />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    className="text-left py-2 font-medium cursor-pointer select-none hover:text-white transition-colors"
+                    onClick={() => handleSort("checked_at")}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      Kontrol Tarihi
+                      {sortBy === "checked_at" ? (
+                        sortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 opacity-40" />
+                      )}
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-glass-border/50">
-                {ips.map((ip) => (
+                {sortedIps.map((ip) => (
                   <tr
                     key={ip.ip}
                     className={`transition-colors ${
