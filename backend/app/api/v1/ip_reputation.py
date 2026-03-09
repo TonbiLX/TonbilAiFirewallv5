@@ -222,6 +222,32 @@ async def get_ip_reputation_summary(
     except Exception as exc:
         logger.debug(f"AbuseIPDB rate limit okunamadi: {exc}")
 
+    # Redis'te rate limit bilgisi yoksa (TTL dolmus veya hic yazilmamis),
+    # API anahtari varsa canli sorgu yaparak header'lardan limit bilgisini guncelle.
+    # Not: Bu sorgu 1 AbuseIPDB check hakkini harcar (nadir durum: sadece TTL sonrasi tetiklenir).
+    if abuseipdb_remaining is None or abuseipdb_limit is None:
+        try:
+            api_key_raw = await redis.get(REDIS_KEY_API_KEY)
+            if api_key_raw and api_key_raw.strip():
+                async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+                    resp = await client.get(
+                        ABUSEIPDB_URL,
+                        headers={"Key": api_key_raw.strip(), "Accept": "application/json"},
+                        params={"ipAddress": "8.8.8.8", "maxAgeInDays": 1},
+                    )
+                    if resp.status_code == 200:
+                        h_remaining = resp.headers.get("X-RateLimit-Remaining")
+                        h_limit     = resp.headers.get("X-RateLimit-Limit")
+                        if h_remaining is not None:
+                            abuseipdb_remaining = int(h_remaining)
+                            await redis.set("reputation:abuseipdb_remaining", str(abuseipdb_remaining), ex=86400)
+                        if h_limit is not None:
+                            abuseipdb_limit = int(h_limit)
+                            await redis.set("reputation:abuseipdb_limit", str(abuseipdb_limit), ex=86400)
+                        logger.info(f"AbuseIPDB limit canli guncellendi: {abuseipdb_remaining}/{abuseipdb_limit}")
+        except Exception as exc:
+            logger.debug(f"AbuseIPDB canli limit sorgusu basarisiz: {exc}")
+
     # Gercek API verisi varsa, yerel sayac yerine API verisini kullan (daha dogru)
     effective_limit = DAILY_LIMIT
     if abuseipdb_remaining is not None and abuseipdb_limit is not None:
