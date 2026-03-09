@@ -15,6 +15,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Search,
 } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { StatCard } from "../components/common/StatCard";
@@ -94,6 +95,14 @@ export function IpManagementPage() {
   // Toplu secim state
   const [selectedBlockedIps, setSelectedBlockedIps] = useState<Set<string>>(new Set());
   const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  // Engellenen IP arama + sayfalama
+  const [blockedSearchTerm, setBlockedSearchTerm] = useState("");
+  const [blockedPageSize, setBlockedPageSize] = useState(50);
+  const [blockedCurrentPage, setBlockedCurrentPage] = useState(1);
+
+  // Guvenilir IP arama
+  const [trustedSearchTerm, setTrustedSearchTerm] = useState("");
 
   const loadData = useCallback(async () => {
     try {
@@ -362,13 +371,29 @@ export function IpManagementPage() {
             <h3 className="text-sm font-semibold text-gray-300">
               Güvenilir IP Listesi
             </h3>
-            <button
-              onClick={() => setShowTrustedForm(!showTrustedForm)}
-              className="flex items-center gap-2 px-4 py-2 bg-neon-green/10 hover:bg-neon-green/20 border border-neon-green/30 text-neon-green rounded-xl text-sm transition-all"
-            >
-              <Plus size={16} />
-              {showTrustedForm ? "Formu Kapat" : "Güvenilir IP Ekle"}
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Arama input'u */}
+              <div className="relative">
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
+                />
+                <input
+                  type="text"
+                  value={trustedSearchTerm}
+                  onChange={(e) => setTrustedSearchTerm(e.target.value)}
+                  placeholder="IP veya açıklama ara..."
+                  className="bg-black border border-glass-border rounded-lg px-3 py-2 pl-9 text-sm text-[#00F0FF] placeholder-gray-500 focus:outline-none focus:border-[#00F0FF]/50 w-56"
+                />
+              </div>
+              <button
+                onClick={() => setShowTrustedForm(!showTrustedForm)}
+                className="flex items-center gap-2 px-4 py-2 bg-neon-green/10 hover:bg-neon-green/20 border border-neon-green/30 text-neon-green rounded-xl text-sm transition-all"
+              >
+                <Plus size={16} />
+                {showTrustedForm ? "Formu Kapat" : "Güvenilir IP Ekle"}
+              </button>
+            </div>
           </div>
 
           {/* Ekleme Formu */}
@@ -484,16 +509,6 @@ export function IpManagementPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {trustedIps.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="py-8 text-center text-gray-500"
-                      >
-                        Henüz güvenilir IP eklenmemiş
-                      </td>
-                    </tr>
-                  )}
                   {(() => {
                     const sortedTrustedIps = [...trustedIps].sort((a, b) => {
                       const aVal = a[trustedSortBy] ?? "";
@@ -501,7 +516,21 @@ export function IpManagementPage() {
                       const cmp = String(aVal).localeCompare(String(bVal));
                       return trustedSortOrder === "asc" ? cmp : -cmp;
                     });
-                    return sortedTrustedIps.map((ip) => (
+                    const filteredTrustedIps = sortedTrustedIps.filter(ip =>
+                      !trustedSearchTerm ||
+                      ip.ip_address.includes(trustedSearchTerm) ||
+                      (ip.description || "").toLowerCase().includes(trustedSearchTerm.toLowerCase())
+                    );
+                    if (filteredTrustedIps.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center text-gray-500">
+                            {trustedSearchTerm ? `"${trustedSearchTerm}" ile esleşen güvenilir IP bulunamadi` : "Henüz güvenilir IP eklenmemiş"}
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return filteredTrustedIps.map((ip) => (
                       <tr
                         key={ip.id}
                         className="border-b border-glass-border/50 hover:bg-glass-light transition-colors"
@@ -539,18 +568,55 @@ export function IpManagementPage() {
       {/* ===== ENGELLENEN IP SEKMESI ===== */}
       {activeTab === "blocked" && (
         <>
-          {/* Ekle Butonu */}
+          {/* Ekle Butonu + Arama + Sayfa Basina */}
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-300">
               Engellenen IP Listesi
             </h3>
-            <button
-              onClick={() => setShowBlockedForm(!showBlockedForm)}
-              className="flex items-center gap-2 px-4 py-2 bg-neon-red/10 hover:bg-neon-red/20 border border-neon-red/30 text-neon-red rounded-xl text-sm transition-all"
-            >
-              <Plus size={16} />
-              {showBlockedForm ? "Formu Kapat" : "IP Engelle"}
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Arama input'u */}
+              <div className="relative">
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
+                />
+                <input
+                  type="text"
+                  value={blockedSearchTerm}
+                  onChange={(e) => {
+                    setBlockedSearchTerm(e.target.value);
+                    setBlockedCurrentPage(1);
+                  }}
+                  placeholder="IP ara..."
+                  className="bg-black border border-glass-border rounded-lg px-3 py-2 pl-9 text-sm text-[#00F0FF] placeholder-gray-500 focus:outline-none focus:border-[#00F0FF]/50 w-64"
+                />
+              </div>
+              {/* Sayfa basina secim */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">Sayfa:</span>
+                <select
+                  value={blockedPageSize}
+                  onChange={(e) => {
+                    setBlockedPageSize(Number(e.target.value));
+                    setBlockedCurrentPage(1);
+                  }}
+                  style={{ backgroundColor: '#000' }}
+                  className="border border-glass-border rounded-lg px-2 py-2 text-sm text-[#00F0FF] focus:outline-none focus:border-[#00F0FF]/50 appearance-none cursor-pointer w-20"
+                >
+                  <option value={50} className="bg-black text-[#00F0FF]">50</option>
+                  <option value={100} className="bg-black text-[#00F0FF]">100</option>
+                  <option value={150} className="bg-black text-[#00F0FF]">150</option>
+                  <option value={200} className="bg-black text-[#00F0FF]">200</option>
+                </select>
+              </div>
+              <button
+                onClick={() => setShowBlockedForm(!showBlockedForm)}
+                className="flex items-center gap-2 px-4 py-2 bg-neon-red/10 hover:bg-neon-red/20 border border-neon-red/30 text-neon-red rounded-xl text-sm transition-all"
+              >
+                <Plus size={16} />
+                {showBlockedForm ? "Formu Kapat" : "IP Engelle"}
+              </button>
+            </div>
           </div>
 
           {/* Ekleme Formu */}
@@ -604,12 +670,15 @@ export function IpManagementPage() {
                               : Number(e.target.value),
                         }))
                       }
+                      style={{ backgroundColor: '#000' }}
                       className={selectClass}
                     >
                       {DURATION_OPTIONS.map((opt) => (
                         <option
                           key={opt.value ?? "permanent"}
                           value={opt.value ?? "permanent"}
+                          className="bg-black text-[#00F0FF]"
+                          style={{ backgroundColor: '#000', color: '#00F0FF' }}
                         >
                           {opt.label}
                         </option>
@@ -670,16 +739,17 @@ export function IpManagementPage() {
                   e.target.value = "";
                 }}
                 disabled={bulkProcessing}
-                className="rounded border border-[#FFB800]/30 bg-transparent px-2 py-1.5 text-xs text-[#FFB800] focus:outline-none focus:ring-1 focus:ring-[#FFB800]/50 cursor-pointer"
+                style={{ backgroundColor: '#000' }}
+                className="rounded border border-[#FFB800]/30 px-2 py-1.5 text-xs text-[#FFB800] focus:outline-none focus:ring-1 focus:ring-[#FFB800]/50 cursor-pointer"
                 defaultValue=""
               >
-                <option value="" disabled>Sure Belirle...</option>
-                <option value="30">30 dakika</option>
-                <option value="60">1 saat</option>
-                <option value="360">6 saat</option>
-                <option value="1440">1 gun</option>
-                <option value="10080">1 hafta</option>
-                <option value="null">Kalici</option>
+                <option value="" disabled className="bg-black text-[#00F0FF]" style={{ backgroundColor: '#000', color: '#00F0FF' }}>Sure Belirle...</option>
+                <option value="30" className="bg-black text-[#00F0FF]" style={{ backgroundColor: '#000', color: '#00F0FF' }}>30 dakika</option>
+                <option value="60" className="bg-black text-[#00F0FF]" style={{ backgroundColor: '#000', color: '#00F0FF' }}>1 saat</option>
+                <option value="360" className="bg-black text-[#00F0FF]" style={{ backgroundColor: '#000', color: '#00F0FF' }}>6 saat</option>
+                <option value="1440" className="bg-black text-[#00F0FF]" style={{ backgroundColor: '#000', color: '#00F0FF' }}>1 gun</option>
+                <option value="10080" className="bg-black text-[#00F0FF]" style={{ backgroundColor: '#000', color: '#00F0FF' }}>1 hafta</option>
+                <option value="null" className="bg-black text-[#00F0FF]" style={{ backgroundColor: '#000', color: '#00F0FF' }}>Kalici</option>
               </select>
               <button
                 onClick={() => setSelectedBlockedIps(new Set())}
@@ -708,15 +778,23 @@ export function IpManagementPage() {
                           const cmp = String(aVal).localeCompare(String(bVal));
                           return blockedSortOrder === "asc" ? cmp : -cmp;
                         });
+                        const filteredForSelect = sortedForSelect.filter(ip =>
+                          !blockedSearchTerm || ip.ip_address.includes(blockedSearchTerm)
+                        );
+                        const startIdx = (blockedCurrentPage - 1) * blockedPageSize;
+                        const pagedForSelect = filteredForSelect.slice(startIdx, startIdx + blockedPageSize);
                         return (
                           <input
                             type="checkbox"
-                            checked={selectedBlockedIps.size === sortedForSelect.length && sortedForSelect.length > 0}
+                            checked={pagedForSelect.length > 0 && pagedForSelect.every(ip => selectedBlockedIps.has(ip.ip_address))}
                             onChange={() => {
-                              if (selectedBlockedIps.size === sortedForSelect.length) {
-                                setSelectedBlockedIps(new Set());
+                              const allSelected = pagedForSelect.every(ip => selectedBlockedIps.has(ip.ip_address));
+                              if (allSelected) {
+                                const next = new Set(selectedBlockedIps);
+                                pagedForSelect.forEach(ip => next.delete(ip.ip_address));
+                                setSelectedBlockedIps(next);
                               } else {
-                                setSelectedBlockedIps(new Set(sortedForSelect.map(ip => ip.ip_address)));
+                                setSelectedBlockedIps(new Set([...selectedBlockedIps, ...pagedForSelect.map(ip => ip.ip_address)]));
                               }
                             }}
                             className="rounded border-gray-600 bg-transparent text-[#00F0FF] focus:ring-[#00F0FF]/30 cursor-pointer"
@@ -781,16 +859,6 @@ export function IpManagementPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {blockedIps.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="py-8 text-center text-gray-500"
-                      >
-                        Henüz engellenen IP yok
-                      </td>
-                    </tr>
-                  )}
                   {(() => {
                     const sortedBlockedIps = [...blockedIps].sort((a, b) => {
                       if (blockedSortBy === "is_manual") {
@@ -802,7 +870,29 @@ export function IpManagementPage() {
                       const cmp = String(aVal).localeCompare(String(bVal));
                       return blockedSortOrder === "asc" ? cmp : -cmp;
                     });
-                    return sortedBlockedIps.map((ip, idx) => (
+
+                    // Arama filtresi
+                    const filteredBlockedIps = sortedBlockedIps.filter(ip =>
+                      !blockedSearchTerm || ip.ip_address.includes(blockedSearchTerm)
+                    );
+
+                    // Sayfalama
+                    const totalFiltered = filteredBlockedIps.length;
+                    const totalPages = Math.ceil(totalFiltered / blockedPageSize);
+                    const startIndex = (blockedCurrentPage - 1) * blockedPageSize;
+                    const pagedBlockedIps = filteredBlockedIps.slice(startIndex, startIndex + blockedPageSize);
+
+                    if (pagedBlockedIps.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-gray-500">
+                            {blockedSearchTerm ? `"${blockedSearchTerm}" ile esleşen engellenen IP bulunamadi` : "Henüz engellenen IP yok"}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return pagedBlockedIps.map((ip, idx) => (
                     <tr
                       key={ip.id ?? `redis-${idx}`}
                       className={`border-b border-glass-border/50 hover:bg-glass-light transition-colors ${selectedBlockedIps.has(ip.ip_address) ? "bg-white/5" : ""}`}
@@ -851,15 +941,18 @@ export function IpManagementPage() {
                               );
                             }}
                             onBlur={() => setEditingDurationIp(null)}
-                            className="bg-surface-800 border border-neon-cyan/40 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-neon-cyan cursor-pointer"
+                            style={{ backgroundColor: '#000' }}
+                            className="border border-neon-cyan/40 rounded-lg px-2 py-1 text-xs text-[#00F0FF] focus:outline-none focus:border-neon-cyan cursor-pointer"
                           >
-                            <option value="__pick__" disabled>
+                            <option value="__pick__" disabled className="bg-black text-[#00F0FF]" style={{ backgroundColor: '#000', color: '#00F0FF' }}>
                               Süre Seç...
                             </option>
                             {DURATION_OPTIONS.map((opt) => (
                               <option
                                 key={opt.value ?? "permanent"}
                                 value={opt.value ?? "permanent"}
+                                className="bg-black text-[#00F0FF]"
+                                style={{ backgroundColor: '#000', color: '#00F0FF' }}
                               >
                                 {opt.label}
                               </option>
@@ -902,6 +995,50 @@ export function IpManagementPage() {
               </table>
             </div>
           </GlassCard>
+
+          {/* Sayfalama Kontrolleri */}
+          {(() => {
+            const sortedForPaging = [...blockedIps].sort((a, b) => {
+              if (blockedSortBy === "is_manual") {
+                const cmp = (a.is_manual ? 1 : 0) - (b.is_manual ? 1 : 0);
+                return blockedSortOrder === "asc" ? cmp : -cmp;
+              }
+              const aVal = a[blockedSortBy] ?? "";
+              const bVal = b[blockedSortBy] ?? "";
+              const cmp = String(aVal).localeCompare(String(bVal));
+              return blockedSortOrder === "asc" ? cmp : -cmp;
+            });
+            const filteredForPaging = sortedForPaging.filter(ip =>
+              !blockedSearchTerm || ip.ip_address.includes(blockedSearchTerm)
+            );
+            const totalFiltered = filteredForPaging.length;
+            const totalPages = Math.ceil(totalFiltered / blockedPageSize);
+            if (totalPages <= 1) return null;
+            return (
+              <div className="flex items-center justify-between px-1 py-2 text-sm">
+                <button
+                  onClick={() => setBlockedCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={blockedCurrentPage <= 1}
+                  className="px-3 py-1.5 text-[#00F0FF] border border-[#00F0FF]/30 rounded-lg hover:bg-[#00F0FF]/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-xs"
+                >
+                  &lt; Onceki
+                </button>
+                <span className="text-xs text-gray-400">
+                  Sayfa {blockedCurrentPage} / {totalPages}
+                  {blockedSearchTerm
+                    ? ` (filtrelenmis: ${totalFiltered} / ${blockedIps.length} IP)`
+                    : ` (toplam ${totalFiltered} IP)`}
+                </span>
+                <button
+                  onClick={() => setBlockedCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={blockedCurrentPage >= totalPages}
+                  className="px-3 py-1.5 text-[#00F0FF] border border-[#00F0FF]/30 rounded-lg hover:bg-[#00F0FF]/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-xs"
+                >
+                  Sonraki &gt;
+                </button>
+              </div>
+            );
+          })()}
         </>
       )}
     </div>
