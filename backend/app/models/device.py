@@ -31,6 +31,9 @@ class Device(Base):
     # Bant genişliği sinirlandirma
     bandwidth_limit_mbps = Column(Integer, nullable=True)   # None = limitsiz, >0 = Mbps sinir
 
+    # IPTV cihaz modu: DNS filtreleme bypass + multicast öncelik
+    is_iptv = Column(Boolean, default=False)
+
     # Risk Degerlendirme (Faz 3.5 v3)
     risk_score = Column(Integer, default=0)                 # 0-100 risk puani
     risk_level = Column(String(20), default="safe")         # safe/suspicious/dangerous

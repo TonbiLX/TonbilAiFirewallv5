@@ -53,6 +53,7 @@ class DeviceUpdate(BaseModel):
     hostname: Optional[str] = None
     manufacturer: Optional[str] = None
     profile_id: Optional[int] = None
+    is_iptv: Optional[bool] = None
     # is_blocked burada yok — block/unblock icin /block ve /unblock endpointleri kullanilmali
     # Dogrudan is_blocked degistirmek nftables kurallariyla tutarsizlik olusturur
 
@@ -102,6 +103,10 @@ class DeviceResponse(BaseModel):
     total_online_seconds: int = 0
     last_online_start: Optional[datetime] = None
     bandwidth_limit_mbps: Optional[int] = None
+    is_iptv: bool = False
+    device_type: Optional[str] = None
+    risk_score: int = 0
+    risk_level: str = "safe"
 
     class Config:
         from_attributes = True

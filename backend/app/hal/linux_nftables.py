@@ -2115,3 +2115,64 @@ async def cleanup_bridge_accounting():
 
     if cleaned:
         logger.info("Eski bridge accounting chain'leri temizlendi (TC mark korundu)")
+
+
+async def ensure_iptv_rules():
+    """IPTV multicast ve IGMP icin nftables kurallari.
+
+    - Multicast (224.0.0.0/4) ve IGMP paketlerini notrack yap (conntrack bypass)
+    - inet tonbilai forward chain'de multicast ve IGMP accept kurallari ekle
+    """
+    ruleset = await run_nft(["list", "ruleset"], check=False)
+
+    # 1) raw_iptv tablosu — multicast + IGMP notrack
+    if "table inet raw_iptv" not in ruleset:
+        logger.info("IPTV raw tablosu olusturuluyor...")
+        nft_commands = """table inet raw_iptv {
+    chain prerouting {
+        type filter hook prerouting priority raw; policy accept;
+        ip daddr 224.0.0.0/4 notrack
+        ip protocol igmp notrack
+    }
+    chain output {
+        type filter hook output priority raw; policy accept;
+        ip daddr 224.0.0.0/4 notrack
+        ip protocol igmp notrack
+    }
+}
+"""
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", NFT_BIN, "-f", "-",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate(input=nft_commands.encode())
+        if proc.returncode != 0:
+            err = stderr.decode().strip()
+            logger.error(f"IPTV raw tablo olusturma hatasi: {err}")
+        else:
+            logger.info("IPTV raw tablosu olusturuldu (multicast + IGMP notrack)")
+    else:
+        logger.debug("IPTV raw tablosu zaten mevcut")
+
+    # 2) inet tonbilai forward chain'e multicast + IGMP accept ekle
+    forward_out = await run_nft(
+        ["list", "chain", "inet", "tonbilai", "forward"], check=False
+    )
+
+    if "ip daddr 224.0.0.0/4 accept" not in forward_out:
+        await run_nft(
+            ["insert", "rule", "inet", "tonbilai", "forward",
+             "ip", "daddr", "224.0.0.0/4", "accept"],
+            check=False,
+        )
+        logger.info("IPTV: forward multicast accept kurali eklendi")
+
+    if "ip protocol igmp accept" not in forward_out:
+        await run_nft(
+            ["insert", "rule", "inet", "tonbilai", "forward",
+             "ip", "protocol", "igmp", "accept"],
+            check=False,
+        )
+        logger.info("IPTV: forward IGMP accept kurali eklendi")

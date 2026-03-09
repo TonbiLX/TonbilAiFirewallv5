@@ -628,6 +628,35 @@ class DnsProxyProtocol(asyncio.DatagramProtocol):
 
         self.stats["total_queries"] += 1
 
+        # IPTV cihaz bypass — tum filtrelemeyi atla, direkt upstream'e yonlendir
+        try:
+            _is_iptv = await self.redis.sismember("iptv:device_ids", client_ip)
+            if _is_iptv:
+                _iptv_response = await forward_to_upstream(data)
+                if _iptv_response:
+                    elapsed = (time.monotonic() - start_time) * 1000
+                    if self.transport:
+                        self.transport.sendto(_iptv_response, addr)
+                    self.query_log.append({
+                        "client_ip": client_ip,
+                        "domain": domain,
+                        "query_type": qtype_name,
+                        "blocked": False,
+                        "block_reason": "iptv_bypass",
+                        "upstream_response_ms": int(elapsed),
+                        "answer_ip": extract_answer_ip(_iptv_response),
+                        "timestamp": datetime.utcnow(),
+                        "destination_port": 53,
+                        "wan_ip": get_wan_ip(),
+                        "source_type": _source_type,
+                    })
+                    asyncio.ensure_future(
+                        cache_dns_ip_mapping(self.redis, domain, _iptv_response)
+                    )
+                return
+        except Exception:
+            pass
+
         blocked = False
         block_reason = None
 
@@ -969,6 +998,38 @@ async def handle_dot_client(
                 continue
 
             stats["total_queries"] += 1
+
+            # IPTV cihaz bypass — DoT uzerinden gelen sorguları da bypass et
+            try:
+                _is_iptv_dot = await redis_client.sismember("iptv:device_ids", client_ip)
+                if _is_iptv_dot:
+                    _iptv_dot_response = await forward_to_upstream(dns_data)
+                    if _iptv_dot_response is not None:
+                        elapsed_ms = (time.monotonic() - start_time) * 1000
+                        writer.write(
+                            struct.pack("!H", len(_iptv_dot_response)) + _iptv_dot_response
+                        )
+                        await writer.drain()
+                        _dot_source_iptv = "EXTERNAL" if not _is_local_client(client_ip) else "DOT"
+                        query_log.append({
+                            "client_ip": client_ip,
+                            "domain": domain,
+                            "query_type": qtype_name,
+                            "blocked": False,
+                            "block_reason": "iptv_bypass",
+                            "upstream_response_ms": int(elapsed_ms),
+                            "answer_ip": extract_answer_ip(_iptv_dot_response),
+                            "timestamp": datetime.utcnow(),
+                            "destination_port": 853,
+                            "wan_ip": get_wan_ip(),
+                            "source_type": _dot_source_iptv,
+                        })
+                        asyncio.ensure_future(
+                            cache_dns_ip_mapping(redis_client, domain, _iptv_dot_response)
+                        )
+                    continue
+            except Exception:
+                pass
 
             blocked = False
             block_reason = None

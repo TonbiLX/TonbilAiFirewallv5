@@ -432,6 +432,13 @@ async def lifespan(app: FastAPI):
             except Exception:
                 pass
 
+        # Migration: devices tablosuna is_iptv sutunu
+        try:
+            await conn.execute(text("ALTER TABLE devices ADD COLUMN is_iptv BOOLEAN DEFAULT FALSE"))
+            logger.info("Migration OK: devices.is_iptv sutunu eklendi")
+        except Exception:
+            pass  # Sutun zaten varsa sessizce gec
+
     # Redis ve HAL surucusunu başlat
     redis_client = await get_redis()
     driver = await get_network_driver(redis_client)
@@ -485,6 +492,29 @@ async def lifespan(app: FastAPI):
         logger.info("Bridge isolation ve persistence kurallari hazir (router modu)")
     except Exception as e:
         logger.error(f"Bridge isolation kurulum hatasi: {e}")
+
+    # IPTV nftables kurallari + Redis sync
+    try:
+        from app.hal.linux_nftables import ensure_iptv_rules
+        await ensure_iptv_rules()
+        # IPTV cihaz IP'lerini Redis'e yukle
+        from app.models.device import Device as DeviceModel
+        from sqlalchemy import select as sa_select
+        from app.db.session import async_session_factory as _iptv_session_factory
+        async with _iptv_session_factory() as _iptv_session:
+            _iptv_result = await _iptv_session.execute(
+                sa_select(DeviceModel).where(DeviceModel.is_iptv == True)  # noqa: E712
+            )
+            _iptv_devices = _iptv_result.scalars().all()
+            if _iptv_devices:
+                _iptv_ips = [d.ip_address for d in _iptv_devices if d.ip_address]
+                if _iptv_ips:
+                    await redis_client.delete("iptv:device_ids")
+                    await redis_client.sadd("iptv:device_ids", *_iptv_ips)
+                    logger.info(f"IPTV cihazlar Redis'e yuklendi: {len(_iptv_ips)} cihaz")
+        logger.info("IPTV nftables kurallari ve Redis sync hazir")
+    except Exception as e:
+        logger.error(f"IPTV kurulum hatasi: {e}")
 
     # Kategori/profil DNS domain setlerini blocklist cache hazir olduktan sonra olustur
     async def _build_category_profile_cache():

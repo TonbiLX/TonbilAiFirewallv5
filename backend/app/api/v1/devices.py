@@ -191,6 +191,15 @@ async def update_device(
                     _logger.warning(f"BW limit sifirla hatasi ({device.mac_address}): {e}")
                 await db.flush()
 
+    # IPTV cihaz degisikligi → Redis iptv:device_ids SET guncelle
+    if "is_iptv" in update_data and device.ip_address:
+        if device.is_iptv:
+            await redis_client.sadd("iptv:device_ids", device.ip_address)
+            _logger.info(f"IPTV cihaz eklendi: {device.hostname} ({device.ip_address})")
+        else:
+            await redis_client.srem("iptv:device_ids", device.ip_address)
+            _logger.info(f"IPTV cihaz cikarildi: {device.hostname} ({device.ip_address})")
+
     await db.refresh(device)
     return device
 
