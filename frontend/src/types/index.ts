@@ -30,6 +30,8 @@ export interface Device {
   device_type: string | null;
   // Bant genişliği siniri
   bandwidth_limit_mbps: number | null;
+  // IPTV cihaz modu
+  is_iptv: boolean;
   // Risk Degerlendirme
   risk_score: number;
   risk_level: "safe" | "suspicious" | "dangerous";

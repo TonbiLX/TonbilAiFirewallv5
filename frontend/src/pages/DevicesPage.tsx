@@ -557,6 +557,12 @@ export function DevicesPage() {
                             >
                               {device.hostname || "Bilinmeyen Cihaz"}
                             </p>
+                            {device.is_iptv && (
+                              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 shrink-0">
+                                <Tv size={10} />
+                                IPTV
+                              </span>
+                            )}
                             <button
                               onClick={() => startEditHostname(device)}
                               className="p-1 text-gray-500 hover:text-neon-cyan transition-colors"

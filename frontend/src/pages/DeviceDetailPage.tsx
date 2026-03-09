@@ -922,6 +922,39 @@ export function DeviceDetailPage() {
                     </div>
                   )}
                 </div>
+
+                {/* IPTV Cihazi */}
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">IPTV Cihazi</span>
+                    <span className="text-[10px] text-gray-600 mt-0.5">DNS filtreleme devre disi, multicast oncelikli</span>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await updateDevice(device.id, { is_iptv: !device.is_iptv });
+                        setFeedback({
+                          type: 'success',
+                          message: device.is_iptv ? 'IPTV modu kapatildi.' : 'IPTV modu acildi. DNS filtreleme devre disi.',
+                        });
+                        await loadDevice();
+                      } catch {
+                        setFeedback({ type: 'error', message: 'IPTV durumu guncellenirken hata olustu.' });
+                      }
+                    }}
+                    className={`relative w-11 h-6 rounded-full transition-all duration-300 ${
+                      device.is_iptv
+                        ? 'bg-neon-cyan/30 border border-neon-cyan/50 shadow-[0_0_10px_rgba(0,240,255,0.3)]'
+                        : 'bg-white/10 border border-white/20'
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-all duration-300 ${
+                      device.is_iptv
+                        ? 'translate-x-5 bg-neon-cyan shadow-[0_0_8px_rgba(0,240,255,0.5)]'
+                        : 'translate-x-0 bg-gray-500'
+                    }`} />
+                  </button>
+                </div>
               </div>
             </GlassCard>
 
