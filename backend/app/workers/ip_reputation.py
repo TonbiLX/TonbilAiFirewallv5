@@ -114,9 +114,9 @@ async def check_abuseipdb(ip: str, api_key: str) -> dict | None:
                     remaining = response.headers.get("X-RateLimit-Remaining")
                     limit = response.headers.get("X-RateLimit-Limit")
                     if remaining is not None:
-                        await redis.set("reputation:abuseipdb_remaining", str(remaining), ex=3600)
+                        await redis.set("reputation:abuseipdb_remaining", str(remaining), ex=CACHE_TTL)
                     if limit is not None:
-                        await redis.set("reputation:abuseipdb_limit", str(limit), ex=3600)
+                        await redis.set("reputation:abuseipdb_limit", str(limit), ex=CACHE_TTL)
                 except Exception as cache_exc:
                     logger.debug(f"Rate limit header kaydedilemedi: {cache_exc}")
 

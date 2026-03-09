@@ -203,15 +203,17 @@ async def get_ip_reputation_summary(
         logger.debug(f"AbuseIPDB rate limit okunamadi: {exc}")
 
     # Gercek API verisi varsa, yerel sayac yerine API verisini kullan (daha dogru)
+    effective_limit = DAILY_LIMIT
     if abuseipdb_remaining is not None and abuseipdb_limit is not None:
         daily_checks_used = abuseipdb_limit - abuseipdb_remaining
+        effective_limit = abuseipdb_limit
 
     return {
         "total_checked":       total_checked,
         "flagged_critical":    flagged_critical,
         "flagged_warning":     flagged_warning,
         "daily_checks_used":   daily_checks_used,
-        "daily_limit":         DAILY_LIMIT,
+        "daily_limit":         effective_limit,
         "abuseipdb_remaining": abuseipdb_remaining,
         "abuseipdb_limit":     abuseipdb_limit,
     }
