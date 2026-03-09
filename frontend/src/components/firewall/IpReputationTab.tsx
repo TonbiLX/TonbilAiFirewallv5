@@ -29,6 +29,10 @@ import {
   fetchReputationIps,
   clearReputationCache,
   testAbuseipdbKey,
+  fetchBlacklist,
+  triggerBlacklistFetch,
+  fetchBlacklistConfig,
+  updateBlacklistConfig,
 } from "../../services/ipReputationApi";
 
 // ---- Tipler ----
@@ -62,6 +66,23 @@ interface ReputationIp {
   isp: string;
   org: string;
   checked_at: string;
+}
+
+interface BlacklistConfig {
+  auto_block: boolean;
+  min_score: number;
+  limit: number;
+  daily_fetches: number;
+  daily_limit: number;
+  last_fetch: string;
+  total_count: number;
+}
+
+interface BlacklistIp {
+  ip: string;
+  abuse_score: number;
+  country: string;
+  last_reported_at: string;
 }
 
 // ---- Sabitler ----
@@ -156,10 +177,30 @@ export function IpReputationTab() {
   const [newCountry, setNewCountry] = useState("");
   const [feedback, setFeedback] = useState<{ msg: string; ok: boolean } | null>(null);
 
+  // Blacklist state
+  const [blacklistConfig, setBlacklistConfig] = useState<BlacklistConfig | null>(null);
+  const [blacklistIps, setBlacklistIps] = useState<BlacklistIp[]>([]);
+  const [blacklistFetching, setBlacklistFetching] = useState(false);
+  const [blacklistSearch, setBlacklistSearch] = useState("");
+  const [blacklistExpanded, setBlacklistExpanded] = useState(false);
+
   const showFeedback = (msg: string, ok: boolean) => {
     setFeedback({ msg, ok });
     setTimeout(() => setFeedback(null), 3000);
   };
+
+  const loadBlacklistData = useCallback(async () => {
+    try {
+      const [configRes, listRes] = await Promise.all([
+        fetchBlacklistConfig(),
+        fetchBlacklist(),
+      ]);
+      setBlacklistConfig(configRes.data);
+      setBlacklistIps(listRes.data.ips || []);
+    } catch (err) {
+      console.error("Blacklist veri yukleme hatasi:", err);
+    }
+  }, []);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -177,7 +218,8 @@ export function IpReputationTab() {
     } finally {
       setLoading(false);
     }
-  }, []);
+    await loadBlacklistData();
+  }, [loadBlacklistData]);
 
   const loadIps = useCallback(async () => {
     try {
@@ -265,6 +307,29 @@ export function IpReputationTab() {
       ...config,
       blocked_countries: config.blocked_countries.filter((c) => c !== code),
     });
+  };
+
+  const handleBlacklistFetch = async () => {
+    setBlacklistFetching(true);
+    try {
+      const res = await triggerBlacklistFetch();
+      const data = res.data;
+      alert(data.message || "Blacklist fetch tamamlandi");
+      await loadBlacklistData();
+    } catch (err) {
+      console.error("Blacklist fetch hatasi:", err);
+    } finally {
+      setBlacklistFetching(false);
+    }
+  };
+
+  const handleBlacklistConfigUpdate = async (field: string, value: unknown) => {
+    try {
+      await updateBlacklistConfig({ [field]: value });
+      await loadBlacklistData();
+    } catch (err) {
+      console.error("Blacklist config guncelleme hatasi:", err);
+    }
   };
 
   function handleSort(col: keyof ReputationIp) {
@@ -563,7 +628,154 @@ export function IpReputationTab() {
         </div>
       </GlassCard>
 
-      {/* ---- Bölüm 4: Kontrol Edilen IP'ler ---- */}
+      {/* ---- Bölüm 4: AbuseIPDB Kara Liste ---- */}
+      <GlassCard className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-[#FF00E5]" />
+            <h3 className="text-sm font-semibold text-white">AbuseIPDB Kara Liste</h3>
+            {blacklistConfig && (
+              <span className="text-xs text-gray-500">
+                ({blacklistConfig.total_count.toLocaleString()} IP)
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {blacklistConfig && (
+              <span className="text-xs text-gray-500">
+                Günlük: {blacklistConfig.daily_fetches}/{blacklistConfig.daily_limit}
+              </span>
+            )}
+            <button
+              onClick={handleBlacklistFetch}
+              disabled={blacklistFetching}
+              className="flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium text-[#FF00E5] border border-[#FF00E5]/30 hover:bg-[#FF00E5]/10 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3 w-3 ${blacklistFetching ? 'animate-spin' : ''}`} />
+              {blacklistFetching ? 'İndiriliyor...' : 'Şimdi Çek'}
+            </button>
+          </div>
+        </div>
+
+        {/* Config row */}
+        {blacklistConfig && (
+          <div className="flex flex-wrap items-center gap-4 mb-4 text-xs">
+            <label className="flex items-center gap-1.5 text-gray-400">
+              <span>Otomatik Engelle:</span>
+              <button
+                onClick={() => handleBlacklistConfigUpdate('auto_block', !blacklistConfig.auto_block)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                  blacklistConfig.auto_block ? 'bg-[#FF00E5]/30 border border-[#FF00E5]/50' : 'bg-gray-700 border border-gray-600'
+                }`}
+              >
+                <span className={`inline-block h-3.5 w-3.5 rounded-full transition-transform ${
+                  blacklistConfig.auto_block ? 'translate-x-4 bg-[#FF00E5]' : 'translate-x-0.5 bg-gray-400'
+                }`} />
+              </button>
+            </label>
+            <label className="flex items-center gap-1 text-gray-400">
+              Min Skor:
+              <input
+                type="number"
+                value={blacklistConfig.min_score}
+                onChange={(e) => handleBlacklistConfigUpdate('min_score', parseInt(e.target.value) || 100)}
+                className="w-14 rounded border border-gray-600 bg-transparent px-1.5 py-0.5 text-xs text-white text-center focus:outline-none focus:border-[#FF00E5]/50"
+                min={25}
+                max={100}
+              />
+            </label>
+            <label className="flex items-center gap-1 text-gray-400">
+              Max IP:
+              <input
+                type="number"
+                value={blacklistConfig.limit}
+                onChange={(e) => handleBlacklistConfigUpdate('limit', parseInt(e.target.value) || 10000)}
+                className="w-20 rounded border border-gray-600 bg-transparent px-1.5 py-0.5 text-xs text-white text-center focus:outline-none focus:border-[#FF00E5]/50"
+                min={100}
+                max={10000}
+              />
+            </label>
+            {blacklistConfig.last_fetch && (
+              <span className="text-gray-500 ml-auto">
+                Son: {formatDate(blacklistConfig.last_fetch)}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Blacklist table (collapsible) */}
+        {blacklistIps.length > 0 && (
+          <>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => setBlacklistExpanded(!blacklistExpanded)}
+                className="text-xs text-[#FF00E5] hover:text-[#FF00E5]/80 transition-colors"
+              >
+                {blacklistExpanded ? '▼ Listeyi Gizle' : '▶ Listeyi Göster'} ({blacklistIps.length.toLocaleString()} IP)
+              </button>
+              {blacklistExpanded && (
+                <div className="relative flex-1 max-w-xs">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-500" />
+                  <input
+                    type="text"
+                    value={blacklistSearch}
+                    onChange={(e) => setBlacklistSearch(e.target.value)}
+                    placeholder="IP ara..."
+                    className="w-full rounded border border-gray-700 bg-transparent pl-7 pr-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#FF00E5]/50"
+                  />
+                </div>
+              )}
+            </div>
+
+            {blacklistExpanded && (
+              <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-white/5">
+                      <th className="pb-2 pr-4 text-xs font-medium text-gray-400">IP Adresi</th>
+                      <th className="pb-2 pr-4 text-xs font-medium text-gray-400">Skor</th>
+                      <th className="pb-2 pr-4 text-xs font-medium text-gray-400">Ülke</th>
+                      <th className="pb-2 text-xs font-medium text-gray-400">Son Rapor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {blacklistIps
+                      .filter(item => !blacklistSearch || item.ip.includes(blacklistSearch) || item.country.toLowerCase().includes(blacklistSearch.toLowerCase()))
+                      .slice(0, 100)
+                      .map((item) => (
+                        <tr key={item.ip} className="border-b border-white/5 hover:bg-white/5">
+                          <td className="py-1.5 pr-4 text-xs font-mono text-[#FF00E5]">{item.ip}</td>
+                          <td className="py-1.5 pr-4">
+                            <ScoreBadge score={item.abuse_score} />
+                          </td>
+                          <td className="py-1.5 pr-4 text-xs text-gray-400">
+                            {getFlag(item.country)} {item.country}
+                          </td>
+                          <td className="py-1.5 text-xs text-gray-500">
+                            {item.last_reported_at ? formatDate(item.last_reported_at) : '--'}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+                {blacklistIps.filter(item => !blacklistSearch || item.ip.includes(blacklistSearch)).length > 100 && (
+                  <p className="text-xs text-gray-600 text-center mt-2">
+                    İlk 100 IP gösteriliyor ({blacklistIps.length.toLocaleString()} toplam)
+                  </p>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {blacklistIps.length === 0 && !blacklistFetching && (
+          <p className="text-xs text-gray-600 text-center py-2">
+            Henüz blacklist verisi yok. "Şimdi Çek" butonuyla ilk indirmeyi başlatabilirsiniz.
+          </p>
+        )}
+      </GlassCard>
+
+      {/* ---- Bölüm 5: Kontrol Edilen IP'ler ---- */}
       <GlassCard>
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <div className="flex items-center gap-3">

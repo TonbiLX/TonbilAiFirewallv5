@@ -7,3 +7,10 @@ export const fetchReputationIps = (minScore?: number) =>
   api.get('/ip-reputation/ips', { params: minScore ? { min_score: minScore } : {} });
 export const clearReputationCache = () => api.delete('/ip-reputation/cache');
 export const testAbuseipdbKey = () => api.post('/ip-reputation/test');
+
+// AbuseIPDB Blacklist
+export const fetchBlacklist = () => api.get('/ip-reputation/blacklist');
+export const triggerBlacklistFetch = () => api.post('/ip-reputation/blacklist/fetch');
+export const fetchBlacklistConfig = () => api.get('/ip-reputation/blacklist/config');
+export const updateBlacklistConfig = (data: { auto_block?: boolean; min_score?: number; limit?: number }) =>
+  api.put('/ip-reputation/blacklist/config', data);
