@@ -51,7 +51,7 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 Phase: 9 of 15 (Device Management) - COMPLETE
 Plan: 2 of 2 complete
 Status: Phase Complete, sistem bakim oturumu tamamlandi
-Last activity: 2026-03-09 - Completed quick task 16: AbuseIPDB limit fix + timestamp fallback + toplu IP yonetimi
+Last activity: 2026-03-09 - Completed quick task 17: AbuseIPDB blacklist entegrasyonu + limit sync + kara liste UI
 
 Progress: [██████░░░░] 40%
 
@@ -140,11 +140,12 @@ Progress: [██████░░░░] 40%
 | 14 | IP tablolarinda sutun siralama: IpReputationTab 6 sutun + IpManagementPage 7 sutun (guvenilir+engellenen) | 2026-03-09 | 2925c87 | [14-ip-tablolarinda-sutun-siralama](./quick/14-ip-tablolarinda-sutun-siralama-zaman-eti/) |
 | 15 | auto_block_ip blocked_at timestamp eksik — otomatik engellenen IP'lerde tarih gozukmuyor fix | 2026-03-09 | ddd6260 | [15-auto-block-ip-timestamp](./quick/15-auto-block-ip-zaman-damgasi-eksik-engell/) |
 | 16 | IP itibar: AbuseIPDB limit TTL fix + timestamp fallback + toplu IP yonetimi (bulk select/unblock/sure) | 2026-03-09 | 43436eb, 9884c95, 3158148 | [16-ip-itibar-abuseipdb-limit-kontrolu-engel](./quick/16-ip-itibar-abuseipdb-limit-kontrolu-engel/) |
+| 17 | AbuseIPDB blacklist entegrasyonu + gunluk limit API senkronizasyonu + kara liste UI | 2026-03-09 | 77ed2b6, d930922, bd6a0e5 | [17-abuseipdb-blacklist-entegrasyonu-gunluk-](./quick/17-abuseipdb-blacklist-entegrasyonu-gunluk-/) |
 
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Quick 16 tamamlandi — 3 paralel ajan: AbuseIPDB limit TTL fix, timestamp fallback, toplu IP yonetimi.
+Stopped at: Quick 17 tamamlandi — AbuseIPDB blacklist (5/gun, 10K IP), limit sync, kara liste UI.
 Resume file: .planning/phases/09-device-management/.continue-here-app-improvements.md
 
 ## Post-Milestone Work (GSD disi)
