@@ -17,11 +17,13 @@ import time
 from datetime import datetime
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.db.redis_client import get_redis
 from app.db.session import async_session_factory
 from app.models.ai_insight import AiInsight, Severity
+from app.models.ip_reputation_check import IpReputationCheck
+from app.models.ip_blacklist_entry import IpBlacklistEntry
 from app.services.telegram_service import notify_ai_insight
 from app.services.timezone_service import now_local, format_local_time
 from app.workers.threat_analyzer import auto_block_ip
@@ -342,6 +344,25 @@ async def _process_ip(ip: str, api_key: str | None, redis) -> bool:
     except Exception as exc:
         logger.warning(f"Redis cache yazma hatasi {ip}: {exc}")
 
+    # ── SQL kalici kayit (UPSERT) ──
+    try:
+        async with async_session_factory() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO ip_reputation_checks "
+                    "(ip_address, abuse_score, total_reports, country, country_code, city, isp, org, checked_at) "
+                    "VALUES (:ip, :score, :reports, :country, :cc, :city, :isp, :org, NOW()) "
+                    "ON DUPLICATE KEY UPDATE "
+                    "abuse_score=:score, total_reports=:reports, country=:country, country_code=:cc, "
+                    "city=:city, isp=:isp, org=:org, checked_at=NOW()"
+                ),
+                {"ip": ip, "score": abuse_score, "reports": total_reports,
+                 "country": country, "cc": country_code, "city": city, "isp": isp, "org": org},
+            )
+            await session.commit()
+    except Exception as sql_exc:
+        logger.warning(f"SQL UPSERT hatasi {ip}: {sql_exc}")
+
     # ── Uyari olusturma ──
     location_str = ", ".join(filter(None, [city, country]))
     isp_str = isp or org or "Bilinmiyor"
@@ -456,6 +477,47 @@ async def fetch_abuseipdb_blacklist(force: bool = False) -> dict:
             await pipe.execute()
 
         count = len(ip_list)
+
+        # ── SQL kalici kayit (blacklist) ──
+        try:
+            async with async_session_factory() as session:
+                # Eski kayitlari temizle
+                await session.execute(text("DELETE FROM ip_blacklist_entries"))
+                # Yeni kayitlari batch ekle (1000'er)
+                batch = []
+                for item in ip_list:
+                    ip_addr = item.get("ipAddress", "")
+                    if not ip_addr:
+                        continue
+                    batch.append({
+                        "ip":       ip_addr,
+                        "score":    item.get("abuseConfidenceScore", 0),
+                        "country":  item.get("countryCode", ""),
+                        "reported": item.get("lastReportedAt", ""),
+                    })
+                    if len(batch) >= 1000:
+                        await session.execute(
+                            text(
+                                "INSERT INTO ip_blacklist_entries "
+                                "(ip_address, abuse_score, country, last_reported_at, fetched_at) "
+                                "VALUES (:ip, :score, :country, :reported, NOW())"
+                            ),
+                            batch,
+                        )
+                        batch = []
+                if batch:
+                    await session.execute(
+                        text(
+                            "INSERT INTO ip_blacklist_entries "
+                            "(ip_address, abuse_score, country, last_reported_at, fetched_at) "
+                            "VALUES (:ip, :score, :country, :reported, NOW())"
+                        ),
+                        batch,
+                    )
+                await session.commit()
+                logger.info(f"Blacklist SQL: {len(ip_list)} IP yazildi")
+        except Exception as sql_exc:
+            logger.warning(f"Blacklist SQL yazma hatasi: {sql_exc}")
 
         # Auto-block (toplu — Telegram/AiInsight gondermeden, sonra tek ozet)
         if auto_block and ip_list:

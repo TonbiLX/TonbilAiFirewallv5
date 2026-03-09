@@ -14,9 +14,11 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import text
 
 from app.api.deps import get_current_user
 from app.db.redis_client import get_redis
+from app.db.session import async_session_factory
 from app.models.user import User
 
 logger = logging.getLogger("tonbilai.api.ip_reputation")
@@ -167,24 +169,42 @@ async def get_ip_reputation_summary(
     flagged_warning  = 0
 
     try:
-        cursor = 0
-        while True:
-            cursor, keys = await redis.scan(
-                cursor, match=f"{REDIS_KEY_IP_PREFIX}*", count=200
+        async with async_session_factory() as session:
+            result = await session.execute(
+                text(
+                    "SELECT COUNT(*) as total, "
+                    "SUM(CASE WHEN abuse_score >= 80 THEN 1 ELSE 0 END) as critical, "
+                    "SUM(CASE WHEN abuse_score >= 50 AND abuse_score < 80 THEN 1 ELSE 0 END) as warning "
+                    "FROM ip_reputation_checks"
+                )
             )
-            for key in keys:
-                score_raw = await redis.hget(key, "abuse_score")
-                if score_raw is not None:
-                    total_checked += 1
-                    score = int(score_raw)
-                    if score >= 80:
-                        flagged_critical += 1
-                    elif score >= 50:
-                        flagged_warning += 1
-            if cursor == 0:
-                break
+            row = result.mappings().first()
+            if row:
+                total_checked    = int(row["total"]    or 0)
+                flagged_critical = int(row["critical"] or 0)
+                flagged_warning  = int(row["warning"]  or 0)
     except Exception as exc:
-        logger.error(f"IP reputation summary tarama hatası: {exc}")
+        logger.error(f"IP reputation summary SQL hatasi: {exc}")
+        # SQL basarisizsa Redis SCAN fallback
+        try:
+            cursor = 0
+            while True:
+                cursor, keys = await redis.scan(
+                    cursor, match=f"{REDIS_KEY_IP_PREFIX}*", count=200
+                )
+                for key in keys:
+                    score_raw = await redis.hget(key, "abuse_score")
+                    if score_raw is not None:
+                        total_checked += 1
+                        score = int(score_raw)
+                        if score >= 80:
+                            flagged_critical += 1
+                        elif score >= 50:
+                            flagged_warning += 1
+                if cursor == 0:
+                    break
+        except Exception as fallback_exc:
+            logger.error(f"IP reputation summary Redis fallback hatasi: {fallback_exc}")
 
     daily_raw = await redis.get(REDIS_KEY_DAILY_CHECKS)
     daily_checks_used = int(daily_raw) if daily_raw else 0
@@ -228,44 +248,69 @@ async def get_checked_ips(
     Kontrol edilmiş IP'lerin listesini döndür (abuse_score DESC sıralı).
 
     min_score parametresiyle belirli bir eşiğin üstündeki IP'ler filtrelenebilir.
+    SQL master veri deposundan okur; hata durumunda Redis fallback kullanır.
     """
-    redis = await get_redis()
     ips: list[dict] = []
 
     try:
-        cursor = 0
-        while True:
-            cursor, keys = await redis.scan(
-                cursor, match=f"{REDIS_KEY_IP_PREFIX}*", count=200
+        async with async_session_factory() as session:
+            result = await session.execute(
+                text(
+                    "SELECT ip_address, abuse_score, total_reports, country, country_code, "
+                    "city, isp, org, checked_at FROM ip_reputation_checks "
+                    "WHERE abuse_score >= :min_score ORDER BY abuse_score DESC"
+                ),
+                {"min_score": min_score},
             )
-            for key in keys:
-                data = await redis.hgetall(key)
-                if not data:
-                    continue
-                score = int(data.get("abuse_score", 0))
-                if score < min_score:
-                    continue
-                ip_addr = key
-                # Redis key'inden prefix'i çıkar
-                if isinstance(key, str):
-                    ip_addr = key.removeprefix(REDIS_KEY_IP_PREFIX)
+            for row in result.mappings():
+                checked_str = ""
+                if row["checked_at"]:
+                    checked_str = row["checked_at"].strftime("%Y-%m-%d %H:%M:%S")
                 ips.append({
-                    "ip":           ip_addr,
-                    "abuse_score":  score,
-                    "total_reports": int(data.get("total_reports", 0)),
-                    "country":      data.get("country", ""),
-                    "city":         data.get("city", ""),
-                    "isp":          data.get("isp", ""),
-                    "org":          data.get("org", ""),
-                    "checked_at":   data.get("checked_at", ""),
+                    "ip":            row["ip_address"],
+                    "abuse_score":   row["abuse_score"]   or 0,
+                    "total_reports": row["total_reports"] or 0,
+                    "country":       row["country"]       or "",
+                    "city":          row["city"]           or "",
+                    "isp":           row["isp"]            or "",
+                    "org":           row["org"]            or "",
+                    "checked_at":    checked_str,
                 })
-            if cursor == 0:
-                break
     except Exception as exc:
-        logger.error(f"IP listesi tarama hatası: {exc}")
-
-    # Abuse skoruna göre azalan sıralama
-    ips.sort(key=lambda x: x["abuse_score"], reverse=True)
+        logger.error(f"IP listesi SQL hatasi: {exc}")
+        # SQL basarisizsa Redis fallback
+        try:
+            redis = await get_redis()
+            cursor = 0
+            while True:
+                cursor, keys = await redis.scan(
+                    cursor, match=f"{REDIS_KEY_IP_PREFIX}*", count=200
+                )
+                for key in keys:
+                    data = await redis.hgetall(key)
+                    if not data:
+                        continue
+                    score = int(data.get("abuse_score", 0))
+                    if score < min_score:
+                        continue
+                    ip_addr = key
+                    if isinstance(key, str):
+                        ip_addr = key.removeprefix(REDIS_KEY_IP_PREFIX)
+                    ips.append({
+                        "ip":            ip_addr,
+                        "abuse_score":   score,
+                        "total_reports": int(data.get("total_reports", 0)),
+                        "country":       data.get("country", ""),
+                        "city":          data.get("city", ""),
+                        "isp":           data.get("isp", ""),
+                        "org":           data.get("org", ""),
+                        "checked_at":    data.get("checked_at", ""),
+                    })
+                if cursor == 0:
+                    break
+            ips.sort(key=lambda x: x["abuse_score"], reverse=True)
+        except Exception as fallback_exc:
+            logger.error(f"IP listesi Redis fallback hatasi: {fallback_exc}")
 
     return {
         "ips":   ips,
@@ -302,10 +347,23 @@ async def clear_reputation_cache(
     except Exception as exc:
         logger.error(f"Cache temizleme hatası: {exc}")
 
+    # SQL temizleme
+    sql_deleted = 0
+    try:
+        async with async_session_factory() as session:
+            r1 = await session.execute(text("DELETE FROM ip_reputation_checks"))
+            r2 = await session.execute(text("DELETE FROM ip_blacklist_entries"))
+            await session.commit()
+            sql_deleted = (r1.rowcount or 0) + (r2.rowcount or 0)
+            logger.info(f"SQL reputation verileri temizlendi: {sql_deleted} kayit")
+    except Exception as sql_exc:
+        logger.warning(f"SQL temizleme hatasi: {sql_exc}")
+
     return {
-        "status":  "ok",
-        "deleted": deleted_count,
-        "message": f"{deleted_count} IP reputation cache kaydı silindi.",
+        "status":      "ok",
+        "deleted":     deleted_count,
+        "sql_deleted": sql_deleted,
+        "message":     f"{deleted_count} Redis + {sql_deleted} SQL IP reputation kaydı silindi.",
     }
 
 
@@ -392,31 +450,52 @@ async def test_abuseipdb_key(
 async def get_blacklist_ips(
     current_user: User = Depends(get_current_user),
 ):
-    """AbuseIPDB blacklist IP'lerini listele."""
+    """AbuseIPDB blacklist IP'lerini listele.
+
+    SQL master veri deposundan okur; hata durumunda Redis fallback kullanır.
+    """
     redis = await get_redis()
     ips = []
     try:
-        ip_set = await redis.smembers("reputation:blacklist_ips")
-        for ip in ip_set:
-            data = await redis.hgetall(f"reputation:blacklist_data:{ip}")
-            if data:
+        async with async_session_factory() as session:
+            result = await session.execute(
+                text(
+                    "SELECT ip_address, abuse_score, country, last_reported_at, fetched_at "
+                    "FROM ip_blacklist_entries ORDER BY abuse_score DESC"
+                )
+            )
+            for row in result.mappings():
                 ips.append({
-                    "ip": ip,
-                    "abuse_score": int(data.get("abuse_score", 0)),
-                    "country": data.get("country", ""),
-                    "last_reported_at": data.get("last_reported_at", ""),
+                    "ip":              row["ip_address"],
+                    "abuse_score":     row["abuse_score"]      or 0,
+                    "country":         row["country"]           or "",
+                    "last_reported_at": row["last_reported_at"] or "",
                 })
-        ips.sort(key=lambda x: x["abuse_score"], reverse=True)
     except Exception as exc:
-        logger.error(f"Blacklist listeleme hatasi: {exc}")
+        logger.error(f"Blacklist SQL hatasi: {exc}")
+        # SQL basarisizsa Redis fallback
+        try:
+            ip_set = await redis.smembers("reputation:blacklist_ips")
+            for ip in ip_set:
+                data = await redis.hgetall(f"reputation:blacklist_data:{ip}")
+                if data:
+                    ips.append({
+                        "ip":              ip,
+                        "abuse_score":     int(data.get("abuse_score", 0)),
+                        "country":         data.get("country", ""),
+                        "last_reported_at": data.get("last_reported_at", ""),
+                    })
+            ips.sort(key=lambda x: x["abuse_score"], reverse=True)
+        except Exception as fallback_exc:
+            logger.error(f"Blacklist Redis fallback hatasi: {fallback_exc}")
 
     last_fetch = await redis.get("reputation:blacklist_last_fetch") or ""
     total_count = await redis.get("reputation:blacklist_count") or "0"
 
     return {
-        "ips": ips,
-        "total": len(ips),
-        "last_fetch": last_fetch,
+        "ips":         ips,
+        "total":       len(ips),
+        "last_fetch":  last_fetch,
         "total_count": int(total_count),
     }
 
