@@ -137,10 +137,11 @@ async def _calculate_and_store_bandwidth(
         delta_up_pkts = current["upload_packets"]
         delta_down_pkts = current["download_packets"]
 
-        # bps hesapla
+        # bps hesapla (max 10 Gbps cap — Pi ethernet 1 Gbps, makul olmayan spike onleme)
+        MAX_BPS = 10_000_000_000  # 10 Gbps
         if elapsed_seconds > 0:
-            upload_bps = int(delta_up_bytes * 8 / elapsed_seconds)
-            download_bps = int(delta_down_bytes * 8 / elapsed_seconds)
+            upload_bps = min(int(delta_up_bytes * 8 / elapsed_seconds), MAX_BPS)
+            download_bps = min(int(delta_down_bytes * 8 / elapsed_seconds), MAX_BPS)
         else:
             upload_bps = 0
             download_bps = 0
@@ -315,6 +316,7 @@ async def start_bandwidth_monitor():
 
     last_sync_time = time.monotonic()
     ip_refresh_counter = 0
+    _first_iteration = True  # Ilk iterasyonu atla (restart spike onleme)
 
     while True:
         try:
@@ -338,6 +340,19 @@ async def start_bandwidth_monitor():
             # Gecen sure
             elapsed = loop_start - last_sync_time
             last_sync_time = loop_start
+
+            # Ilk iterasyonu atla — restart sonrasi bayat counter spike onleme
+            if _first_iteration:
+                _first_iteration = False
+                logger.debug("Ilk iterasyon atlandi (restart spike onleme)")
+                await asyncio.sleep(POLL_INTERVAL)
+                continue
+
+            # Elapsed cok kucukse atla (0'a bolme / spike onleme)
+            if elapsed < 2.0:
+                logger.debug(f"Elapsed cok kucuk ({elapsed:.1f}s), atlanıyor")
+                await asyncio.sleep(POLL_INTERVAL)
+                continue
 
             # Delta hesapla ve Redis'e yaz
             up_bps, down_bps = await _calculate_and_store_bandwidth(
