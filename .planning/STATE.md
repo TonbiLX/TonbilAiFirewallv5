@@ -51,7 +51,7 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 Phase: 9 of 15 (Device Management) - COMPLETE
 Plan: 2 of 2 complete
 Status: Phase Complete, sistem bakim oturumu tamamlandi
-Last activity: 2026-03-09 - Completed quick task 17: AbuseIPDB blacklist entegrasyonu + limit sync + kara liste UI
+Last activity: 2026-03-09 - Completed quick task 18: IP yonetimi engellenen IP sayfasina arama + sayfalama + tema fix
 
 Progress: [██████░░░░] 40%
 
@@ -141,6 +141,7 @@ Progress: [██████░░░░] 40%
 | 15 | auto_block_ip blocked_at timestamp eksik — otomatik engellenen IP'lerde tarih gozukmuyor fix | 2026-03-09 | ddd6260 | [15-auto-block-ip-timestamp](./quick/15-auto-block-ip-zaman-damgasi-eksik-engell/) |
 | 16 | IP itibar: AbuseIPDB limit TTL fix + timestamp fallback + toplu IP yonetimi (bulk select/unblock/sure) | 2026-03-09 | 43436eb, 9884c95, 3158148 | [16-ip-itibar-abuseipdb-limit-kontrolu-engel](./quick/16-ip-itibar-abuseipdb-limit-kontrolu-engel/) |
 | 17 | AbuseIPDB blacklist entegrasyonu + gunluk limit API senkronizasyonu + kara liste UI | 2026-03-09 | 77ed2b6, d930922, bd6a0e5 | [17-abuseipdb-blacklist-entegrasyonu-gunluk-](./quick/17-abuseipdb-blacklist-entegrasyonu-gunluk-/) |
+| 18 | IP yonetimi engellenen IP sayfasina arama + sayfalama + dropdown tema fix | 2026-03-09 | 4f3789d | [18-ip-yonetimi-engellenen-ip-sayfasina-aram](./quick/18-ip-yonetimi-engellenen-ip-sayfasina-aram/) |
 
 ## Session Continuity
 
