@@ -504,6 +504,7 @@ async def manual_unblock_ip(ip: str):
 
 async def get_blocked_ips() -> list[dict]:
     """Engellenen IP listesini dondur."""
+    from datetime import timedelta
     try:
         redis = await _get_redis()
         ips = await redis.smembers("dns:threat:blocked")
@@ -512,6 +513,22 @@ async def get_blocked_ips() -> list[dict]:
             reason = await redis.get(f"dns:threat:block_expire:{ip}") or "Bilinmiyor"
             ttl = await redis.ttl(f"dns:threat:block_expire:{ip}")
             blocked_at = await redis.get(f"dns:threat:block_time:{ip}")
+            original_blocked_at = blocked_at  # Onceden kayitli mi?
+
+            # Fallback: block_time anahtari yoksa TTL'den tahmini zaman hesapla
+            if not blocked_at and ttl > 0:
+                block_dur = await _get_sec_int(redis, "block_duration_sec", BLOCK_DURATION_SEC)
+                elapsed = block_dur - ttl
+                estimated_time = datetime.utcnow() - timedelta(seconds=elapsed)
+                blocked_at = estimated_time.isoformat()
+                # Retroaktif olarak Redis'e kaydet — bir sonraki istekte tekrar hesaplanmasin
+                await redis.set(
+                    f"dns:threat:block_time:{ip}",
+                    blocked_at,
+                    ex=max(ttl, 60),
+                )
+                logger.debug(f"Eski IP icin blocked_at TTL'den tahmin edildi ve kaydedildi: {ip} (~{elapsed}s once)")
+
             result.append({
                 "ip": ip,
                 "reason": reason,
