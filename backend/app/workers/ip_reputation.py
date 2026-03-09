@@ -546,8 +546,8 @@ async def fetch_abuseipdb_blacklist(force: bool = False) -> dict:
                                         "Kara liste otomatik engelleme tamamlandi.")
                 logger.info(summary_msg)
 
-        # Meta veri guncelle
-        await redis.set(REDIS_KEY_BLACKLIST_LAST_FETCH, format_local_time())
+        # Meta veri guncelle (UTC ISO format — timezone kaymasini onlemek icin)
+        await redis.set(REDIS_KEY_BLACKLIST_LAST_FETCH, datetime.utcnow().isoformat() + "Z")
         await redis.set(REDIS_KEY_BLACKLIST_COUNT, str(count))
         await redis.expire(REDIS_KEY_BLACKLIST_IPS, BLACKLIST_FETCH_INTERVAL * 2)
 
@@ -625,10 +625,15 @@ async def _run_reputation_cycle() -> None:
         if last_fetch_raw:
             # Son fetch'ten bu yana 24 saat gecti mi?
             try:
-                last_dt = datetime.fromisoformat(last_fetch_raw.replace("+03:00", "").replace("Z", ""))
+                # UTC ISO formatini parse et ("Z" ve "+00:00" suffix'lerini kaldir → naive UTC datetime)
+                clean = last_fetch_raw.replace("Z", "").replace("+00:00", "")
+                # Eski format uyumlulugu: "HH:MM:SS DD/MM/YYYY" gibi local format → parse hatasi
+                # verilebilir; except blogu should_fetch=True birakmak icin kullanilir (guvenli)
+                last_dt = datetime.fromisoformat(clean)
                 if (datetime.utcnow() - last_dt).total_seconds() < BLACKLIST_FETCH_INTERVAL:
                     should_fetch = False
             except Exception:
+                # Parse hatasi → eski format veya bozuk veri → yeniden fetch tetikle (guvenli)
                 pass
         if should_fetch:
             logger.info("Blacklist otomatik fetch baslatiliyor...")
