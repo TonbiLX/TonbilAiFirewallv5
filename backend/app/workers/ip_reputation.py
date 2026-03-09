@@ -94,6 +94,19 @@ async def check_abuseipdb(ip: str, api_key: str) -> dict | None:
             if response.status_code == 200:
                 body = response.json()
                 data = body.get("data", {})
+
+                # AbuseIPDB gercek rate limit degerlerini Redis'e kaydet (1 saatlik TTL)
+                try:
+                    redis = await get_redis()
+                    remaining = response.headers.get("X-RateLimit-Remaining")
+                    limit = response.headers.get("X-RateLimit-Limit")
+                    if remaining is not None:
+                        await redis.set("reputation:abuseipdb_remaining", str(remaining), ex=3600)
+                    if limit is not None:
+                        await redis.set("reputation:abuseipdb_limit", str(limit), ex=3600)
+                except Exception as cache_exc:
+                    logger.debug(f"Rate limit header kaydedilemedi: {cache_exc}")
+
                 return {
                     "abuse_score": data.get("abuseConfidenceScore", 0),
                     "total_reports": data.get("totalReports", 0),
@@ -216,8 +229,10 @@ async def _increment_daily_counter(redis) -> int:
     """Gunluk AbuseIPDB sayacini artir ve mevcut degeri dondur."""
     try:
         count = await redis.incr(REDIS_KEY_DAILY_CHECKS)
-        # Ilk artirmada TTL ayarla (gun boyunca gecerli)
-        if count == 1:
+        # Her artirmada TTL kontrolu — gun sinirini gecmemek icin
+        ttl = await redis.ttl(REDIS_KEY_DAILY_CHECKS)
+        if ttl == -1:
+            # TTL yok (manuel reset veya eski veri) — yeniden ayarla
             await redis.expire(REDIS_KEY_DAILY_CHECKS, CACHE_TTL)
         return count
     except Exception:

@@ -189,12 +189,27 @@ async def get_ip_reputation_summary(
     daily_raw = await redis.get(REDIS_KEY_DAILY_CHECKS)
     daily_checks_used = int(daily_raw) if daily_raw else 0
 
+    # AbuseIPDB gercek rate limit degerleri (worker tarafindan kaydedilir)
+    abuseipdb_remaining: int | None = None
+    abuseipdb_limit: int | None = None
+    try:
+        remaining_raw = await redis.get("reputation:abuseipdb_remaining")
+        limit_raw     = await redis.get("reputation:abuseipdb_limit")
+        if remaining_raw is not None:
+            abuseipdb_remaining = int(remaining_raw)
+        if limit_raw is not None:
+            abuseipdb_limit = int(limit_raw)
+    except Exception as exc:
+        logger.debug(f"AbuseIPDB rate limit okunamadi: {exc}")
+
     return {
-        "total_checked":     total_checked,
-        "flagged_critical":  flagged_critical,
-        "flagged_warning":   flagged_warning,
-        "daily_checks_used": daily_checks_used,
-        "daily_limit":       DAILY_LIMIT,
+        "total_checked":       total_checked,
+        "flagged_critical":    flagged_critical,
+        "flagged_warning":     flagged_warning,
+        "daily_checks_used":   daily_checks_used,
+        "daily_limit":         DAILY_LIMIT,
+        "abuseipdb_remaining": abuseipdb_remaining,
+        "abuseipdb_limit":     abuseipdb_limit,
     }
 
 

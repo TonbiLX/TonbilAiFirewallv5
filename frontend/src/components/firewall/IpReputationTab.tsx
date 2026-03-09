@@ -49,6 +49,8 @@ interface ReputationSummary {
   flagged_warning: number;
   daily_checks_used: number;
   daily_limit: number;
+  abuseipdb_remaining?: number | null;
+  abuseipdb_limit?: number | null;
 }
 
 interface ReputationIp {
@@ -290,6 +292,15 @@ export function IpReputationTab() {
     ? Math.round((summary.daily_checks_used / summary.daily_limit) * 100)
     : 0;
 
+  // AbuseIPDB gercek kota doluluk yuzdesi (varsa)
+  const abuseipdbLimit = summary?.abuseipdb_limit ?? 1000;
+  const abuseipdbUsed = summary?.abuseipdb_limit != null && summary?.abuseipdb_remaining != null
+    ? summary.abuseipdb_limit - summary.abuseipdb_remaining
+    : null;
+  const abuseipdbPct = abuseipdbUsed != null && abuseipdbLimit > 0
+    ? Math.round((abuseipdbUsed / abuseipdbLimit) * 100)
+    : null;
+
   const filteredIps = ips.filter(ip =>
     (!filterFlagged || ip.abuse_score >= 50)
   );
@@ -346,16 +357,34 @@ export function IpReputationTab() {
         {/* Günlük Kullanım */}
         <div className="glass-card p-4 border-l-2 border-[#39FF14]">
           <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">Günlük Kullanım</div>
+          {/* Yerel sayac */}
           <div className="text-2xl font-bold text-[#39FF14]">
             {summary?.daily_checks_used ?? 0}
-            <span className="text-sm font-normal text-gray-400">/{summary?.daily_limit ?? 1000}</span>
+            <span className="text-sm font-normal text-gray-400">/{summary?.daily_limit ?? 900}</span>
           </div>
-          <div className="w-full bg-gray-700 rounded-full h-1 mt-2">
+          <div className="w-full bg-gray-700 rounded-full h-1 mt-1.5">
             <div
               className="h-1 rounded-full bg-[#39FF14] transition-all"
               style={{ width: `${Math.min(dailyPct, 100)}%` }}
             />
           </div>
+          {/* AbuseIPDB gercek kota (varsa) */}
+          {abuseipdbUsed != null && (
+            <div className="mt-2 pt-2 border-t border-white/5">
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-gray-500">AbuseIPDB kalan</span>
+                <span className="text-[#00F0FF] font-mono">
+                  {summary?.abuseipdb_remaining ?? "?"}/{abuseipdbLimit}
+                </span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-1">
+                <div
+                  className="h-1 rounded-full bg-[#00F0FF] transition-all"
+                  style={{ width: `${Math.min(abuseipdbPct ?? 0, 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
