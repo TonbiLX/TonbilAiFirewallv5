@@ -24,6 +24,7 @@ from app.db.session import async_session_factory
 from app.models.ai_insight import AiInsight, Severity
 from app.services.telegram_service import notify_ai_insight
 from app.services.timezone_service import now_local, format_local_time
+from app.workers.threat_analyzer import auto_block_ip
 
 logger = logging.getLogger("tonbilai.ip_reputation")
 
@@ -307,6 +308,8 @@ async def _process_ip(ip: str, api_key: str | None, redis) -> bool:
         )
         logger.warning(f"[KRITIK] {message}")
         await _write_ai_insight(Severity.CRITICAL, message, action)
+        # OTOMATIK ENGELLEME
+        await auto_block_ip(ip, f"AbuseIPDB kritik skor: {abuse_score}/100, raporlar: {total_reports}")
 
     elif abuse_score >= 50:
         message = (
@@ -359,6 +362,8 @@ async def _check_country_block(ip: str, country_code: str, blocked_countries: li
     )
     logger.warning(f"[ULKE ENGEL] {message}")
     await _write_ai_insight(Severity.CRITICAL, message, action, category="country_block")
+    # OTOMATIK ENGELLEME
+    await auto_block_ip(ip, f"Engellenen ulke: {country_code}")
 
 
 async def _run_reputation_cycle() -> None:
