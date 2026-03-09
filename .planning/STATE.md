@@ -142,11 +142,12 @@ Progress: [██████░░░░] 40%
 | 16 | IP itibar: AbuseIPDB limit TTL fix + timestamp fallback + toplu IP yonetimi (bulk select/unblock/sure) | 2026-03-09 | 43436eb, 9884c95, 3158148 | [16-ip-itibar-abuseipdb-limit-kontrolu-engel](./quick/16-ip-itibar-abuseipdb-limit-kontrolu-engel/) |
 | 17 | AbuseIPDB blacklist entegrasyonu + gunluk limit API senkronizasyonu + kara liste UI | 2026-03-09 | 77ed2b6, d930922, bd6a0e5 | [17-abuseipdb-blacklist-entegrasyonu-gunluk-](./quick/17-abuseipdb-blacklist-entegrasyonu-gunluk-/) |
 | 18 | IP yonetimi engellenen IP sayfasina arama + sayfalama + dropdown tema fix | 2026-03-09 | 4f3789d | [18-ip-yonetimi-engellenen-ip-sayfasina-aram](./quick/18-ip-yonetimi-engellenen-ip-sayfasina-aram/) |
+| 19 | IP itibar sayfasi sorgulanan IP tablosuna arama + sayfalama + dropdown tema | 2026-03-09 | 3e06125 | [19-ip-itibar-sayfasi-sorgulanan-ip-tablosun](./quick/19-ip-itibar-sayfasi-sorgulanan-ip-tablosun/) |
 
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Quick 17 tamamlandi — AbuseIPDB blacklist (5/gun, 10K IP), limit sync, kara liste UI.
+Stopped at: Quick 19 tamamlandi — IpReputationTab arama + sayfalama + dropdown tema eklendi.
 Resume file: .planning/phases/09-device-management/.continue-here-app-improvements.md
 
 ## Post-Milestone Work (GSD disi)
