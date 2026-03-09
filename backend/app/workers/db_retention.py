@@ -14,16 +14,20 @@ logger = logging.getLogger("tonbilai.db_retention")
 
 # Retention sureleri (gun)
 RETENTION_DAYS = {
-    "connection_flows": 7,
-    "dns_query_logs":   14,
-    "traffic_logs":     30,
+    "connection_flows":    7,
+    "dns_query_logs":      14,
+    "traffic_logs":        30,
+    "ip_reputation_checks": 30,
+    "ip_blacklist_entries": 7,
 }
 
 # Her tablodaki timestamp sutun isimleri
 TIMESTAMP_COLUMNS = {
-    "connection_flows": "first_seen",
-    "dns_query_logs":   "timestamp",
-    "traffic_logs":     "timestamp",
+    "connection_flows":    "first_seen",
+    "dns_query_logs":      "timestamp",
+    "traffic_logs":        "timestamp",
+    "ip_reputation_checks": "checked_at",
+    "ip_blacklist_entries": "fetched_at",
 }
 
 BATCH_SIZE     = 10_000  # Her seferde silinecek maksimum satir

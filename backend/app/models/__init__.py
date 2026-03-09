@@ -32,6 +32,8 @@ from app.models.ddos_config import DdosConfig
 from app.models.connection_flow import ConnectionFlow
 from app.models.wifi_config import WifiConfig
 from app.models.security_config import SecurityConfig
+from app.models.ip_reputation_check import IpReputationCheck
+from app.models.ip_blacklist_entry import IpBlacklistEntry
 
 __all__ = [
     "Profile", "ProfileType",
@@ -66,4 +68,6 @@ __all__ = [
     "ConnectionFlow",
     "WifiConfig",
     "SecurityConfig",
+    "IpReputationCheck",
+    "IpBlacklistEntry",
 ]
