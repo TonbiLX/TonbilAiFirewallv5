@@ -457,17 +457,32 @@ async def fetch_abuseipdb_blacklist(force: bool = False) -> dict:
 
         count = len(ip_list)
 
-        # Auto-block
+        # Auto-block (toplu — Telegram/AiInsight gondermeden, sonra tek ozet)
         if auto_block and ip_list:
-            for item in ip_list[:500]:  # Max 500 IP auto-block (performans icin)
+            block_dur_raw = await redis.get("block_duration_sec")
+            block_dur = int(block_dur_raw) if block_dur_raw else 3600
+            now_iso = datetime.utcnow().isoformat()
+            pipe_block = redis.pipeline()
+            for item in ip_list[:500]:
                 ip_addr = item.get("ipAddress", "")
                 score = item.get("abuseConfidenceScore", 0)
                 if ip_addr and score >= min_score:
-                    try:
-                        await auto_block_ip(ip_addr, f"AbuseIPDB blacklist (skor: {score})")
-                        blocked_count += 1
-                    except Exception:
-                        pass
+                    pipe_block.sadd("dns:threat:blocked", ip_addr)
+                    pipe_block.set(f"dns:threat:block_expire:{ip_addr}",
+                                   f"AbuseIPDB blacklist (skor: {score})", ex=block_dur)
+                    pipe_block.set(f"dns:threat:block_time:{ip_addr}", now_iso, ex=block_dur)
+                    blocked_count += 1
+            if blocked_count > 0:
+                await pipe_block.execute()
+                await redis.hincrby("dns:threat:stats", "total_auto_blocks", blocked_count)
+                # Tek ozet bildirim
+                summary_msg = (
+                    f"AbuseIPDB Kara Liste: {blocked_count} IP otomatik engellendi "
+                    f"(toplam {count} IP indirildi, min skor: {min_score})"
+                )
+                await _write_ai_insight(Severity.WARNING, summary_msg,
+                                        "Kara liste otomatik engelleme tamamlandi.")
+                logger.info(summary_msg)
 
         # Meta veri guncelle
         await redis.set(REDIS_KEY_BLACKLIST_LAST_FETCH, format_local_time())
