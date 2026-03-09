@@ -177,6 +177,11 @@ export function IpReputationTab() {
   const [newCountry, setNewCountry] = useState("");
   const [feedback, setFeedback] = useState<{ msg: string; ok: boolean } | null>(null);
 
+  // Sorgulanan IP arama + sayfalama
+  const [ipSearchTerm, setIpSearchTerm] = useState("");
+  const [ipPageSize, setIpPageSize] = useState(50);
+  const [ipCurrentPage, setIpCurrentPage] = useState(1);
+
   // Blacklist state
   const [blacklistConfig, setBlacklistConfig] = useState<BlacklistConfig | null>(null);
   const [blacklistIps, setBlacklistIps] = useState<BlacklistIp[]>([]);
@@ -364,7 +369,8 @@ export function IpReputationTab() {
   const hasRealApiData = summary?.abuseipdb_limit != null && summary?.abuseipdb_remaining != null;
 
   const filteredIps = ips.filter(ip =>
-    (!filterFlagged || ip.abuse_score >= 50)
+    (!filterFlagged || ip.abuse_score >= 50) &&
+    (!ipSearchTerm || ip.ip.includes(ipSearchTerm))
   );
 
   const sortedIps = [...filteredIps].sort((a, b) => {
@@ -375,6 +381,11 @@ export function IpReputationTab() {
       : String(aVal).localeCompare(String(bVal));
     return sortOrder === "asc" ? cmp : -cmp;
   });
+
+  const totalFilteredIps = sortedIps.length;
+  const totalIpPages = Math.ceil(totalFilteredIps / ipPageSize);
+  const ipStartIndex = (ipCurrentPage - 1) * ipPageSize;
+  const pagedIps = sortedIps.slice(ipStartIndex, ipStartIndex + ipPageSize);
 
   return (
     <div className="space-y-6">
@@ -784,14 +795,44 @@ export function IpReputationTab() {
             </div>
             <div>
               <h3 className="text-base font-semibold text-white">Kontrol Edilen IP'ler</h3>
-              <p className="text-xs text-gray-400">{ips.length} kayıt</p>
+              <p className="text-xs text-gray-400">
+                {ipSearchTerm ? `${totalFilteredIps} / ${ips.length}` : ips.length} kayıt
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* IP arama inputu */}
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+              <input
+                type="text"
+                value={ipSearchTerm}
+                onChange={(e) => { setIpSearchTerm(e.target.value); setIpCurrentPage(1); }}
+                placeholder="IP ara..."
+                className="bg-black border border-glass-border rounded-lg px-3 py-2 pl-9 text-sm text-[#00F0FF] placeholder-gray-500 focus:outline-none focus:border-[#00F0FF]/50 w-64"
+              />
+            </div>
+
+            {/* Sayfa basina dropdown */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">Sayfa:</span>
+              <select
+                value={ipPageSize}
+                onChange={(e) => { setIpPageSize(Number(e.target.value)); setIpCurrentPage(1); }}
+                style={{ backgroundColor: '#000' }}
+                className="border border-glass-border rounded-lg px-2 py-2 text-sm text-[#00F0FF] focus:outline-none focus:border-[#00F0FF]/50 appearance-none cursor-pointer w-20"
+              >
+                <option value={50} className="bg-black text-[#00F0FF]">50</option>
+                <option value={100} className="bg-black text-[#00F0FF]">100</option>
+                <option value={150} className="bg-black text-[#00F0FF]">150</option>
+                <option value={200} className="bg-black text-[#00F0FF]">200</option>
+              </select>
+            </div>
+
             {/* Sadece işaretlenenler toggle */}
             <button
-              onClick={() => setFilterFlagged(!filterFlagged)}
+              onClick={() => { setFilterFlagged(!filterFlagged); setIpCurrentPage(1); }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-all ${
                 filterFlagged
                   ? "bg-neon-amber/15 border-neon-amber/40 text-[#FFB800]"
@@ -823,11 +864,15 @@ export function IpReputationTab() {
           </div>
         </div>
 
-        {ips.length === 0 ? (
+        {ips.length === 0 || totalFilteredIps === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-gray-500">
             <Shield className="w-10 h-10 mb-3 opacity-30" />
-            <p className="text-sm">Henüz kontrol edilen IP yok</p>
-            <p className="text-xs mt-1 opacity-60">IP itibar kontrolü aktif olduğunda burada görünecek</p>
+            <p className="text-sm">
+              {ipSearchTerm ? `"${ipSearchTerm}" ile eşleşen IP bulunamadı` : "Henüz kontrol edilen IP yok"}
+            </p>
+            {!ipSearchTerm && (
+              <p className="text-xs mt-1 opacity-60">IP itibar kontrolü aktif olduğunda burada görünecek</p>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -915,7 +960,7 @@ export function IpReputationTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-glass-border/50">
-                {sortedIps.map((ip) => (
+                {pagedIps.map((ip) => (
                   <tr
                     key={ip.ip}
                     className={`transition-colors ${
@@ -949,6 +994,32 @@ export function IpReputationTab() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Sayfalama kontrolleri */}
+        {totalIpPages > 1 && (
+          <div className="flex items-center justify-between px-1 py-2 mt-4 text-sm">
+            <button
+              onClick={() => setIpCurrentPage(p => Math.max(1, p - 1))}
+              disabled={ipCurrentPage <= 1}
+              className="px-3 py-1.5 text-[#00F0FF] border border-[#00F0FF]/30 rounded-lg hover:bg-[#00F0FF]/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-xs"
+            >
+              &lt; Onceki
+            </button>
+            <span className="text-xs text-gray-400">
+              Sayfa {ipCurrentPage} / {totalIpPages}
+              {ipSearchTerm
+                ? ` (filtrelenmis: ${totalFilteredIps} / ${ips.length} IP)`
+                : ` (toplam ${totalFilteredIps} IP)`}
+            </span>
+            <button
+              onClick={() => setIpCurrentPage(p => Math.min(totalIpPages, p + 1))}
+              disabled={ipCurrentPage >= totalIpPages}
+              className="px-3 py-1.5 text-[#00F0FF] border border-[#00F0FF]/30 rounded-lg hover:bg-[#00F0FF]/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-xs"
+            >
+              Sonraki &gt;
+            </button>
           </div>
         )}
       </GlassCard>
