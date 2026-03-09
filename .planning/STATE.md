@@ -51,7 +51,7 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 Phase: 9 of 15 (Device Management) - COMPLETE
 Plan: 2 of 2 complete
 Status: Phase Complete, sistem bakim oturumu tamamlandi
-Last activity: 2026-03-09 - Completed quick task 15: auto_block_ip zaman damgasi eksik duzeltme
+Last activity: 2026-03-09 - Completed quick task 16: AbuseIPDB limit fix + timestamp fallback + toplu IP yonetimi
 
 Progress: [██████░░░░] 40%
 
@@ -139,11 +139,12 @@ Progress: [██████░░░░] 40%
 | 13 | IP engelleme/DDoS/AI Insight canli test + IP Reputation auto-block eklendi (skor>=80, ulke engeli) | 2026-03-09 | 0c7e15f | [13-ip-engelleme](./quick/13-ip-engelleme-ddos-koruma-ve-ai-insight-o/) |
 | 14 | IP tablolarinda sutun siralama: IpReputationTab 6 sutun + IpManagementPage 7 sutun (guvenilir+engellenen) | 2026-03-09 | 2925c87 | [14-ip-tablolarinda-sutun-siralama](./quick/14-ip-tablolarinda-sutun-siralama-zaman-eti/) |
 | 15 | auto_block_ip blocked_at timestamp eksik — otomatik engellenen IP'lerde tarih gozukmuyor fix | 2026-03-09 | ddd6260 | [15-auto-block-ip-timestamp](./quick/15-auto-block-ip-zaman-damgasi-eksik-engell/) |
+| 16 | IP itibar: AbuseIPDB limit TTL fix + timestamp fallback + toplu IP yonetimi (bulk select/unblock/sure) | 2026-03-09 | 43436eb, 9884c95, 3158148 | [16-ip-itibar-abuseipdb-limit-kontrolu-engel](./quick/16-ip-itibar-abuseipdb-limit-kontrolu-engel/) |
 
 ## Session Continuity
 
 Last session: 2026-03-09
-Stopped at: Quick 11 tamamlandi — IP Reputation stabilite testi 25/25 PASS, test_ip_reputation.py olusturuldu.
+Stopped at: Quick 16 tamamlandi — 3 paralel ajan: AbuseIPDB limit TTL fix, timestamp fallback, toplu IP yonetimi.
 Resume file: .planning/phases/09-device-management/.continue-here-app-improvements.md
 
 ## Post-Milestone Work (GSD disi)
