@@ -298,6 +298,7 @@ async def auto_block_ip(ip: str, reason: str):
         # Engel süresi için ayri key (TTL ile otomatik kalkar)
         block_dur = await _get_sec_int(redis, "block_duration_sec", BLOCK_DURATION_SEC)
         await redis.set(f"dns:threat:block_expire:{ip}", reason, ex=block_dur)
+        await redis.set(f"dns:threat:block_time:{ip}", datetime.utcnow().isoformat(), ex=block_dur)
 
         # İstatistikleri güncelle
         await redis.hincrby("dns:threat:stats", "total_auto_blocks", 1)
@@ -510,10 +511,12 @@ async def get_blocked_ips() -> list[dict]:
         for ip in ips:
             reason = await redis.get(f"dns:threat:block_expire:{ip}") or "Bilinmiyor"
             ttl = await redis.ttl(f"dns:threat:block_expire:{ip}")
+            blocked_at = await redis.get(f"dns:threat:block_time:{ip}")
             result.append({
                 "ip": ip,
                 "reason": reason,
                 "remaining_seconds": max(ttl, 0),
+                "blocked_at": blocked_at,
             })
         return result
     except Exception as e:

@@ -186,7 +186,7 @@ async def list_blocked_ips(
                 id=None,
                 ip_address=r["ip"],
                 reason=r["reason"],
-                blocked_at=None,
+                blocked_at=r.get("blocked_at"),
                 expires_at=None,
                 is_manual=False,
                 source="threat_analyzer",
