@@ -288,18 +288,15 @@ export function IpReputationTab() {
     </div>
   );
 
-  const dailyPct = summary && summary.daily_limit > 0
-    ? Math.round((summary.daily_checks_used / summary.daily_limit) * 100)
+  // Gercek AbuseIPDB limiti varsa onu kullan, yoksa yerel limite don
+  const effectiveLimit = summary?.abuseipdb_limit ?? summary?.daily_limit ?? 900;
+  // daily_checks_used backend tarafindan gercek API verisine gore hesaplanir (varsa)
+  const effectiveUsed = summary?.daily_checks_used ?? 0;
+  const dailyPct = effectiveLimit > 0
+    ? Math.round((effectiveUsed / effectiveLimit) * 100)
     : 0;
-
-  // AbuseIPDB gercek kota doluluk yuzdesi (varsa)
-  const abuseipdbLimit = summary?.abuseipdb_limit ?? 1000;
-  const abuseipdbUsed = summary?.abuseipdb_limit != null && summary?.abuseipdb_remaining != null
-    ? summary.abuseipdb_limit - summary.abuseipdb_remaining
-    : null;
-  const abuseipdbPct = abuseipdbUsed != null && abuseipdbLimit > 0
-    ? Math.round((abuseipdbUsed / abuseipdbLimit) * 100)
-    : null;
+  // Gercek AbuseIPDB verisi mevcut mu? (header'dan alindi mi?)
+  const hasRealApiData = summary?.abuseipdb_limit != null && summary?.abuseipdb_remaining != null;
 
   const filteredIps = ips.filter(ip =>
     (!filterFlagged || ip.abuse_score >= 50)
@@ -356,34 +353,27 @@ export function IpReputationTab() {
 
         {/* Günlük Kullanım */}
         <div className="glass-card p-4 border-l-2 border-[#39FF14]">
-          <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">Günlük Kullanım</div>
-          {/* Yerel sayac */}
+          <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">
+            {hasRealApiData ? "AbuseIPDB Kullanım" : "Günlük Kullanım"}
+          </div>
           <div className="text-2xl font-bold text-[#39FF14]">
-            {summary?.daily_checks_used ?? 0}
-            <span className="text-sm font-normal text-gray-400">/{summary?.daily_limit ?? 900}</span>
+            {effectiveUsed}
+            <span className="text-sm font-normal text-gray-400">/{effectiveLimit}</span>
           </div>
           <div className="w-full bg-gray-700 rounded-full h-1 mt-1.5">
             <div
-              className="h-1 rounded-full bg-[#39FF14] transition-all"
+              className={`h-1 rounded-full transition-all ${
+                dailyPct >= 90 ? "bg-[#FF003C]" : dailyPct >= 70 ? "bg-[#FFB800]" : "bg-[#39FF14]"
+              }`}
               style={{ width: `${Math.min(dailyPct, 100)}%` }}
             />
           </div>
-          {/* AbuseIPDB gercek kota (varsa) */}
-          {abuseipdbUsed != null && (
-            <div className="mt-2 pt-2 border-t border-white/5">
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-gray-500">AbuseIPDB kalan</span>
-                <span className="text-[#00F0FF] font-mono">
-                  {summary?.abuseipdb_remaining ?? "?"}/{abuseipdbLimit}
-                </span>
-              </div>
-              <div className="w-full bg-gray-700 rounded-full h-1">
-                <div
-                  className="h-1 rounded-full bg-[#00F0FF] transition-all"
-                  style={{ width: `${Math.min(abuseipdbPct ?? 0, 100)}%` }}
-                />
-              </div>
+          {hasRealApiData ? (
+            <div className="text-xs text-[#00F0FF] mt-1.5 font-mono">
+              {summary?.abuseipdb_remaining ?? "?"} istek kalan
             </div>
+          ) : (
+            <div className="text-xs text-gray-500 mt-1.5">Yerel sayaç</div>
           )}
         </div>
       </div>

@@ -49,6 +49,19 @@ REDIS_KEY_FLOW_PREFIX   = "flow:live:"
 REDIS_KEY_ENABLED       = "reputation:enabled"
 REDIS_KEY_COUNTRIES     = "reputation:blocked_countries"
 
+# Blacklist sabitleri
+ABUSEIPDB_BLACKLIST_URL         = "https://api.abuseipdb.com/api/v2/blacklist"
+BLACKLIST_MAX_DAILY             = 5       # AbuseIPDB blacklist gunluk limit (ucretsiz)
+BLACKLIST_FETCH_INTERVAL        = 86400   # 24 saat (saniye)
+REDIS_KEY_BLACKLIST_IPS         = "reputation:blacklist_ips"
+REDIS_KEY_BLACKLIST_DATA_PREFIX = "reputation:blacklist_data:"
+REDIS_KEY_BLACKLIST_LAST_FETCH  = "reputation:blacklist_last_fetch"
+REDIS_KEY_BLACKLIST_COUNT       = "reputation:blacklist_count"
+REDIS_KEY_BLACKLIST_DAILY       = "reputation:blacklist_daily_fetches"
+REDIS_KEY_BLACKLIST_AUTO_BLOCK  = "reputation:blacklist_auto_block"
+REDIS_KEY_BLACKLIST_MIN_SCORE   = "reputation:blacklist_min_score"
+REDIS_KEY_BLACKLIST_LIMIT       = "reputation:blacklist_limit"
+
 
 # ─── Yardimci fonksiyonlar ───────────────────────────────────────────────────
 
@@ -267,9 +280,31 @@ async def _process_ip(ip: str, api_key: str | None, redis) -> bool:
     # ── AbuseIPDB kontrolu (API anahtari varsa ve kota dolmadiysa) ──
     if api_key:
         daily_count = await _increment_daily_counter(redis)
-        if daily_count <= DAILY_LIMIT:
+        # Gercek AbuseIPDB kalan hak sayisini kontrol et (X-RateLimit-Remaining header'dan)
+        api_remaining = await redis.get("reputation:abuseipdb_remaining")
+        api_has_quota = api_remaining is not None and int(api_remaining) > 0
+
+        if daily_count <= DAILY_LIMIT or api_has_quota:
             abuse_data = await check_abuseipdb(ip, api_key)
             used_abuseipdb = True
+            # Basarili cagri sonrasi yerel sayaci gercek API verisiyle senkronize et
+            if abuse_data:
+                try:
+                    real_remaining = await redis.get("reputation:abuseipdb_remaining")
+                    real_limit = await redis.get("reputation:abuseipdb_limit")
+                    if real_remaining is not None and real_limit is not None:
+                        synced_count = int(real_limit) - int(real_remaining)
+                        await redis.set(REDIS_KEY_DAILY_CHECKS, str(synced_count))
+                        # TTL yoksa yeniden ayarla
+                        ttl = await redis.ttl(REDIS_KEY_DAILY_CHECKS)
+                        if ttl == -1:
+                            await redis.expire(REDIS_KEY_DAILY_CHECKS, CACHE_TTL)
+                        logger.debug(
+                            f"Yerel sayac senkronize edildi: {synced_count}/{int(real_limit)} "
+                            f"(AbuseIPDB kalan: {real_remaining})"
+                        )
+                except Exception:
+                    pass
         else:
             logger.debug(f"AbuseIPDB gunluk kota doldu ({daily_count}/{DAILY_LIMIT}), {ip} atlanıyor.")
             # Sayaci geri al (bosu bosuna arttirdik)
