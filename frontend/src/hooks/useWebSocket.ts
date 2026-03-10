@@ -98,7 +98,11 @@ export function useWebSocket() {
       if (isUnmountedRef.current) return;
       try {
         const parsed = JSON.parse(event.data);
-        setData(parsed);
+        // Sadece realtime_update mesajlarini dashboard verisine yaz
+        // ping ve security_event mesajlari data state'ini ezmesin
+        if (parsed.type === "realtime_update") {
+          setData(parsed);
+        }
       } catch (e) {
         console.error("WebSocket parse hatasi:", e);
       }
