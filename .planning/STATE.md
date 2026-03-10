@@ -151,19 +151,19 @@ Progress: [██████░░░░] 40%
 | 25 | DDoS harita paket/boyut 0 fix + conn_limit attacker set + history counter | 2026-03-10 | 202a281 | [25-ddos-harita-paket-boyut-0-fix](./quick/25-ddos-harita-paket-boyut-0-fix-savunma-me/) |
 | 26 | Android cihaz detay canli trafik akisi — live flows listesi, 5s auto-refresh, siralama chip'leri, >10MB glow | 2026-03-10 | 3483f6d, 3a1423e | [26-android-cihaz-detay-canli-trafik-akisi-w](./quick/26-android-cihaz-detay-canli-trafik-akisi-w/) |
 | 27 | Android IP Reputation sayfasi tam uyarla — 17 DTO, 13 endpoint, 4-tab UI (ulke engelleme + API usage) | 2026-03-10 | 4c93f62, 3bc9ff3, 67a8d06 | [27-android-ip-reputation](./quick/27-android-ip-reputation-sayfasi-tam-uyarla/) |
+| 28 | Android Push Bildirimleri + Backend Push API — 3 endpoint (GET channels, POST toggle, POST register), Android geri butonu + Build.MODEL, Pi deploy + test | 2026-03-10 | 4f75903, 0ffeb43, 419e978 | [28-android-push-bildirimleri](./quick/28-android-app-push-bildirimleri-ve-push-bi/) |
 
 ## Session Continuity
 
 Last session: 2026-03-10
-Stopped at: Quick 26-27 tamamlandi, DDoS hayalet IP fix deploy edildi, Android APK build basarili
+Stopped at: Quick 28 tamamlandi — Push bildirim API backend+Android+deploy
 Resume file: .planning/quick/23-android-complete-app/EXECUTION-GUIDE.md
 Notes: |
-  - Quick 26: Android cihaz detay canli trafik akisi (live flows, 5s refresh, siralama)
+  - Quick 28: Push bildirim API (GET /channels, POST toggle, POST register), Android screen geri butonu + Build.MODEL
   - Quick 27: Android IP Reputation tam uyarlama (17 DTO, 13 endpoint, 4-tab UI, ulke engelleme)
   - DDoS fix: flush_attacker_sets() Redis temizligi + periyodik expired kayit temizligi + ZSET TTL
   - Android build: JDK 17 + Android SDK kuruldu, APK basariyla derlendi (72MB)
   - ADB surucu sorunu: Samsung S24 USB driver uyumsuzlugu (APK elle yuklendi)
-  - Push Notification sayfasi MUTLAKA eklenecek (kullanici ozellikle istedi)
   - Sonraki isler: ADIM 8 (mevcut ekran duzeltmeleri), ADIM 10 (test/build iyilestirme)
 
 ## Post-Milestone Work (GSD disi)
