@@ -9,6 +9,7 @@ import com.tonbil.aifirewall.data.remote.dto.DeviceUpdateDto
 import com.tonbil.aifirewall.data.remote.dto.DeviceBandwidthDto
 import com.tonbil.aifirewall.data.remote.dto.DeviceScanResponseDto
 import com.tonbil.aifirewall.data.remote.dto.DnsQueryLogDto
+import com.tonbil.aifirewall.data.remote.dto.LiveFlowDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -135,6 +136,22 @@ class DeviceRepository(private val client: HttpClient) {
             val response: DeviceResponseDto = client.patch(ApiRoutes.deviceBandwidth(id)) {
                 contentType(ContentType.Application.Json)
                 setBody(dto)
+            }.body()
+            Result.success(response)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getDeviceLiveFlows(deviceId: Int): Result<List<LiveFlowDto>> {
+        return try {
+            val response: List<LiveFlowDto> = client.get(ApiRoutes.TRAFFIC_FLOWS_LIVE) {
+                url {
+                    parameters.append("device_id", deviceId.toString())
+                    parameters.append("sort_by", "bytes_total")
+                    parameters.append("sort_order", "desc")
+                    parameters.append("limit", "200")
+                }
             }.body()
             Result.success(response)
         } catch (e: Exception) {

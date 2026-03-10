@@ -9,6 +9,7 @@ import com.tonbil.aifirewall.data.remote.dto.DeviceTrafficSummaryDto
 import com.tonbil.aifirewall.data.remote.dto.DeviceBandwidthDto
 import com.tonbil.aifirewall.data.remote.dto.DeviceUpdateDto
 import com.tonbil.aifirewall.data.remote.dto.DnsQueryLogDto
+import com.tonbil.aifirewall.data.remote.dto.LiveFlowDto
 import com.tonbil.aifirewall.data.remote.dto.ProfileResponseDto
 import com.tonbil.aifirewall.data.remote.dto.WsDeviceBandwidthDto
 import com.tonbil.aifirewall.data.repository.DeviceRepository
@@ -28,6 +29,8 @@ data class DeviceDetailUiState(
     val dnsLogs: List<DnsQueryLogDto> = emptyList(),
     val trafficSummary: DeviceTrafficSummaryDto? = null,
     val bandwidth: WsDeviceBandwidthDto? = null,
+    val liveFlows: List<LiveFlowDto> = emptyList(),
+    val isLiveFlowsLoading: Boolean = false,
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val error: String? = null,
@@ -67,11 +70,13 @@ class DeviceDetailViewModel(
                     val profilesDeferred = async { profileRepository.getProfiles() }
                     val historyDeferred = async { deviceRepository.getConnectionHistory(deviceId) }
                     val trafficDeferred = async { deviceRepository.getTrafficSummary(deviceId) }
+                    val liveFlowsDeferred = async { deviceRepository.getDeviceLiveFlows(deviceId) }
 
                     val deviceResult = deviceDeferred.await()
                     val profilesResult = profilesDeferred.await()
                     val historyResult = historyDeferred.await()
                     val trafficResult = trafficDeferred.await()
+                    val liveFlowsResult = liveFlowsDeferred.await()
 
                     // DNS logs need the device IP, so load after device
                     val dnsResult = deviceResult.getOrNull()?.ipAddress?.let { ip ->
@@ -85,6 +90,7 @@ class DeviceDetailViewModel(
                             connectionHistory = historyResult.getOrElse { emptyList() },
                             trafficSummary = trafficResult.getOrNull(),
                             dnsLogs = dnsResult?.getOrElse { emptyList() } ?: emptyList(),
+                            liveFlows = liveFlowsResult.getOrElse { emptyList() },
                             isLoading = false,
                             isRefreshing = false,
                             error = if (deviceResult.isFailure)
@@ -102,6 +108,19 @@ class DeviceDetailViewModel(
                     )
                 }
             }
+        }
+    }
+
+    fun loadDeviceLiveFlows() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLiveFlowsLoading = true) }
+            deviceRepository.getDeviceLiveFlows(deviceId)
+                .onSuccess { flows ->
+                    _uiState.update { it.copy(liveFlows = flows, isLiveFlowsLoading = false) }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(isLiveFlowsLoading = false) }
+                }
         }
     }
 
