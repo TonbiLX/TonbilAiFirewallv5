@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,13 +24,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Error
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Shield
@@ -40,11 +46,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -63,7 +68,6 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -78,9 +82,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tonbil.aifirewall.data.remote.dto.IpRepApiUsageDataDto
+import com.tonbil.aifirewall.data.remote.dto.IpRepBlacklistApiUsageDataDto
 import com.tonbil.aifirewall.data.remote.dto.IpRepBlacklistConfigDto
 import com.tonbil.aifirewall.data.remote.dto.IpRepBlacklistConfigUpdateDto
 import com.tonbil.aifirewall.data.remote.dto.IpRepBlacklistDto
+import com.tonbil.aifirewall.data.remote.dto.IpRepBlacklistResponseDto
 import com.tonbil.aifirewall.data.remote.dto.IpRepCheckDto
 import com.tonbil.aifirewall.data.remote.dto.IpRepConfigDto
 import com.tonbil.aifirewall.data.remote.dto.IpRepConfigUpdateDto
@@ -90,6 +97,17 @@ import com.tonbil.aifirewall.ui.theme.CyberpunkTheme
 import org.koin.androidx.compose.koinViewModel
 
 private val TAB_TITLES = listOf("Ozet", "IP'ler", "Kara Liste", "Ayarlar")
+
+private val PRESET_COUNTRIES = listOf(
+    "CN" to "Cin",
+    "RU" to "Rusya",
+    "KP" to "Kuzey Kore",
+    "IR" to "Iran",
+    "NG" to "Nijerya",
+    "BR" to "Brezilya",
+    "IN" to "Hindistan",
+    "UA" to "Ukrayna",
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -227,7 +245,12 @@ fun IpReputationScreen(
                         }
 
                         when (uiState.selectedTab) {
-                            0 -> SummaryTab(summary = uiState.summary)
+                            0 -> SummaryTab(
+                                summary = uiState.summary,
+                                apiUsage = uiState.apiUsage,
+                                isCheckingApiUsage = uiState.isCheckingApiUsage,
+                                onCheckApiUsage = { viewModel.checkApiUsage() },
+                            )
                             1 -> IpsTab(
                                 ips = uiState.ips,
                                 sortField = uiState.ipSortField,
@@ -235,11 +258,14 @@ fun IpReputationScreen(
                                 onSortBy = { viewModel.sortIpBy(it) },
                             )
                             2 -> BlacklistTab(
-                                blacklist = uiState.blacklist,
+                                blacklistResponse = uiState.blacklistResponse,
                                 blacklistConfig = uiState.blacklistConfig,
                                 isFetching = uiState.isBlacklistFetching,
                                 onFetch = { viewModel.fetchBlacklist() },
                                 onUpdateConfig = { viewModel.updateBlacklistConfig(it) },
+                                blacklistApiUsage = uiState.blacklistApiUsage,
+                                isCheckingBlacklistApiUsage = uiState.isCheckingBlacklistApiUsage,
+                                onCheckBlacklistApiUsage = { viewModel.checkBlacklistApiUsage() },
                             )
                             3 -> SettingsTab(
                                 config = uiState.config,
@@ -266,7 +292,12 @@ fun IpReputationScreen(
 // ============================================================
 
 @Composable
-private fun SummaryTab(summary: IpRepSummaryDto?) {
+private fun SummaryTab(
+    summary: IpRepSummaryDto?,
+    apiUsage: IpRepApiUsageDataDto?,
+    isCheckingApiUsage: Boolean,
+    onCheckApiUsage: () -> Unit,
+) {
     val colors = CyberpunkTheme.colors
 
     if (summary == null) {
@@ -275,6 +306,8 @@ private fun SummaryTab(summary: IpRepSummaryDto?) {
         }
         return
     }
+
+    val cleanCount = summary.totalChecked - summary.flaggedCritical - summary.flaggedWarning
 
     LazyColumn(
         modifier = Modifier
@@ -305,7 +338,7 @@ private fun SummaryTab(summary: IpRepSummaryDto?) {
                     )
                     SummaryStatCard(
                         label = "Temiz",
-                        value = summary.totalClean.toString(),
+                        value = cleanCount.coerceAtLeast(0).toString(),
                         color = colors.neonGreen,
                         icon = Icons.Outlined.CheckCircle,
                         modifier = Modifier.weight(1f),
@@ -316,54 +349,104 @@ private fun SummaryTab(summary: IpRepSummaryDto?) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     SummaryStatCard(
-                        label = "Supheli",
-                        value = summary.totalSuspicious.toString(),
+                        label = "Supheli (50-79)",
+                        value = summary.flaggedWarning.toString(),
                         color = colors.neonAmber,
                         icon = Icons.Outlined.Warning,
                         modifier = Modifier.weight(1f),
                     )
                     SummaryStatCard(
-                        label = "Kritik",
-                        value = summary.totalCritical.toString(),
+                        label = "Kritik (80+)",
+                        value = summary.flaggedCritical.toString(),
                         color = colors.neonRed,
                         icon = Icons.Outlined.Error,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    SummaryStatCard(
-                        label = "Engellenen",
-                        value = summary.totalBlocked.toString(),
-                        color = colors.neonRed,
-                        icon = Icons.Outlined.Shield,
-                        modifier = Modifier.weight(1f),
-                    )
-                    SummaryStatCard(
-                        label = "API Kota",
-                        value = summary.apiQuotaRemaining?.toString() ?: "—",
-                        color = colors.neonMagenta,
                         modifier = Modifier.weight(1f),
                     )
                 }
             }
         }
 
-        if (!summary.lastCheck.isNullOrBlank()) {
+        // Daily quota
+        item {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Gunluk Kota",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "Gunluk Kontrol",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    )
+                    Text(
+                        text = "${summary.dailyChecksUsed} / ${summary.dailyLimit}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.neonCyan,
+                    )
+                }
+                if (summary.abuseipdbRemaining != null && summary.abuseipdbLimit != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = "AbuseIPDB API Kalan",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        )
+                        Text(
+                            text = "${summary.abuseipdbRemaining} / ${summary.abuseipdbLimit}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.neonMagenta,
+                        )
+                    }
+                }
+            }
+        }
+
+        // API Usage check button
+        item {
+            OutlinedButton(
+                onClick = onCheckApiUsage,
+                enabled = !isCheckingApiUsage,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.neonCyan),
+            ) {
+                if (isCheckingApiUsage) {
+                    CircularProgressIndicator(
+                        color = colors.neonCyan,
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(Icons.Outlined.Info, null, modifier = Modifier.size(16.dp))
+                }
+                Spacer(Modifier.width(8.dp))
+                Text("API Kullanimi Kontrol Et")
+            }
+        }
+
+        // API Usage result
+        if (apiUsage != null) {
             item {
-                GlassCard(modifier = Modifier.fillMaxWidth()) {
+                GlassCard(modifier = Modifier.fillMaxWidth(), glowColor = colors.neonCyan.copy(alpha = 0.15f)) {
                     Text(
-                        text = "Son Kontrol",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        text = "AbuseIPDB API Kullanimi",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.neonCyan,
                     )
-                    Text(
-                        text = summary.lastCheck,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+                    Spacer(Modifier.height(8.dp))
+                    ApiUsageRow("Limit", apiUsage.limit?.toString() ?: "-")
+                    ApiUsageRow("Kullanilan", apiUsage.used?.toString() ?: "-")
+                    ApiUsageRow("Kalan", apiUsage.remaining?.toString() ?: "-")
+                    ApiUsageRow("Kullanim %", "%.1f%%".format(apiUsage.usagePercent))
                 }
             }
         }
@@ -379,9 +462,9 @@ private fun SummaryTab(summary: IpRepSummaryDto?) {
                     )
                     Spacer(Modifier.height(8.dp))
                     ScoreDistributionBar(
-                        clean = summary.totalClean,
-                        suspicious = summary.totalSuspicious,
-                        critical = summary.totalCritical,
+                        clean = cleanCount.coerceAtLeast(0),
+                        suspicious = summary.flaggedWarning,
+                        critical = summary.flaggedCritical,
                         total = summary.totalChecked,
                     )
                     Spacer(Modifier.height(6.dp))
@@ -396,6 +479,27 @@ private fun SummaryTab(summary: IpRepSummaryDto?) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ApiUsageRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -572,7 +676,7 @@ private fun IpsTab(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(items = ips, key = { it.ipAddress }) { ip ->
+            items(items = ips, key = { it.ip }) { ip ->
                 IpRepCheckCard(ip = ip)
             }
         }
@@ -619,8 +723,8 @@ private fun IpRepCheckCard(ip: IpRepCheckDto) {
     val colors = CyberpunkTheme.colors
 
     val scoreColor = when {
-        ip.score >= 80 -> colors.neonRed
-        ip.score >= 50 -> colors.neonAmber
+        ip.abuseScore >= 80 -> colors.neonRed
+        ip.abuseScore >= 50 -> colors.neonAmber
         else -> colors.neonGreen
     }
 
@@ -639,7 +743,7 @@ private fun IpRepCheckCard(ip: IpRepCheckDto) {
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = ip.score.toString(),
+                    text = ip.abuseScore.toString(),
                     style = MaterialTheme.typography.titleMedium,
                     color = scoreColor,
                 )
@@ -653,42 +757,22 @@ private fun IpRepCheckCard(ip: IpRepCheckDto) {
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Text(
-                        text = ip.ipAddress,
+                        text = ip.ip,
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-                    // Country flag
-                    ip.countryCode?.let { code ->
-                        Text(text = countryCodeToFlag(code), style = MaterialTheme.typography.bodyMedium)
-                    }
-                    // TOR badge
-                    if (ip.isTor) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(colors.neonMagenta.copy(alpha = 0.2f))
-                                .border(1.dp, colors.neonMagenta.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 5.dp, vertical = 1.dp),
-                        ) {
-                            Text("TOR", style = MaterialTheme.typography.labelSmall, color = colors.neonMagenta)
-                        }
-                    }
-                    // Blocked badge
-                    if (ip.blocked) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(colors.neonRed.copy(alpha = 0.2f))
-                                .border(1.dp, colors.neonRed.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 5.dp, vertical = 1.dp),
-                        ) {
-                            Text("Engelli", style = MaterialTheme.typography.labelSmall, color = colors.neonRed)
-                        }
+                    // Country flag if it's a 2-letter code, otherwise text
+                    if (ip.country.length == 2) {
+                        Text(text = countryCodeToFlag(ip.country), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
 
-                // Country + ISP
-                val infoText = listOfNotNull(ip.countryName, ip.isp).joinToString(" • ")
+                // Country + City + ISP info line
+                val infoText = buildList {
+                    if (ip.country.isNotBlank()) add(ip.country)
+                    if (ip.city.isNotBlank()) add(ip.city)
+                    if (ip.isp.isNotBlank()) add(ip.isp)
+                }.joinToString(" - ")
                 if (infoText.isNotBlank()) {
                     Text(
                         text = infoText,
@@ -699,13 +783,24 @@ private fun IpRepCheckCard(ip: IpRepCheckDto) {
                     )
                 }
 
-                // Reports + last reported
-                if (ip.totalReports > 0) {
-                    Text(
-                        text = "${ip.totalReports} rapor" + (ip.lastReported?.let { " • $it" } ?: ""),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                    )
+                // Reports + checked_at
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (ip.totalReports > 0) {
+                        Text(
+                            text = "${ip.totalReports} rapor",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        )
+                    }
+                    if (ip.checkedAt.isNotBlank()) {
+                        Text(
+                            text = ip.checkedAt,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        )
+                    }
                 }
             }
         }
@@ -718,13 +813,17 @@ private fun IpRepCheckCard(ip: IpRepCheckDto) {
 
 @Composable
 private fun BlacklistTab(
-    blacklist: List<IpRepBlacklistDto>,
+    blacklistResponse: IpRepBlacklistResponseDto?,
     blacklistConfig: IpRepBlacklistConfigDto?,
     isFetching: Boolean,
     onFetch: () -> Unit,
     onUpdateConfig: (IpRepBlacklistConfigUpdateDto) -> Unit,
+    blacklistApiUsage: IpRepBlacklistApiUsageDataDto?,
+    isCheckingBlacklistApiUsage: Boolean,
+    onCheckBlacklistApiUsage: () -> Unit,
 ) {
     val colors = CyberpunkTheme.colors
+    val blacklist = blacklistResponse?.ips ?: emptyList()
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Blacklist info + fetch button
@@ -745,11 +844,11 @@ private fun BlacklistTab(
                             color = colors.neonMagenta,
                         )
                         Text(
-                            text = "${cfg.totalEntries} kayit",
+                            text = "${cfg.totalCount} kayit",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         )
-                        if (!cfg.lastFetch.isNullOrBlank()) {
+                        if (cfg.lastFetch.isNotBlank()) {
                             Text(
                                 text = "Son guncelleme: ${cfg.lastFetch}",
                                 style = MaterialTheme.typography.labelSmall,
@@ -757,12 +856,12 @@ private fun BlacklistTab(
                             )
                         }
                     }
-                    // Enabled toggle
+                    // Auto block toggle
                     Column(horizontalAlignment = Alignment.End) {
                         Switch(
-                            checked = cfg.enabled,
-                            onCheckedChange = { enabled ->
-                                onUpdateConfig(IpRepBlacklistConfigUpdateDto(enabled = enabled))
+                            checked = cfg.autoBlock,
+                            onCheckedChange = { autoBlock ->
+                                onUpdateConfig(IpRepBlacklistConfigUpdateDto(autoBlock = autoBlock))
                             },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = colors.neonMagenta,
@@ -770,9 +869,9 @@ private fun BlacklistTab(
                             ),
                         )
                         Text(
-                            text = if (cfg.enabled) "Aktif" else "Pasif",
+                            text = if (cfg.autoBlock) "Oto-Engel" else "Pasif",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (cfg.enabled) colors.neonGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            color = if (cfg.autoBlock) colors.neonGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                         )
                     }
                 }
@@ -800,6 +899,40 @@ private fun BlacklistTab(
             }
         }
 
+        // Blacklist API usage button
+        GlassCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+        ) {
+            OutlinedButton(
+                onClick = onCheckBlacklistApiUsage,
+                enabled = !isCheckingBlacklistApiUsage,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.neonCyan),
+            ) {
+                if (isCheckingBlacklistApiUsage) {
+                    CircularProgressIndicator(
+                        color = colors.neonCyan,
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Icon(Icons.Outlined.Info, null, modifier = Modifier.size(16.dp))
+                }
+                Spacer(Modifier.width(8.dp))
+                Text("Blacklist API Kontrol")
+            }
+
+            if (blacklistApiUsage != null) {
+                Spacer(Modifier.height(8.dp))
+                ApiUsageRow("Limit", blacklistApiUsage.limit.toString())
+                ApiUsageRow("Kullanilan", blacklistApiUsage.used.toString())
+                ApiUsageRow("Kalan", blacklistApiUsage.remaining.toString())
+                ApiUsageRow("Toplam IP", blacklistApiUsage.totalIps.toString())
+            }
+        }
+
         // Blacklist entries
         if (blacklist.isEmpty()) {
             Box(
@@ -821,13 +954,13 @@ private fun BlacklistTab(
             ) {
                 item {
                     Text(
-                        text = "${blacklist.size} giris",
+                        text = "${blacklistResponse?.totalCount ?: blacklist.size} giris",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.padding(vertical = 4.dp),
                     )
                 }
-                items(items = blacklist, key = { it.ipAddress }) { entry ->
+                items(items = blacklist, key = { it.ip }) { entry ->
                     BlacklistEntryCard(entry = entry)
                 }
             }
@@ -839,8 +972,8 @@ private fun BlacklistTab(
 private fun BlacklistEntryCard(entry: IpRepBlacklistDto) {
     val colors = CyberpunkTheme.colors
     val scoreColor = when {
-        entry.score >= 80 -> colors.neonRed
-        entry.score >= 50 -> colors.neonAmber
+        entry.abuseScore >= 80 -> colors.neonRed
+        entry.abuseScore >= 50 -> colors.neonAmber
         else -> colors.neonGreen
     }
 
@@ -858,13 +991,19 @@ private fun BlacklistEntryCard(entry: IpRepBlacklistDto) {
                     .background(scoreColor),
             )
             Text(
-                text = entry.ipAddress,
+                text = entry.ip,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
-            entry.countryCode?.let { code ->
-                Text(text = countryCodeToFlag(code), style = MaterialTheme.typography.bodySmall)
+            if (entry.country.length == 2) {
+                Text(text = countryCodeToFlag(entry.country), style = MaterialTheme.typography.bodySmall)
+            } else if (entry.country.isNotBlank()) {
+                Text(
+                    text = entry.country,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                )
             }
             Box(
                 modifier = Modifier
@@ -873,7 +1012,7 @@ private fun BlacklistEntryCard(entry: IpRepBlacklistDto) {
                     .padding(horizontal = 6.dp, vertical = 2.dp),
             ) {
                 Text(
-                    text = entry.score.toString(),
+                    text = entry.abuseScore.toString(),
                     style = MaterialTheme.typography.labelSmall,
                     color = scoreColor,
                 )
@@ -886,6 +1025,7 @@ private fun BlacklistEntryCard(entry: IpRepBlacklistDto) {
 // Tab 4: Settings
 // ============================================================
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SettingsTab(
     config: IpRepConfigDto?,
@@ -903,13 +1043,10 @@ private fun SettingsTab(
     }
 
     var enabled by rememberSaveable { mutableStateOf(config.enabled) }
-    var apiKey by rememberSaveable { mutableStateOf(config.apiKey) }
+    var apiKeyInput by rememberSaveable { mutableStateOf("") }
     var apiKeyVisible by remember { mutableStateOf(false) }
-    var minScore by rememberSaveable { mutableFloatStateOf(config.minScore.toFloat()) }
-    var checkInterval by rememberSaveable { mutableStateOf(config.checkIntervalMinutes.toString()) }
-    var maxPerCycle by rememberSaveable { mutableStateOf(config.maxIpsPerCycle.toString()) }
-    var autoBlock by rememberSaveable { mutableStateOf(config.autoBlock) }
-    var blockDuration by rememberSaveable { mutableStateOf(config.blockDuration ?: "24h") }
+    var blockedCountries by rememberSaveable { mutableStateOf(config.blockedCountries) }
+    var newCountryCode by rememberSaveable { mutableStateOf("") }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = colors.neonMagenta,
@@ -964,11 +1101,25 @@ private fun SettingsTab(
                 style = MaterialTheme.typography.labelMedium,
                 color = colors.neonMagenta,
             )
+            Spacer(Modifier.height(4.dp))
+            if (config.abuseipdbKeySet) {
+                Text(
+                    text = "Mevcut: ${config.abuseipdbKey}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.neonGreen,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Yeni key girmek icin asagiya yazin (bos birakirsaniz mevcut key korunur)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                )
+            }
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
-                value = apiKey,
-                onValueChange = { apiKey = it },
-                label = { Text("API Key") },
+                value = apiKeyInput,
+                onValueChange = { apiKeyInput = it },
+                label = { Text(if (config.abuseipdbKeySet) "Yeni API Key (opsiyonel)" else "API Key") },
                 singleLine = true,
                 visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -986,111 +1137,125 @@ private fun SettingsTab(
             )
         }
 
-        // Min score slider
+        // Country blocking
         GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Public,
+                    contentDescription = null,
+                    tint = colors.neonMagenta,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    text = "Engellenen Ulkeler",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = colors.neonMagenta,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+
+            // Current blocked countries as removable chips
+            if (blockedCountries.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    blockedCountries.forEach { code ->
+                        CountryChip(
+                            code = code,
+                            onRemove = {
+                                blockedCountries = blockedCountries.filter { it != code }
+                            },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            } else {
+                Text(
+                    text = "Henuz engellenen ulke yok",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
+            // Preset countries
             Text(
-                text = "Minimum Engelleme Skoru: ${minScore.toInt()}",
-                style = MaterialTheme.typography.labelMedium,
-                color = colors.neonMagenta,
-            )
-            Text(
-                text = "Bu skorun uzerindeki IP'ler otomatik engellenir (0-100)",
-                style = MaterialTheme.typography.bodySmall,
+                text = "Hizli Ekle",
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
             )
             Spacer(Modifier.height(4.dp))
-            Slider(
-                value = minScore,
-                onValueChange = { minScore = it },
-                valueRange = 0f..100f,
-                steps = 9,
-                colors = SliderDefaults.colors(
-                    thumbColor = when {
-                        minScore >= 80 -> colors.neonRed
-                        minScore >= 50 -> colors.neonAmber
-                        else -> colors.neonGreen
-                    },
-                    activeTrackColor = when {
-                        minScore >= 80 -> colors.neonRed
-                        minScore >= 50 -> colors.neonAmber
-                        else -> colors.neonGreen
-                    },
-                ),
-            )
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("0", style = MaterialTheme.typography.labelSmall, color = colors.neonGreen)
-                Text("50", style = MaterialTheme.typography.labelSmall, color = colors.neonAmber)
-                Text("100", style = MaterialTheme.typography.labelSmall, color = colors.neonRed)
-            }
-        }
-
-        // Interval + max per cycle
-        GlassCard(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = "Kontrol Parametreleri",
-                style = MaterialTheme.typography.labelMedium,
-                color = colors.neonMagenta,
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = checkInterval,
-                onValueChange = { checkInterval = it },
-                label = { Text("Kontrol Araligi (dakika)") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                colors = textFieldColors,
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = maxPerCycle,
-                onValueChange = { maxPerCycle = it },
-                label = { Text("Dongu Basi Max IP Sayisi") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                colors = textFieldColors,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-
-        // Auto block + block duration
-        GlassCard(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Otomatik Engelleme",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = "Kritik IP'leri otomatik engelle",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                PRESET_COUNTRIES.forEach { (code, name) ->
+                    val isAdded = blockedCountries.contains(code)
+                    PresetCountryChip(
+                        code = code,
+                        name = name,
+                        isAdded = isAdded,
+                        onClick = {
+                            if (!isAdded) {
+                                blockedCountries = blockedCountries + code
+                            }
+                        },
                     )
                 }
-                Switch(
-                    checked = autoBlock,
-                    onCheckedChange = { autoBlock = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = colors.neonRed,
-                        checkedTrackColor = colors.neonRed.copy(alpha = 0.3f),
-                    ),
-                )
             }
-            if (autoBlock) {
-                Spacer(Modifier.height(8.dp))
+
+            Spacer(Modifier.height(12.dp))
+
+            // Custom country code input
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 OutlinedTextField(
-                    value = blockDuration,
-                    onValueChange = { blockDuration = it },
-                    label = { Text("Engelleme Suresi (ornek: 24h, 7d, permanent)") },
+                    value = newCountryCode,
+                    onValueChange = { newCountryCode = it.uppercase().take(2) },
+                    label = { Text("Ulke Kodu") },
+                    placeholder = { Text("XX") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                     colors = textFieldColors,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.weight(1f),
                 )
+                Button(
+                    onClick = {
+                        val code = newCountryCode.trim().uppercase()
+                        if (code.length == 2 && !blockedCountries.contains(code)) {
+                            blockedCountries = blockedCountries + code
+                            newCountryCode = ""
+                        }
+                    },
+                    enabled = newCountryCode.trim().length == 2,
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.neonMagenta),
+                ) {
+                    Icon(Icons.Outlined.Add, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Ekle")
+                }
             }
+        }
+
+        // General info card (read-only backend constants)
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "Sistem Bilgileri",
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.neonCyan,
+            )
+            Spacer(Modifier.height(8.dp))
+            ApiUsageRow("Kontrol Araligi", "${config.checkInterval / 60} dk")
+            ApiUsageRow("Dongu Basi Max IP", config.maxChecksPerCycle.toString())
+            ApiUsageRow("Gunluk Limit", config.dailyLimit.toString())
         }
 
         // Action buttons
@@ -1100,17 +1265,12 @@ private fun SettingsTab(
         ) {
             Button(
                 onClick = {
-                    onSave(
-                        IpRepConfigUpdateDto(
-                            enabled = enabled,
-                            apiKey = apiKey.takeIf { it.isNotBlank() },
-                            minScore = minScore.toInt(),
-                            checkIntervalMinutes = checkInterval.toIntOrNull(),
-                            maxIpsPerCycle = maxPerCycle.toIntOrNull(),
-                            autoBlock = autoBlock,
-                            blockDuration = blockDuration.takeIf { it.isNotBlank() },
-                        )
+                    val updateDto = IpRepConfigUpdateDto(
+                        enabled = enabled,
+                        abuseipdbKey = apiKeyInput.takeIf { it.isNotBlank() },
+                        blockedCountries = blockedCountries,
                     )
+                    onSave(updateDto)
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = colors.neonMagenta),
                 modifier = Modifier.weight(1f),
@@ -1155,7 +1315,81 @@ private fun SettingsTab(
 }
 
 // ============================================================
-// Country code → flag emoji helper
+// Country chip components
+// ============================================================
+
+@Composable
+private fun CountryChip(
+    code: String,
+    onRemove: () -> Unit,
+) {
+    val colors = CyberpunkTheme.colors
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.neonMagenta.copy(alpha = 0.15f))
+            .border(1.dp, colors.neonMagenta.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+            .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(text = countryCodeToFlag(code), style = MaterialTheme.typography.bodySmall)
+            Text(text = code, style = MaterialTheme.typography.labelMedium, color = colors.neonMagenta)
+            Icon(
+                imageVector = Icons.Outlined.Close,
+                contentDescription = "Kaldir",
+                tint = colors.neonMagenta,
+                modifier = Modifier
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onRemove),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PresetCountryChip(
+    code: String,
+    name: String,
+    isAdded: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = CyberpunkTheme.colors
+    val chipBg = if (isAdded) colors.neonGreen.copy(alpha = 0.15f) else Color.Transparent
+    val chipBorder = if (isAdded) colors.neonGreen.copy(alpha = 0.4f) else colors.glassBorder
+    val chipText = if (isAdded) colors.neonGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = !isAdded, onClick = onClick)
+            .background(chipBg)
+            .border(1.dp, chipBorder, RoundedCornerShape(12.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(text = countryCodeToFlag(code), style = MaterialTheme.typography.labelSmall)
+            Text(text = "$name ($code)", style = MaterialTheme.typography.labelSmall, color = chipText)
+            if (isAdded) {
+                Icon(
+                    imageVector = Icons.Outlined.CheckCircle,
+                    contentDescription = null,
+                    tint = colors.neonGreen,
+                    modifier = Modifier.size(12.dp),
+                )
+            }
+        }
+    }
+}
+
+// ============================================================
+// Country code -> flag emoji helper
 // ============================================================
 
 private fun countryCodeToFlag(countryCode: String): String {
