@@ -9,6 +9,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -253,18 +254,74 @@ private fun StatChip(label: String, value: String, color: Color) {
 }
 
 @Composable
+private fun SortChipRow(
+    options: List<Pair<String, String>>,
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        options.forEach { (key, label) ->
+            val isSelected = selected == key
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (isSelected) NeonCyan.copy(alpha = 0.18f) else GlassBg)
+                    .border(
+                        0.5.dp,
+                        if (isSelected) NeonCyan.copy(alpha = 0.6f) else GlassBorder,
+                        RoundedCornerShape(16.dp),
+                    )
+                    .clickable { onSelect(key) }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+            ) {
+                Text(
+                    text = label,
+                    color = if (isSelected) NeonCyan else TextSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun LiveFlowsTab(flows: List<LiveFlowDto>) {
     if (flows.isEmpty()) {
         EmptyState("Aktif baglanti yok")
         return
     }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
-    ) {
-        items(flows, key = { it.flowId }) { flow ->
-            LiveFlowCard(flow = flow)
+    var sortKey by remember { mutableStateOf("speed") }
+    val sortedFlows = remember(flows, sortKey) {
+        when (sortKey) {
+            "speed" -> flows.sortedByDescending { maxOf(it.bpsIn, it.bpsOut) }
+            "bytes" -> flows.sortedByDescending { it.bytesIn + it.bytesOut }
+            "protocol" -> flows.sortedBy { it.protocol }
+            "name" -> flows.sortedBy { (it.hostname ?: it.srcIp).lowercase() }
+            else -> flows
+        }
+    }
+    Column(modifier = Modifier.fillMaxSize()) {
+        SortChipRow(
+            options = listOf("speed" to "Hiz \u2193", "bytes" to "Boyut \u2193", "protocol" to "Protokol", "name" to "Isim"),
+            selected = sortKey,
+            onSelect = { sortKey = it },
+        )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
+        ) {
+            items(sortedFlows, key = { it.flowId }) { flow ->
+                LiveFlowCard(flow = flow)
+            }
         }
     }
 }
@@ -382,16 +439,29 @@ private fun LargeTransfersTab(flows: List<LiveFlowDto>) {
         EmptyState("Buyuk transfer yok (>1MB)")
         return
     }
-    val sortedFlows = remember(flows) {
-        flows.sortedByDescending { it.bytesIn + it.bytesOut }
+    var sortKey by remember { mutableStateOf("bytes") }
+    val sortedFlows = remember(flows, sortKey) {
+        when (sortKey) {
+            "bytes" -> flows.sortedByDescending { it.bytesIn + it.bytesOut }
+            "speed" -> flows.sortedByDescending { maxOf(it.bpsIn, it.bpsOut) }
+            "name" -> flows.sortedBy { (it.dstDomain ?: it.dstIp).lowercase() }
+            else -> flows
+        }
     }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
-    ) {
-        items(sortedFlows, key = { it.flowId }) { flow ->
-            LargeTransferCard(flow = flow)
+    Column(modifier = Modifier.fillMaxSize()) {
+        SortChipRow(
+            options = listOf("bytes" to "Boyut \u2193", "speed" to "Hiz \u2193", "name" to "Hedef"),
+            selected = sortKey,
+            onSelect = { sortKey = it },
+        )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
+        ) {
+            items(sortedFlows, key = { it.flowId }) { flow ->
+                LargeTransferCard(flow = flow)
+            }
         }
     }
 }
@@ -509,13 +579,29 @@ private fun HistoryTab(
         (history.total + history.pageSize - 1) / history.pageSize
     } else 1
 
+    var sortKey by remember { mutableStateOf("time") }
+    val sortedItems = remember(history.items, sortKey) {
+        when (sortKey) {
+            "time" -> history.items // backend default: yeni önce
+            "time_asc" -> history.items.reversed()
+            "bytes" -> history.items.sortedByDescending { it.bytesTotal }
+            "domain" -> history.items.sortedBy { (it.dstDomain ?: it.dstIp).lowercase() }
+            else -> history.items
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
+        SortChipRow(
+            options = listOf("time" to "Yeni Once", "time_asc" to "Eski Once", "bytes" to "Boyut \u2193", "domain" to "Hedef"),
+            selected = sortKey,
+            onSelect = { sortKey = it },
+        )
         LazyColumn(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
         ) {
-            items(history.items) { item ->
+            items(sortedItems) { item ->
                 HistoryItemCard(item = item)
             }
         }
@@ -617,27 +703,44 @@ private fun PerDeviceTab(devices: List<TrafficPerDeviceDto>) {
         EmptyState("Cihaz trafik verisi yok")
         return
     }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        // Header
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(DarkSurface)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            ) {
-                Text("Cihaz", color = TextSecondary, fontSize = 10.sp, modifier = Modifier.weight(2.5f))
-                Text("Upload", color = NeonCyan, fontSize = 10.sp, modifier = Modifier.weight(1.5f), textAlign = TextAlign.End)
-                Text("Download", color = NeonMagenta, fontSize = 10.sp, modifier = Modifier.weight(1.5f), textAlign = TextAlign.End)
-                Text("Hiz", color = NeonAmber, fontSize = 10.sp, modifier = Modifier.weight(1.5f), textAlign = TextAlign.End)
-            }
+    var sortKey by remember { mutableStateOf("speed") }
+    val sortedDevices = remember(devices, sortKey) {
+        when (sortKey) {
+            "speed" -> devices.sortedByDescending { it.uploadSpeed + it.downloadSpeed }
+            "upload" -> devices.sortedByDescending { it.totalUpload }
+            "download" -> devices.sortedByDescending { it.totalDownload }
+            "name" -> devices.sortedBy { it.hostname.ifBlank { it.ipAddress }.lowercase() }
+            else -> devices
         }
-        items(devices) { dev ->
-            PerDeviceRow(dev = dev)
+    }
+    Column(modifier = Modifier.fillMaxSize()) {
+        SortChipRow(
+            options = listOf("speed" to "Hiz \u2193", "upload" to "Upload \u2193", "download" to "Download \u2193", "name" to "Isim"),
+            selected = sortKey,
+            onSelect = { sortKey = it },
+        )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // Header
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(DarkSurface)
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    Text("Cihaz", color = TextSecondary, fontSize = 10.sp, modifier = Modifier.weight(2.5f))
+                    Text("Upload", color = NeonCyan, fontSize = 10.sp, modifier = Modifier.weight(1.5f), textAlign = TextAlign.End)
+                    Text("Download", color = NeonMagenta, fontSize = 10.sp, modifier = Modifier.weight(1.5f), textAlign = TextAlign.End)
+                    Text("Hiz", color = NeonAmber, fontSize = 10.sp, modifier = Modifier.weight(1.5f), textAlign = TextAlign.End)
+                }
+            }
+            items(sortedDevices) { dev ->
+                PerDeviceRow(dev = dev)
+            }
         }
     }
 }

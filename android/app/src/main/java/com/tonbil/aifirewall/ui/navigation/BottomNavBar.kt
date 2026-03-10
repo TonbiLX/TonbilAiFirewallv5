@@ -94,13 +94,11 @@ fun CyberpunkBottomNav(navController: NavController) {
                     selected = selected,
                     onClick = {
                         navController.navigate(item.route) {
-                            // Always pop back to Dashboard (the real root after auth)
-                            // so that any sub-screen is cleared when switching tabs
+                            // Pop everything back to Dashboard so sub-screens are cleared
                             popUpTo<DashboardRoute> {
-                                saveState = true
+                                inclusive = false
                             }
                             launchSingleTop = true
-                            restoreState = true
                         }
                     },
                     icon = {

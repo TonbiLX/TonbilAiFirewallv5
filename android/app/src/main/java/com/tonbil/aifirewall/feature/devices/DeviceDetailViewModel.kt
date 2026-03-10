@@ -6,6 +6,7 @@ import com.tonbil.aifirewall.data.remote.WebSocketManager
 import com.tonbil.aifirewall.data.remote.dto.ConnectionHistoryDto
 import com.tonbil.aifirewall.data.remote.dto.DeviceResponseDto
 import com.tonbil.aifirewall.data.remote.dto.DeviceTrafficSummaryDto
+import com.tonbil.aifirewall.data.remote.dto.DeviceBandwidthDto
 import com.tonbil.aifirewall.data.remote.dto.DeviceUpdateDto
 import com.tonbil.aifirewall.data.remote.dto.DnsQueryLogDto
 import com.tonbil.aifirewall.data.remote.dto.ProfileResponseDto
@@ -131,6 +132,28 @@ class DeviceDetailViewModel(
                 deviceRepository.blockDevice(device.id)
             }
             result.onSuccess { loadAll() }
+        }
+    }
+
+    fun updateHostname(name: String) {
+        viewModelScope.launch {
+            deviceRepository.updateDevice(deviceId, DeviceUpdateDto(hostname = name))
+                .onSuccess { loadAll() }
+        }
+    }
+
+    fun updateBandwidth(mbps: Float?) {
+        viewModelScope.launch {
+            deviceRepository.updateBandwidth(deviceId, DeviceBandwidthDto(bandwidthLimitMbps = mbps))
+                .onSuccess { loadAll() }
+        }
+    }
+
+    fun toggleIptv() {
+        val device = _uiState.value.device ?: return
+        viewModelScope.launch {
+            deviceRepository.updateDevice(deviceId, DeviceUpdateDto(isIptv = !device.isIptv))
+                .onSuccess { loadAll() }
         }
     }
 }

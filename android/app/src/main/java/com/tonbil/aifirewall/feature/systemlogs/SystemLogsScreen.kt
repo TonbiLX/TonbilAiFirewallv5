@@ -1,6 +1,9 @@
 package com.tonbil.aifirewall.feature.systemlogs
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -49,6 +53,7 @@ import com.tonbil.aifirewall.data.remote.dto.SystemLogDto
 import com.tonbil.aifirewall.ui.theme.DarkBackground
 import com.tonbil.aifirewall.ui.theme.DarkSurface
 import com.tonbil.aifirewall.ui.theme.GlassBg
+import com.tonbil.aifirewall.ui.theme.GlassBorder
 import com.tonbil.aifirewall.ui.theme.NeonAmber
 import com.tonbil.aifirewall.ui.theme.NeonCyan
 import com.tonbil.aifirewall.ui.theme.NeonGreen
@@ -65,6 +70,7 @@ fun SystemLogsScreen(
     viewModel: SystemLogsViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    var sortKey by remember { mutableStateOf("time_desc") }
 
     Column(
         modifier = Modifier
@@ -111,8 +117,36 @@ fun SystemLogsScreen(
                     )
                 }
 
+                // Sort chips
+                item {
+                    SortChipRow(
+                        options = listOf(
+                            "time_desc" to "Yeni Once",
+                            "time_asc" to "Eski Once",
+                            "severity" to "Onem \u2193",
+                            "category" to "Kategori",
+                        ),
+                        selected = sortKey,
+                        onSelect = { sortKey = it },
+                    )
+                }
+
                 // Log items
-                items(state.logs.items) { log ->
+                val sortedLogs = when (sortKey) {
+                    "time_desc" -> state.logs.items
+                    "time_asc" -> state.logs.items.reversed()
+                    "severity" -> state.logs.items.sortedBy {
+                        when (it.severity.lowercase()) {
+                            "critical" -> 0
+                            "warning" -> 1
+                            "info" -> 2
+                            else -> 3
+                        }
+                    }
+                    "category" -> state.logs.items.sortedBy { it.category.lowercase() }
+                    else -> state.logs.items
+                }
+                items(sortedLogs) { log ->
                     LogItem(log)
                 }
 
@@ -204,6 +238,45 @@ private fun DropdownSelector(
                 DropdownMenuItem(
                     text = { Text(display) },
                     onClick = { onSelect(value); expanded = false },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SortChipRow(
+    options: List<Pair<String, String>>,
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        options.forEach { (key, label) ->
+            val isSelected = selected == key
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (isSelected) NeonCyan.copy(alpha = 0.18f) else GlassBg)
+                    .border(
+                        0.5.dp,
+                        if (isSelected) NeonCyan.copy(alpha = 0.6f) else GlassBorder,
+                        RoundedCornerShape(16.dp),
+                    )
+                    .clickable { onSelect(key) }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+            ) {
+                Text(
+                    text = label,
+                    color = if (isSelected) NeonCyan else TextSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                 )
             }
         }

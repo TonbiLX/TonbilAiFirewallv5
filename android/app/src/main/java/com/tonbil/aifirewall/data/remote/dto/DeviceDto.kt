@@ -18,6 +18,10 @@ data class DeviceResponseDto(
     @SerialName("total_online_seconds") val totalOnlineSeconds: Int = 0,
     @SerialName("last_online_start") val lastOnlineStart: String? = null,
     @SerialName("bandwidth_limit_mbps") val bandwidthLimitMbps: Float? = null,
+    @SerialName("is_iptv") val isIptv: Boolean = false,
+    @SerialName("device_type") val deviceType: String? = null,
+    @SerialName("risk_score") val riskScore: Int = 0,
+    @SerialName("risk_level") val riskLevel: String = "safe",
 )
 
 @Serializable
@@ -26,6 +30,7 @@ data class DeviceUpdateDto(
     @SerialName("ip_address") val ipAddress: String? = null,
     val manufacturer: String? = null,
     @SerialName("profile_id") val profileId: Int? = null,
+    @SerialName("is_iptv") val isIptv: Boolean? = null,
 )
 
 @Serializable

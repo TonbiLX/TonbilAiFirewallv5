@@ -1,24 +1,58 @@
-# Quick 29 — Bottom Nav Direct Navigation Fix
+# Quick 29 — Nav Fix + Sort Chips + Cihaz Yönetim Hazırlık
 
 ## Tamamlanan İşler
 
-### NAV BAR: Direkt Sayfa Geçişi ✅
-- **Sorun:** Alt navbar'dan bir ikona tıklayınca, alt sayfalardayken (örn. DdosMapRoute, TrafficRoute) navigasyon düzgün çalışmıyordu. Kullanıcı önce geri çıkmak zorunda kalıyordu.
-- **Kök Neden:** `popUpTo(navController.graph.findStartDestination().id)` — Graph'ın startDestination'ı SplashRoute veya LoginRoute olabiliyordu, bu route'lar auth sonrası back stack'ten temizlendiği için popUpTo hedefi bulunamıyordu.
-- **Çözüm (BottomNavBar.kt):**
-  1. `popUpTo<DashboardRoute>` — Her zaman gerçek kök olan Dashboard'a pop
-  2. **Child route eşleştirmesi** — Alt sayfalarda doğru tab'ın seçili (highlighted) görünmesi için her BottomNavItem'a `childRoutes` listesi eklendi
-  3. `selected` kontrolü: Ana route VEYA child route'lardan biri aktifse tab seçili görünüyor
-- **Dosya:** `android/.../ui/navigation/BottomNavBar.kt`
+### 1. Bottom Nav Direkt Navigasyon ✅
+- `popUpTo<DashboardRoute>` — SplashRoute/LoginRoute sorununu çözdü
+- `saveState/restoreState` kaldırıldı — alt sayfada kalma sorunu giderildi
+- Child route eşleştirmesi — alt sayfalarda doğru tab highlighted
+- **Dosya:** `BottomNavBar.kt`
 
-## Önceki Oturum (Quick 28) Özeti
-- BUG 1: Trafik JSON Parse (bpsIn/bpsOut Long→Double) ✅
-- BUG 3: Sistem Logları detay eksik ✅
-- BUG 4: IP Reputation mesaj yanlış ✅
-- Trafik Cihazlar sekmesi 0 değerler (DTO SerialName fix) ✅
-- DDoS Saldırı Haritası (DTO rewrite + Canvas polygon harita) ✅
+### 2. Sıralama Butonları (Sort Chips) ✅
+- **TrafficScreen** — 4 tab'a sıralama eklendi:
+  - Canlı: Hız↓, Boyut↓, Protokol, İsim
+  - Büyük: Boyut↓, Hız↓, Hedef
+  - Geçmiş: Yeni Önce, Eski Önce, Boyut↓, Hedef
+  - Cihazlar: Hız↓, Upload↓, Download↓, İsim
+- **SystemLogsScreen** — Yeni Önce, Eski Önce, Önem↓, Kategori
+- Cyberpunk glassmorphism chip tasarımı, seçili=cyan
+- **Dosyalar:** `TrafficScreen.kt`, `SystemLogsScreen.kt`
 
-## Sonraki Oturum İçin Olası İşler
-- DDoS Haritası iyileştirmeler (zoom/pan, daha detaylı polygon)
-- UX: Pull-to-refresh, offline mod
-- Production release (signed APK, ProGuard)
+### 3. Cihaz Yönetim Altyapı (Kısmen) ✅
+- `DeviceResponseDto` → `isIptv`, `deviceType`, `riskScore`, `riskLevel` eklendi
+- `DeviceUpdateDto` → `isIptv` eklendi
+- `DeviceDetailViewModel` → `updateHostname()`, `updateBandwidth()`, `toggleIptv()` eklendi
+- **Dosyalar:** `DeviceDto.kt`, `DeviceDetailViewModel.kt`
+
+## Sonraki Oturum — Cihaz Yönetim Tab (ÖNCELİKLİ)
+
+### DeviceDetailScreen 4. Tab: "Yönetim"
+Aşağıdakilerin UI'ını ekle:
+
+1. **Hostname düzenleme** — text field + kaydet butonu
+   - `viewModel.updateHostname(name)` kullan
+2. **Bandwidth limit** — slider (0-100 Mbps) + sayı gösterimi
+   - `viewModel.updateBandwidth(mbps)` kullan, null=limitsiz
+3. **IPTV modu toggle** — Switch
+   - `viewModel.toggleIptv()` kullan
+4. **Servis Engelleme butonu** → DeviceServicesScreen'e navigate
+   - `onNavigateToServices` callback ekle
+   - `AppNavHost.kt`'de DeviceDetailScreen'e navigation parametresi geç
+   - DeviceServicesRoute(deviceId, deviceName) kullan
+5. **Engelle/Kaldır butonu** (zaten var ama tab'a da ekle)
+6. **Cihaz bilgi kartı** — MAC, IP, üretici, cihaz tipi, risk skoru
+
+### Navigation Değişikliği
+- `DeviceDetailScreen` → `onNavigateToServices: (deviceId: Int, deviceName: String) -> Unit` parametresi ekle
+- `AppNavHost.kt` → DeviceDetailRoute composable'da:
+  ```kotlin
+  onNavigateToServices = { id, name ->
+      navController.navigate(DeviceServicesRoute(id.toString(), name))
+  }
+  ```
+
+### Mevcut Altyapı (Hazır)
+- `DeviceServicesScreen` + `DeviceServicesViewModel` → tam çalışıyor
+- `DeviceServiceRepository` → toggle, bulk update hazır
+- `DeviceRepository.updateBandwidth()` → hazır
+- Backend endpoint'ler: devices/{id}/bandwidth, services/devices/{id}/toggle
