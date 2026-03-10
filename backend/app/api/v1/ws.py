@@ -27,14 +27,19 @@ logger = logging.getLogger("tonbilai.ws")
 MAX_WS_CONNECTIONS = 100       # Maksimum esanli WebSocket bağlantısi
 MAX_CONNECTIONS_PER_IP = 5    # Tek IP'den maksimum esanli baglanti
 
+PING_INTERVAL = 30   # Saniye: her 30s bir application-level ping gonder
+PONG_TIMEOUT = 10    # Saniye: ping gonderilemezse stale kabul et
+DATA_INTERVAL = 3    # Saniye: normal realtime data gonderim araligi
+
 
 class ConnectionManager:
-    """WebSocket bağlantı yöneticisi — pending event kuyruklari ile."""
+    """WebSocket bağlantı yöneticisi — asyncio.Event tabanli anlik broadcast + ping/pong."""
 
     def __init__(self):
         self.active_connections: list[WebSocket] = []
         self._ip_counts: dict[str, int] = {}  # IP -> aktif baglanti sayisi
         self._pending_events: dict[int, list[str]] = {}  # ws id -> event list
+        self._wake_event = asyncio.Event()  # Security event geldiginde donguleri uyandir
 
     async def connect(self, websocket: WebSocket, client_ip: str = "") -> bool:
         """Bağlantı kabul et. Global veya per-IP limit asildiysa False dondur."""
@@ -70,7 +75,7 @@ class ConnectionManager:
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
         self._pending_events.pop(id(websocket), None)
-        if client_ip and client_ip in self._ip_counts:
+        if client_ip and client_ip not in ("stale", "") and client_ip in self._ip_counts:
             self._ip_counts[client_ip] = max(0, self._ip_counts[client_ip] - 1)
             if self._ip_counts[client_ip] == 0:
                 del self._ip_counts[client_ip]
@@ -80,11 +85,12 @@ class ConnectionManager:
         )
 
     def queue_event(self, payload: str):
-        """Tum bagli istemcilerin kuyruklarina event ekle."""
+        """Tum bagli istemcilerin kuyruklarina event ekle ve donguleri uyandir."""
         for ws in self.active_connections:
             events = self._pending_events.get(id(ws))
             if events is not None:
                 events.append(payload)
+        self._wake_event.set()  # Bekleyen donguleri aninda uyandir
 
     def drain_events(self, websocket: WebSocket) -> list[str]:
         """Belirli bir baglantinin bekleyen event'lerini al ve temizle."""
@@ -93,6 +99,26 @@ class ConnectionManager:
         if events:
             self._pending_events[ws_id] = []
         return events
+
+    async def cleanup_stale(self):
+        """Gonderim yapilamayan stale baglantilar icin yardimci metod (hazir bekler)."""
+        stale = []
+        for ws in self.active_connections[:]:
+            try:
+                await asyncio.wait_for(
+                    ws.send_json({"type": "ping"}),
+                    timeout=5,
+                )
+            except Exception:
+                stale.append(ws)
+        for ws in stale:
+            self.disconnect(ws, client_ip="stale")
+            try:
+                await ws.close(code=1001, reason="Stale connection")
+            except Exception:
+                pass
+        if stale:
+            logger.info(f"Stale WebSocket temizlendi: {len(stale)} baglanti")
 
 
 manager = ConnectionManager()
@@ -123,7 +149,7 @@ async def broadcast_security_event(
     manager.queue_event(payload)
 
     logger.info(
-        f"Security event queued: {event_type}/{severity} -> "
+        f"Security event queued+woken: {event_type}/{severity} -> "
         f"{len(manager.active_connections)} client"
     )
 
@@ -383,7 +409,8 @@ def _validate_ws_token(token: str | None, client_ip: str = "") -> bool:
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=None)):
     """Her 3 saniyede gercek DNS ve cihaz verisi push et.
-    Arada bekleyen security_event varsa onlari da gonder.
+    Security event gelince asyncio.Event ile aninda gonder (3s beklemez).
+    Periyodik application-level ping ile stale baglantilar tespit edilir.
     Token doğrulama: ?token=xxx query parametresi veya cookie."""
     # Token kontrolü: query param > cookie
     ws_token = token or websocket.cookies.get("tonbilai_session")
@@ -400,16 +427,51 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=No
     if not connected:
         return
     try:
+        loop_time = asyncio.get_event_loop().time
+        last_ping = loop_time()
+        last_data = 0.0  # 0 ile baslat: ilk data hemen gonderilsin
+
         while True:
-            # Bekleyen security event'leri gonder (kuyruktan, ayni coroutine'de)
+            now = loop_time()
+
+            # 1) Bekleyen security event'leri ANINDA gonder (3s beklemez)
             pending = manager.drain_events(websocket)
             for event_payload in pending:
                 await websocket.send_text(event_payload)
 
-            # Normal realtime veri gonder
-            data = await _get_realtime_data()
-            await websocket.send_json(data)
-            await asyncio.sleep(3)
+            # 2) Realtime data gonder (her DATA_INTERVAL saniyede bir)
+            if now - last_data >= DATA_INTERVAL:
+                data = await _get_realtime_data()
+                await websocket.send_json(data)
+                last_data = loop_time()
+
+            # 3) Application-level ping (her PING_INTERVAL saniyede bir)
+            now = loop_time()
+            if now - last_ping >= PING_INTERVAL:
+                try:
+                    await asyncio.wait_for(
+                        websocket.send_json({"type": "ping", "ts": int(now)}),
+                        timeout=PONG_TIMEOUT,
+                    )
+                    last_ping = loop_time()
+                except (asyncio.TimeoutError, Exception):
+                    logger.warning(
+                        f"WebSocket ping timeout, stale baglanti kapatiliyor: {client_ip}"
+                    )
+                    break
+
+            # 4) _wake_event veya DATA_INTERVAL kadar bekle (hangisi once gelirse)
+            manager._wake_event.clear()
+            try:
+                await asyncio.wait_for(
+                    manager._wake_event.wait(),
+                    timeout=DATA_INTERVAL,
+                )
+                # Security event geldi — dongude hemen drain_events calisacak
+            except asyncio.TimeoutError:
+                # Normal timeout — dongude realtime data gonderilecek
+                pass
+
     except WebSocketDisconnect:
         manager.disconnect(websocket, client_ip=client_ip)
     except Exception as e:
