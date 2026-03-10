@@ -53,6 +53,7 @@ ATTACKER_SETS = {
     "ddos_udp_attackers": "udp_flood",
     "ddos_icmp_attackers": "icmp_flood",
     "ddos_invalid_attackers": "invalid_packet",
+    "ddos_conn_attackers": "conn_limit",
 }
 
 async def flush_attacker_sets() -> dict:
@@ -239,6 +240,7 @@ async def apply_ddos_nft_rules(config) -> int:
             rules.append(
                 f'add rule {TABLE} {chain} {LAN_EXCLUDE} ct state new '
                 f'meter ddos_connlimit {{ ip saddr ct count over {config.conn_limit_per_ip} }} '
+                f'add @ddos_conn_attackers {{ ip saddr }} '
                 f'counter reject comment "{DDOS_COMMENT_PREFIX}conn_limit"'
             )
 
@@ -623,12 +625,14 @@ async def get_ddos_attacker_ips() -> dict[str, list[str]]:
                 attackers[prot] = list(set(ips))
         except Exception:
             pass
-    # Connlimit meter
+    # Connlimit meter — set'e ek olarak meter'dan da IP topla (gecis donemi)
     try:
         out = await _run_nft(["list", "meter", "inet", "tonbilai", "ddos_connlimit"])
-        ips = re.findall(r'(\d+\.\d+\.\d+\.\d+)', out)
-        if ips:
-            attackers["conn_limit"] = list(set(ips))
+        meter_ips = re.findall(r'(\d+\.\d+\.\d+\.\d+)', out)
+        if meter_ips:
+            existing = set(attackers.get("conn_limit", []))
+            existing.update(meter_ips)
+            attackers["conn_limit"] = list(existing)
     except Exception:
         pass
     return attackers
@@ -810,8 +814,17 @@ async def check_ddos_anomaly_and_alert():
                         prot = alert["protection"]
                         raw_ips = attacker_ips.get(prot, [])
                         external_ips = [ip for ip in raw_ips if not _is_private_ip(ip)]
+                        ext_count = max(len(external_ips), 1)
+                        # Per-IP counter: delta ve bytes'i IP sayisina bol
+                        per_ip_packets = alert.get("delta", 0) // ext_count
+                        prot_bytes = by_prot.get(prot, {}).get("bytes", 0)
+                        per_ip_bytes = prot_bytes // ext_count
                         for ip in external_ips[:20]:
-                            entry = _json.dumps({"ip": ip, "type": prot, "ts": now})
+                            entry = _json.dumps({
+                                "ip": ip, "type": prot, "ts": now,
+                                "packets": per_ip_packets,
+                                "bytes": per_ip_bytes,
+                            })
                             await redis.zadd("ddos:attack_history", {entry: now})
                     # 24 saat'ten eski kayıtları temizle
                     cutoff = now - 86400
@@ -1019,6 +1032,7 @@ async def get_attack_map_data() -> dict:
                 all_ips.add(ip)
 
     # Redis geçmişinden de IP'leri al (son 24 saat)
+    history = []
     try:
         from app.db.redis_client import get_redis
         redis = await get_redis()
@@ -1039,16 +1053,47 @@ async def get_attack_map_data() -> dict:
     # GeoIP cozumle
     geo_data = await resolve_attacker_geoip(list(all_ips))
 
-    # Saldırı listesi oluştur
+    # Redis history'den IP bazli counter bilgisi topla
+    import json as _json
+    history_counters = {}  # {ip: {"type": str, "packets": int, "bytes": int}}
+    try:
+        for entry_bytes in history:
+            try:
+                entry = _json.loads(entry_bytes)
+                ip = entry.get("ip", "")
+                if ip and not _is_private_ip(ip):
+                    pkt = entry.get("packets", 0)
+                    byt = entry.get("bytes", 0)
+                    if ip in history_counters:
+                        history_counters[ip]["packets"] += pkt
+                        history_counters[ip]["bytes"] += byt
+                    else:
+                        history_counters[ip] = {
+                            "type": entry.get("type", "unknown"),
+                            "packets": pkt,
+                            "bytes": byt,
+                        }
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Saldırı listesi oluştur — per-IP counter paylastirma
     attacks = []
+    seen_ips = set()
     by_prot = summary.get("by_protection", {})
     for prot, ips in attacker_ips.items():
+        external_ips = [ip for ip in ips if not _is_private_ip(ip)]
+        ip_count = max(len(external_ips), 1)
         prot_stats = by_prot.get(prot, {"packets": 0, "bytes": 0})
-        for ip in ips:
-            if _is_private_ip(ip):
-                continue
+        per_ip_packets = prot_stats["packets"] // ip_count
+        per_ip_bytes = prot_stats["bytes"] // ip_count
+        for ip in external_ips:
+            seen_ips.add(ip)
             geo = geo_data.get(ip)
             if geo:
+                # History counter varsa ekle
+                hist = history_counters.get(ip, {})
                 attacks.append({
                     "ip": ip,
                     "lat": geo["lat"],
@@ -1058,9 +1103,29 @@ async def get_attack_map_data() -> dict:
                     "city": geo["city"],
                     "isp": geo.get("isp", ""),
                     "type": prot,
-                    "packets": prot_stats["packets"],
-                    "bytes": prot_stats["bytes"],
+                    "packets": per_ip_packets + hist.get("packets", 0),
+                    "bytes": per_ip_bytes + hist.get("bytes", 0),
                 })
+
+    # History'den gelen ama attacker_ips'te olmayan IP'leri de ekle
+    for ip, data in history_counters.items():
+        if ip in seen_ips:
+            continue
+        geo = geo_data.get(ip)
+        if geo:
+            attacks.append({
+                "ip": ip,
+                "lat": geo["lat"],
+                "lon": geo["lon"],
+                "country": geo["country"],
+                "countryCode": geo["countryCode"],
+                "city": geo["city"],
+                "isp": geo.get("isp", ""),
+                "type": data["type"],
+                "packets": data["packets"],
+                "bytes": data["bytes"],
+            })
+            seen_ips.add(ip)
 
     # Hedef konum (Turkiye)
     target = {"lat": 39.92, "lon": 32.85, "label": "TonbilAi Firewall"}
