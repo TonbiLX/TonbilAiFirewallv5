@@ -203,7 +203,7 @@ fun DnsBlockingScreen(
                             }
                         }
                     } else {
-                        items(uiState.blocklists, key = { it.id }) { blocklist ->
+                        items(uiState.blocklists, key = { "bl_${it.id}" }) { blocklist ->
                             BlocklistCard(
                                 blocklist = blocklist,
                                 onToggle = { viewModel.toggleBlocklist(blocklist.id) },
@@ -240,7 +240,7 @@ fun DnsBlockingScreen(
                             }
                         }
                     } else {
-                        items(uiState.rules, key = { it.id }) { rule ->
+                        items(uiState.rules, key = { "rule_${it.id}" }) { rule ->
                             RuleCard(
                                 rule = rule,
                                 onDelete = { viewModel.deleteRule(rule.id) },

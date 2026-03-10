@@ -1,58 +1,42 @@
-# Quick 29 — Nav Fix + Sort Chips + Cihaz Yönetim Hazırlık
+# Quick 30 — Cihaz Yonetim Tab + Servis DTO Fix + Arama
 
-## Tamamlanan İşler
+## Tamamlanan Isler
 
-### 1. Bottom Nav Direkt Navigasyon ✅
-- `popUpTo<DashboardRoute>` — SplashRoute/LoginRoute sorununu çözdü
-- `saveState/restoreState` kaldırıldı — alt sayfada kalma sorunu giderildi
-- Child route eşleştirmesi — alt sayfalarda doğru tab highlighted
-- **Dosya:** `BottomNavBar.kt`
+### 1. DeviceDetailScreen 4. Tab: "Yonetim" ✅
+- **Cihaz Bilgileri karti** — MAC, IP, uretici, cihaz tipi, risk skoru (renk kodlu)
+- **Hostname duzenleme** — OutlinedTextField + Kaydet butonu
+- **Bandwidth limiti** — Slider (0-100 Mbps, 5'er artis), 0=Limitsiz
+- **IPTV modu** — Switch toggle, aktif/devre disi aciklamali
+- **Servis Engelleme** — OutlinedButton → DeviceServicesScreen'e navigate
+- **Engelle/Kaldir** — Tam blok toggle butonu (kirmizi/yesil)
+- **Dosyalar:** `DeviceDetailScreen.kt`, `AppNavHost.kt`
 
-### 2. Sıralama Butonları (Sort Chips) ✅
-- **TrafficScreen** — 4 tab'a sıralama eklendi:
-  - Canlı: Hız↓, Boyut↓, Protokol, İsim
-  - Büyük: Boyut↓, Hız↓, Hedef
-  - Geçmiş: Yeni Önce, Eski Önce, Boyut↓, Hedef
-  - Cihazlar: Hız↓, Upload↓, Download↓, İsim
-- **SystemLogsScreen** — Yeni Önce, Eski Önce, Önem↓, Kategori
-- Cyberpunk glassmorphism chip tasarımı, seçili=cyan
-- **Dosyalar:** `TrafficScreen.kt`, `SystemLogsScreen.kt`
+### 2. DeviceServices DTO Fix ✅
+- Backend `service_id` String ("youtube"), Android Int bekliyordu → **bos liste**
+- `DeviceServiceDto.serviceId` Int→String, field name'ler duzeltildi
+- `ServiceGroupDto` backend'in `group`+`count` formatina uyarlandi
+- `ServiceToggleDto.serviceId` Int→String
+- `ServiceBulkDto` → `blockedServiceIds` formatina uyarlandi
+- **Dosya:** `DeviceServiceDtos.kt`, `DeviceServicesViewModel.kt`
 
-### 3. Cihaz Yönetim Altyapı (Kısmen) ✅
-- `DeviceResponseDto` → `isIptv`, `deviceType`, `riskScore`, `riskLevel` eklendi
-- `DeviceUpdateDto` → `isIptv` eklendi
-- `DeviceDetailViewModel` → `updateHostname()`, `updateBandwidth()`, `toggleIptv()` eklendi
-- **Dosyalar:** `DeviceDto.kt`, `DeviceDetailViewModel.kt`
+### 3. Cihaz Arama Kutusu ✅
+- DevicesScreen'e arama kutusu eklendi (header altinda)
+- Hostname, IP adresi, MAC adresi uzerinden ortak arama
+- X butonu ile temizleme
+- **Dosyalar:** `DevicesScreen.kt`, `DevicesViewModel.kt`
 
-## Sonraki Oturum — Cihaz Yönetim Tab (ÖNCELİKLİ)
+### 4. Servis Arama Kutusu ✅
+- DeviceServicesScreen'e arama kutusu eklendi (grup filtrelerinin ustunde)
+- Servis adi ve servis ID uzerinden arama
+- Grup filtresi + arama birlikte calisiyor
+- **Dosyalar:** `DeviceServicesScreen.kt`, `DeviceServicesViewModel.kt`
 
-### DeviceDetailScreen 4. Tab: "Yönetim"
-Aşağıdakilerin UI'ını ekle:
+## Sonraki Oturum Onerileri
 
-1. **Hostname düzenleme** — text field + kaydet butonu
-   - `viewModel.updateHostname(name)` kullan
-2. **Bandwidth limit** — slider (0-100 Mbps) + sayı gösterimi
-   - `viewModel.updateBandwidth(mbps)` kullan, null=limitsiz
-3. **IPTV modu toggle** — Switch
-   - `viewModel.toggleIptv()` kullan
-4. **Servis Engelleme butonu** → DeviceServicesScreen'e navigate
-   - `onNavigateToServices` callback ekle
-   - `AppNavHost.kt`'de DeviceDetailScreen'e navigation parametresi geç
-   - DeviceServicesRoute(deviceId, deviceName) kullan
-5. **Engelle/Kaldır butonu** (zaten var ama tab'a da ekle)
-6. **Cihaz bilgi kartı** — MAC, IP, üretici, cihaz tipi, risk skoru
+1. Profil atama → ManagementTab'a tasima (su an OverviewTab'da)
+2. UX iyilestirmeleri (offline mod, hata mesajlari)
+3. Production release (signed APK, ProGuard)
+4. Push notification entegrasyonu
 
-### Navigation Değişikliği
-- `DeviceDetailScreen` → `onNavigateToServices: (deviceId: Int, deviceName: String) -> Unit` parametresi ekle
-- `AppNavHost.kt` → DeviceDetailRoute composable'da:
-  ```kotlin
-  onNavigateToServices = { id, name ->
-      navController.navigate(DeviceServicesRoute(id.toString(), name))
-  }
-  ```
-
-### Mevcut Altyapı (Hazır)
-- `DeviceServicesScreen` + `DeviceServicesViewModel` → tam çalışıyor
-- `DeviceServiceRepository` → toggle, bulk update hazır
-- `DeviceRepository.updateBandwidth()` → hazır
-- Backend endpoint'ler: devices/{id}/bandwidth, services/devices/{id}/toggle
+---
+**Onceki oturumlar:** [sessions/SESSION-Q27-Q29.md](sessions/SESSION-Q27-Q29.md) → [sessions/SESSION-Q23-Q26.md](sessions/SESSION-Q23-Q26.md)

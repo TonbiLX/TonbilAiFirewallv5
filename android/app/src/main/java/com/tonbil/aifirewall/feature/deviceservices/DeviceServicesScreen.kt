@@ -22,7 +22,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,6 +32,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -79,11 +83,18 @@ fun DeviceServicesScreen(
         }
     }
 
-    // Filtrelenmis servisler (secili gruba gore)
-    val filteredServices = remember(uiState.services, uiState.selectedGroup) {
+    // Filtrelenmis servisler (secili gruba + aramaya gore)
+    val filteredServices = remember(uiState.services, uiState.selectedGroup, uiState.searchQuery) {
+        var list = uiState.services
         val group = uiState.selectedGroup
-        if (group == null) uiState.services
-        else uiState.services.filter { it.group == group }
+        if (group != null) {
+            list = list.filter { it.group == group }
+        }
+        val q = uiState.searchQuery.lowercase()
+        if (q.isNotBlank()) {
+            list = list.filter { it.displayName.lowercase().contains(q) || it.serviceId.lowercase().contains(q) }
+        }
+        list
     }
 
     val blockedCount = filteredServices.count { it.blocked }
@@ -167,6 +178,41 @@ fun DeviceServicesScreen(
                         }
                     }
                     else -> {
+                        // Arama kutusu
+                        OutlinedTextField(
+                            value = uiState.searchQuery,
+                            onValueChange = { viewModel.setSearchQuery(it) },
+                            placeholder = { Text("Servis ara...") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.Search,
+                                    contentDescription = null,
+                                    tint = colors.neonCyan,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            },
+                            trailingIcon = {
+                                if (uiState.searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Clear,
+                                            contentDescription = "Temizle",
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                        )
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = colors.neonCyan,
+                                unfocusedBorderColor = colors.glassBorder,
+                                cursorColor = colors.neonCyan,
+                            ),
+                        )
+
                         // Grup filtre chipler
                         if (uiState.groups.isNotEmpty()) {
                             GroupFilterRow(

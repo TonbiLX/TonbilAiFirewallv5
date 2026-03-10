@@ -21,6 +21,8 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.ShieldMoon
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.SortByAlpha
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -31,6 +33,8 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.pullToRefresh
@@ -144,6 +148,41 @@ fun DevicesScreen(
                                 )
                             }
                         }
+                    }
+
+                    // Search bar
+                    item {
+                        OutlinedTextField(
+                            value = uiState.searchQuery,
+                            onValueChange = { viewModel.setSearchQuery(it) },
+                            placeholder = { Text("Isim, IP veya MAC ara...") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.Search,
+                                    contentDescription = null,
+                                    tint = colors.neonCyan,
+                                )
+                            },
+                            trailingIcon = {
+                                if (uiState.searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Clear,
+                                            contentDescription = "Temizle",
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                        )
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = colors.neonCyan,
+                                unfocusedBorderColor = colors.glassBorder,
+                                focusedLeadingIconColor = colors.neonCyan,
+                                cursorColor = colors.neonCyan,
+                            ),
+                        )
                     }
 
                     // Filter chips

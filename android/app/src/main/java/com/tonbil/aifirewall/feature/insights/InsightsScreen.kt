@@ -232,11 +232,10 @@ private fun ThreatStatsRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            ThreatStatItem("Toplam", "${stats?.totalThreats24h ?: 0}", colors.neonCyan)
-            ThreatStatItem("Kritik", "${stats?.criticalCount ?: 0}", colors.neonRed)
-            ThreatStatItem("Uyari", "${stats?.warningCount ?: 0}", colors.neonAmber)
-            ThreatStatItem("Bilgi", "${stats?.infoCount ?: 0}", colors.neonGreen)
-            ThreatStatItem("Oto-Engel", "${stats?.autoBlocked ?: 0}", colors.neonMagenta)
+            ThreatStatItem("Engelli IP", "${stats?.blockedIpCount ?: 0}", colors.neonCyan)
+            ThreatStatItem("Harici", "${stats?.totalExternalBlocked ?: 0}", colors.neonRed)
+            ThreatStatItem("Oto-Engel", "${stats?.totalAutoBlocks ?: 0}", colors.neonAmber)
+            ThreatStatItem("Suphe", "${stats?.totalSuspicious ?: 0}", colors.neonMagenta)
         }
     }
 }

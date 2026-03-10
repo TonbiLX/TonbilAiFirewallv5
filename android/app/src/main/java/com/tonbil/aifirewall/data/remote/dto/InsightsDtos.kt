@@ -17,12 +17,11 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class InsightThreatStatsDto(
-    @SerialName("total_threats_24h") val totalThreats24h: Int = 0,
-    @SerialName("critical_count") val criticalCount: Int = 0,
-    @SerialName("warning_count") val warningCount: Int = 0,
-    @SerialName("info_count") val infoCount: Int = 0,
-    @SerialName("auto_blocked") val autoBlocked: Int = 0,
-    @SerialName("top_categories") val topCategories: List<ThreatCategoryCountDto> = emptyList(),
+    @SerialName("blocked_ip_count") val blockedIpCount: Int = 0,
+    @SerialName("total_external_blocked") val totalExternalBlocked: Int = 0,
+    @SerialName("total_auto_blocks") val totalAutoBlocks: Int = 0,
+    @SerialName("total_suspicious") val totalSuspicious: Int = 0,
+    @SerialName("last_threat_time") val lastThreatTime: String? = null,
 )
 
 @Serializable

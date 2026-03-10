@@ -23,13 +23,22 @@ data class DevicesUiState(
     val error: String? = null,
     val filter: DeviceFilter = DeviceFilter.ALL,
     val sort: DeviceSort = DeviceSort.NAME,
+    val searchQuery: String = "",
 ) {
     val filteredDevices: List<DeviceResponseDto>
         get() {
+            val searched = if (searchQuery.isBlank()) devices else {
+                val q = searchQuery.lowercase()
+                devices.filter { d ->
+                    (d.hostname?.lowercase()?.contains(q) == true) ||
+                        (d.ipAddress?.lowercase()?.contains(q) == true) ||
+                        d.macAddress.lowercase().contains(q)
+                }
+            }
             val filtered = when (filter) {
-                DeviceFilter.ALL -> devices
-                DeviceFilter.ONLINE -> devices.filter { it.isOnline }
-                DeviceFilter.OFFLINE -> devices.filter { !it.isOnline }
+                DeviceFilter.ALL -> searched
+                DeviceFilter.ONLINE -> searched.filter { it.isOnline }
+                DeviceFilter.OFFLINE -> searched.filter { !it.isOnline }
             }
             return when (sort) {
                 DeviceSort.NAME -> filtered.sortedBy { it.hostname?.lowercase() ?: "zzz" }
@@ -96,6 +105,10 @@ class DevicesViewModel(
 
     fun setSort(sort: DeviceSort) {
         _uiState.update { it.copy(sort = sort) }
+    }
+
+    fun setSearchQuery(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
     }
 
     fun toggleBlock(device: DeviceResponseDto) {

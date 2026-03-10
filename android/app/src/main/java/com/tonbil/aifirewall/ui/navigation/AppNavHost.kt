@@ -107,6 +107,9 @@ fun AppNavHost(
             DeviceDetailScreen(
                 deviceId = route.deviceId,
                 onBack = { navController.popBackStack() },
+                onNavigateToServices = { id, name ->
+                    navController.navigate(DeviceServicesRoute(id.toString(), name))
+                },
             )
         }
         composable<DeviceServicesRoute> { backStackEntry ->

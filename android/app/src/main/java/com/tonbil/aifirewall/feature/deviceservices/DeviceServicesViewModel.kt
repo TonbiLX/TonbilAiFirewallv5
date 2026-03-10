@@ -14,9 +14,10 @@ data class DeviceServicesUiState(
     val services: List<DeviceServiceDto> = emptyList(),
     val groups: List<ServiceGroupDto> = emptyList(),
     val selectedGroup: String? = null,
+    val searchQuery: String = "",
     val isLoading: Boolean = true,
     val error: String? = null,
-    val togglingServiceId: Int? = null,
+    val togglingServiceId: String? = null,
 )
 
 class DeviceServicesViewModel(
@@ -44,7 +45,7 @@ class DeviceServicesViewModel(
         }
     }
 
-    fun toggleService(serviceId: Int, blocked: Boolean) {
+    fun toggleService(serviceId: String, blocked: Boolean) {
         viewModelScope.launch {
             _state.value = _state.value.copy(togglingServiceId = serviceId)
             repo.toggleService(deviceId, ServiceToggleDto(serviceId, blocked))
@@ -69,6 +70,10 @@ class DeviceServicesViewModel(
 
     fun selectGroup(group: String?) {
         _state.value = _state.value.copy(selectedGroup = group)
+    }
+
+    fun setSearchQuery(query: String) {
+        _state.value = _state.value.copy(searchQuery = query)
     }
 
     fun clearError() {

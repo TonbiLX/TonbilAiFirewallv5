@@ -26,7 +26,22 @@ import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Router
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.LiveTv
+import androidx.compose.material.icons.outlined.Warning
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -45,6 +60,7 @@ import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -67,11 +83,12 @@ fun DeviceDetailScreen(
     deviceId: String,
     viewModel: DeviceDetailViewModel = koinViewModel { parametersOf(deviceId.toInt()) },
     onBack: () -> Unit,
+    onNavigateToServices: (deviceId: Int, deviceName: String) -> Unit = { _, _ -> },
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = CyberpunkTheme.colors
     val pullToRefreshState = rememberPullToRefreshState()
-    val tabs = listOf("Genel", "Trafik", "DNS")
+    val tabs = listOf("Genel", "Trafik", "DNS", "Yonetim")
 
     Box(
         modifier = Modifier
@@ -169,6 +186,7 @@ fun DeviceDetailScreen(
                         0 -> OverviewTab(uiState, viewModel, colors)
                         1 -> TrafficTab(uiState, colors)
                         2 -> DnsTab(uiState, colors)
+                        3 -> ManagementTab(uiState, viewModel, colors, onNavigateToServices)
                     }
                 }
             }
@@ -613,6 +631,302 @@ private fun DnsTab(
                             color = if (log.blocked) colors.neonRed else colors.neonGreen,
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ManagementTab(
+    uiState: DeviceDetailUiState,
+    viewModel: DeviceDetailViewModel,
+    colors: CyberpunkColors,
+    onNavigateToServices: (deviceId: Int, deviceName: String) -> Unit,
+) {
+    val device = uiState.device ?: return
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // Device info card
+        item {
+            GlassCard(modifier = Modifier.fillMaxWidth(), glowColor = colors.neonCyan) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = null,
+                        tint = colors.neonCyan,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Cihaz Bilgileri",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.neonCyan,
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                InfoRow("MAC Adresi", device.macAddress)
+                InfoRow("IP Adresi", device.ipAddress ?: "-")
+                if (!device.manufacturer.isNullOrBlank()) {
+                    InfoRow("Uretici", device.manufacturer)
+                }
+                if (!device.deviceType.isNullOrBlank()) {
+                    InfoRow("Cihaz Tipi", device.deviceType)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                // Risk score
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Risk Skoru",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val riskColor = when (device.riskLevel) {
+                            "critical" -> colors.neonRed
+                            "high" -> colors.neonRed.copy(alpha = 0.8f)
+                            "medium" -> colors.neonAmber
+                            else -> colors.neonGreen
+                        }
+                        Icon(
+                            imageVector = if (device.riskScore > 50) Icons.Outlined.Warning
+                            else Icons.Outlined.CheckCircle,
+                            contentDescription = null,
+                            tint = riskColor,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${device.riskScore}/100 (${device.riskLevel})",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = riskColor,
+                        )
+                    }
+                }
+            }
+        }
+
+        // Hostname editing
+        item {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = null,
+                        tint = colors.neonCyan,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Hostname",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.neonCyan,
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                var hostnameText by remember(device.hostname) {
+                    mutableStateOf(device.hostname ?: "")
+                }
+                OutlinedTextField(
+                    value = hostnameText,
+                    onValueChange = { hostnameText = it },
+                    label = { Text("Cihaz Adi") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = colors.neonCyan,
+                        unfocusedBorderColor = colors.glassBorder,
+                        focusedLabelColor = colors.neonCyan,
+                        cursorColor = colors.neonCyan,
+                    ),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        if (hostnameText.isNotBlank() && hostnameText != device.hostname) {
+                            viewModel.updateHostname(hostnameText)
+                        }
+                    },
+                    enabled = hostnameText.isNotBlank() && hostnameText != device.hostname,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.neonCyan.copy(alpha = 0.2f),
+                        contentColor = colors.neonCyan,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Kaydet")
+                }
+            }
+        }
+
+        // Bandwidth limit
+        item {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.Speed,
+                        contentDescription = null,
+                        tint = colors.neonAmber,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Bant Genisligi Limiti",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.neonAmber,
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                var sliderValue by remember(device.bandwidthLimitMbps) {
+                    mutableFloatStateOf(device.bandwidthLimitMbps ?: 0f)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = if (sliderValue == 0f) "Limitsiz" else "${sliderValue.toInt()} Mbps",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (sliderValue == 0f) colors.neonGreen else colors.neonAmber,
+                    )
+                    Text(
+                        text = "0 = Limitsiz",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    )
+                }
+                Slider(
+                    value = sliderValue,
+                    onValueChange = { sliderValue = it },
+                    valueRange = 0f..100f,
+                    steps = 19, // 0, 5, 10, ... 100
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = SliderDefaults.colors(
+                        thumbColor = colors.neonAmber,
+                        activeTrackColor = colors.neonAmber,
+                        inactiveTrackColor = colors.glassBorder,
+                    ),
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Button(
+                    onClick = {
+                        viewModel.updateBandwidth(if (sliderValue == 0f) null else sliderValue)
+                    },
+                    enabled = sliderValue != (device.bandwidthLimitMbps ?: 0f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.neonAmber.copy(alpha = 0.2f),
+                        contentColor = colors.neonAmber,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Uygula")
+                }
+            }
+        }
+
+        // IPTV toggle
+        item {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Outlined.LiveTv,
+                            contentDescription = null,
+                            tint = if (device.isIptv) colors.neonGreen else
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "IPTV Modu",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = if (device.isIptv) "Aktif — DNS filtreleme bypass" else "Devre disi",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = device.isIptv,
+                        onCheckedChange = { viewModel.toggleIptv() },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = colors.neonGreen,
+                            checkedTrackColor = colors.neonGreen.copy(alpha = 0.3f),
+                        ),
+                    )
+                }
+            }
+        }
+
+        // Service blocking button
+        item {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = {
+                        onNavigateToServices(
+                            device.id,
+                            device.hostname ?: "Bilinmeyen Cihaz",
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = colors.neonMagenta,
+                    ),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Router,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Servis Engelleme Yonet")
+                }
+            }
+        }
+
+        // Block/Unblock button
+        item {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = { viewModel.toggleBlock() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (device.isBlocked) colors.neonGreen.copy(alpha = 0.2f)
+                        else colors.neonRed.copy(alpha = 0.2f),
+                        contentColor = if (device.isBlocked) colors.neonGreen else colors.neonRed,
+                    ),
+                ) {
+                    Icon(
+                        imageVector = if (device.isBlocked) Icons.Outlined.LockOpen
+                        else Icons.Outlined.Block,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (device.isBlocked) "Engeli Kaldir" else "Cihazi Engelle",
+                    )
                 }
             }
         }
