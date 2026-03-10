@@ -63,6 +63,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tonbil.aifirewall.data.remote.dto.LiveFlowDto
+import com.tonbil.aifirewall.data.remote.dto.TrafficHistoryDto
 import com.tonbil.aifirewall.data.remote.dto.TrafficHistoryItemDto
 import com.tonbil.aifirewall.data.remote.dto.TrafficPerDeviceDto
 import com.tonbil.aifirewall.ui.theme.DarkBackground

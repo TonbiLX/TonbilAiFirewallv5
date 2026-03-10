@@ -43,18 +43,18 @@ class SystemManagementViewModel(
 
     fun loadAll() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = it.services.isEmpty(), error = null) }
+            _uiState.update { state -> state.copy(isLoading = state.services.isEmpty(), error = null) }
             try {
                 coroutineScope {
                     val overview = async { systemRepository.getOverview() }
                     val services = async { systemRepository.getServices() }
                     val bootInfo = async { systemRepository.getBootInfo() }
-                    _uiState.update {
-                        it.copy(
+                    _uiState.update { state ->
+                        state.copy(
                             isLoading = false,
-                            overview = overview.await().getOrElse { it.overview },
-                            services = services.await().getOrElse { it.services },
-                            bootInfo = bootInfo.await().getOrElse { it.bootInfo },
+                            overview = overview.await().getOrElse { state.overview },
+                            services = services.await().getOrElse { state.services },
+                            bootInfo = bootInfo.await().getOrElse { state.bootInfo },
                         )
                     }
                 }

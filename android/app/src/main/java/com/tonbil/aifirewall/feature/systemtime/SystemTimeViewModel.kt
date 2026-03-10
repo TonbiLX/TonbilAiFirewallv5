@@ -40,18 +40,18 @@ class SystemTimeViewModel(
 
     fun loadAll() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = it.timezones.isEmpty(), error = null) }
+            _uiState.update { state -> state.copy(isLoading = state.timezones.isEmpty(), error = null) }
             try {
                 coroutineScope {
                     val status = async { systemRepository.getTimeStatus() }
                     val timezones = async { systemRepository.getTimezones() }
                     val ntpServers = async { systemRepository.getNtpServers() }
-                    _uiState.update {
-                        it.copy(
+                    _uiState.update { state ->
+                        state.copy(
                             isLoading = false,
-                            status = status.await().getOrElse { it.status },
-                            timezones = timezones.await().getOrElse { it.timezones },
-                            ntpServers = ntpServers.await().getOrElse { it.ntpServers },
+                            status = status.await().getOrElse { state.status },
+                            timezones = timezones.await().getOrElse { state.timezones },
+                            ntpServers = ntpServers.await().getOrElse { state.ntpServers },
                         )
                     }
                 }

@@ -112,7 +112,8 @@ fun AppNavHost(
         composable<DeviceServicesRoute> { backStackEntry ->
             val route = backStackEntry.toRoute<DeviceServicesRoute>()
             DeviceServicesScreen(
-                deviceId = route.deviceId,
+                deviceId = route.deviceId.toIntOrNull() ?: 0,
+                deviceName = route.deviceName,
                 onBack = { navController.popBackStack() },
             )
         }
@@ -146,6 +147,16 @@ fun AppNavHost(
         composable<ChatRoute> { ChatScreen(onBack = { navController.popBackStack() }) }
         composable<PushNotificationsRoute> { PushNotificationsScreen(onBack = { navController.popBackStack() }) }
         composable<ProfilesRoute> { ProfilesScreen(onBack = { navController.popBackStack() }) }
-        composable<UserSettingsRoute> { UserSettingsScreen(onBack = { navController.popBackStack() }) }
+        composable<UserSettingsRoute> {
+            UserSettingsScreen(
+                onBack = { navController.popBackStack() },
+                onLogout = {
+                    tokenManager.clearTokens()
+                    navController.navigate(LoginRoute) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+            )
+        }
     }
 }

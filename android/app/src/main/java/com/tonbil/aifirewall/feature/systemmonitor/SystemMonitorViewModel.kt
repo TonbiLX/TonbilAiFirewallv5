@@ -37,18 +37,18 @@ class SystemMonitorViewModel(
 
     fun loadAll() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = it.info.hostname.isEmpty(), error = null) }
+            _uiState.update { state -> state.copy(isLoading = state.info.hostname.isEmpty(), error = null) }
             try {
                 coroutineScope {
                     val info = async { systemRepository.getSystemInfo() }
                     val metrics = async { systemRepository.getSystemMetrics() }
                     val fan = async { systemRepository.getFanConfig() }
-                    _uiState.update {
-                        it.copy(
+                    _uiState.update { state ->
+                        state.copy(
                             isLoading = false,
-                            info = info.await().getOrElse { it.info },
-                            metrics = metrics.await().getOrElse { it.metrics },
-                            fan = fan.await().getOrElse { it.fan },
+                            info = info.await().getOrElse { state.info },
+                            metrics = metrics.await().getOrElse { state.metrics },
+                            fan = fan.await().getOrElse { state.fan },
                         )
                     }
                 }

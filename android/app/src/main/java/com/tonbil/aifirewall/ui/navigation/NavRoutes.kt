@@ -16,7 +16,7 @@ import kotlinx.serialization.Serializable
 
 // ========== Device Sub-Screens ==========
 @Serializable data class DeviceDetailRoute(val deviceId: String)
-@Serializable data class DeviceServicesRoute(val deviceId: String)
+@Serializable data class DeviceServicesRoute(val deviceId: String, val deviceName: String = "")
 
 // ========== Network Section ==========
 @Serializable object DnsBlockingRoute

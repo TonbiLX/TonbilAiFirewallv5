@@ -6,6 +6,8 @@ import com.tonbil.aifirewall.data.remote.dto.ConnectionHistoryDto
 import com.tonbil.aifirewall.data.remote.dto.DeviceResponseDto
 import com.tonbil.aifirewall.data.remote.dto.DeviceTrafficSummaryDto
 import com.tonbil.aifirewall.data.remote.dto.DeviceUpdateDto
+import com.tonbil.aifirewall.data.remote.dto.DeviceBandwidthDto
+import com.tonbil.aifirewall.data.remote.dto.DeviceScanResponseDto
 import com.tonbil.aifirewall.data.remote.dto.DnsQueryLogDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
