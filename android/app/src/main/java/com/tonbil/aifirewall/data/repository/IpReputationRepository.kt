@@ -6,7 +6,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
-import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -19,11 +18,12 @@ class IpReputationRepository(private val client: HttpClient) {
         client.get(ApiRoutes.IP_REP_CONFIG).body()
     }
 
-    suspend fun updateConfig(dto: IpRepConfigUpdateDto): Result<IpRepConfigDto> = runCatching {
+    suspend fun updateConfig(dto: IpRepConfigUpdateDto): Result<Unit> = runCatching {
         client.put(ApiRoutes.IP_REP_CONFIG) {
             contentType(ContentType.Application.Json)
             setBody(dto)
-        }.body()
+        }
+        Unit
     }
 
     suspend fun getSummary(): Result<IpRepSummaryDto> = runCatching {
@@ -31,24 +31,29 @@ class IpReputationRepository(private val client: HttpClient) {
     }
 
     suspend fun getIps(minScore: Int? = null): Result<List<IpRepCheckDto>> = runCatching {
-        client.get(ApiRoutes.IP_REP_IPS) {
-            minScore?.let { parameter("min_score", it) }
+        val response: IpRepIpsResponseDto = client.get(ApiRoutes.IP_REP_IPS) {
+            minScore?.let { url { parameters.append("min_score", it.toString()) } }
         }.body()
+        response.ips
     }
 
-    suspend fun clearCache(): Result<MessageResponseDto> = runCatching {
+    suspend fun clearCache(): Result<IpRepCacheClearResponseDto> = runCatching {
         client.delete(ApiRoutes.IP_REP_CACHE).body()
     }
 
-    suspend fun test(): Result<IpRepTestDto> = runCatching {
+    suspend fun test(): Result<IpRepTestResponseDto> = runCatching {
         client.post(ApiRoutes.IP_REP_TEST).body()
     }
 
-    suspend fun getBlacklist(): Result<List<IpRepBlacklistDto>> = runCatching {
+    suspend fun getApiUsage(): Result<IpRepApiUsageResponseDto> = runCatching {
+        client.get(ApiRoutes.IP_REP_API_USAGE).body()
+    }
+
+    suspend fun getBlacklist(): Result<IpRepBlacklistResponseDto> = runCatching {
         client.get(ApiRoutes.IP_REP_BLACKLIST).body()
     }
 
-    suspend fun fetchBlacklist(): Result<MessageResponseDto> = runCatching {
+    suspend fun fetchBlacklist(): Result<IpRepBlacklistFetchResponseDto> = runCatching {
         client.post(ApiRoutes.IP_REP_BLACKLIST_FETCH).body()
     }
 
@@ -56,10 +61,15 @@ class IpReputationRepository(private val client: HttpClient) {
         client.get(ApiRoutes.IP_REP_BLACKLIST_CONFIG).body()
     }
 
-    suspend fun updateBlacklistConfig(dto: IpRepBlacklistConfigUpdateDto): Result<IpRepBlacklistConfigDto> = runCatching {
+    suspend fun updateBlacklistConfig(dto: IpRepBlacklistConfigUpdateDto): Result<Unit> = runCatching {
         client.put(ApiRoutes.IP_REP_BLACKLIST_CONFIG) {
             contentType(ContentType.Application.Json)
             setBody(dto)
-        }.body()
+        }
+        Unit
+    }
+
+    suspend fun getBlacklistApiUsage(): Result<IpRepBlacklistApiUsageDto> = runCatching {
+        client.get(ApiRoutes.IP_REP_BLACKLIST_API_USAGE).body()
     }
 }

@@ -133,6 +133,8 @@ object ApiRoutes {
     const val IP_REP_BLACKLIST = "ip-reputation/blacklist"
     const val IP_REP_BLACKLIST_FETCH = "ip-reputation/blacklist/fetch"
     const val IP_REP_BLACKLIST_CONFIG = "ip-reputation/blacklist/config"
+    const val IP_REP_API_USAGE = "ip-reputation/api-usage"
+    const val IP_REP_BLACKLIST_API_USAGE = "ip-reputation/blacklist/api-usage"
 
     // ========== System Monitor ==========
     const val SYSTEM_INFO = "system-monitor/info"
