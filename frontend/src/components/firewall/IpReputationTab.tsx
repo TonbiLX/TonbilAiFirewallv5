@@ -303,6 +303,15 @@ export function IpReputationTab() {
     setConfig({ ...config, enabled: !config.enabled });
   };
 
+  const saveCountries = async (newList: string[]) => {
+    try {
+      await updateReputationConfig({ blocked_countries: newList });
+      showFeedback("Ülke listesi güncellendi.", true);
+    } catch {
+      showFeedback("Ülke listesi kaydedilemedi.", false);
+    }
+  };
+
   const handleAddCountry = () => {
     const code = newCountry.trim().toUpperCase();
     if (!code || code.length !== 2 || !config) return;
@@ -310,16 +319,17 @@ export function IpReputationTab() {
       showFeedback("Bu ülke zaten listede.", false);
       return;
     }
-    setConfig({ ...config, blocked_countries: [...config.blocked_countries, code] });
+    const newList = [...config.blocked_countries, code];
+    setConfig({ ...config, blocked_countries: newList });
     setNewCountry("");
+    saveCountries(newList);
   };
 
   const handleRemoveCountry = (code: string) => {
     if (!config) return;
-    setConfig({
-      ...config,
-      blocked_countries: config.blocked_countries.filter((c) => c !== code),
-    });
+    const newList = config.blocked_countries.filter((c) => c !== code);
+    setConfig({ ...config, blocked_countries: newList });
+    saveCountries(newList);
   };
 
   const handleCheckApiUsage = async () => {
@@ -394,7 +404,9 @@ export function IpReputationTab() {
     if (config.blocked_countries.includes(code)) {
       handleRemoveCountry(code);
     } else {
-      setConfig({ ...config, blocked_countries: [...config.blocked_countries, code] });
+      const newList = [...config.blocked_countries, code];
+      setConfig({ ...config, blocked_countries: newList });
+      saveCountries(newList);
     }
   };
 
