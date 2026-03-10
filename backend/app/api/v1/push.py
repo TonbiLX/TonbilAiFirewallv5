@@ -111,3 +111,25 @@ async def register_push_token(
     """FCM push token kaydi (gelecek FCM entegrasyonu icin placeholder)."""
     # Ileride: data.token ve data.device_name DB'ye kaydedilecek
     return PushRegisterResponse(success=True, message="Token kaydedildi")
+
+
+@router.post("/test-notification")
+async def send_test_notification(
+    current_user: User = Depends(get_current_user),
+):
+    """Test bildirimi gonder — WebSocket uzerinden tum bagli istemcilere."""
+    from app.api.v1.ws import broadcast_security_event
+
+    await broadcast_security_event(
+        event_type="ddos_attack",
+        severity="critical",
+        title="DDoS Saldirisi Tespit Edildi!",
+        message="185.220.101.42 adresinden SYN Flood saldirisi algilandi. Saldiri otomatik engellendi.",
+        data={
+            "ip": "185.220.101.42",
+            "attack_type": "SYN Flood",
+            "packets_per_sec": 12500,
+            "country": "DE",
+        },
+    )
+    return {"success": True, "message": "Test bildirimi gonderildi"}

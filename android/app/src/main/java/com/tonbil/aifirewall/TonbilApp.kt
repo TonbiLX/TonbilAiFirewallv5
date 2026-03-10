@@ -2,15 +2,23 @@ package com.tonbil.aifirewall
 
 import android.app.Application
 import android.util.Log
+import com.tonbil.aifirewall.data.remote.WebSocketManager
 import com.tonbil.aifirewall.di.appModule
 import com.tonbil.aifirewall.di.featureModules
+import com.tonbil.aifirewall.util.NotificationHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
+import org.koin.java.KoinJavaComponent.getKoin
 import java.io.File
-import java.io.PrintWriter
-import java.io.StringWriter
 
 class TonbilApp : Application() {
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     override fun onCreate() {
         super.onCreate()
 
@@ -50,6 +58,26 @@ class TonbilApp : Application() {
         startKoin {
             androidContext(this@TonbilApp)
             modules(appModule, featureModules)
+        }
+
+        // Bildirim kanalini olustur
+        NotificationHelper.createNotificationChannel(this)
+
+        // WebSocket security event'lerini dinle ve sistem bildirimi goster
+        observeSecurityEvents()
+    }
+
+    private fun observeSecurityEvents() {
+        appScope.launch {
+            try {
+                val wsManager = getKoin().get<WebSocketManager>()
+                wsManager.securityEvents.collect { event ->
+                    Log.d("TonbilApp", "Security event: ${event.eventType} - ${event.title}")
+                    NotificationHelper.showSecurityNotification(this@TonbilApp, event)
+                }
+            } catch (e: Exception) {
+                Log.e("TonbilApp", "Security event observer error: ${e.message}")
+            }
         }
     }
 }

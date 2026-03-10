@@ -60,3 +60,14 @@ data class WsVpnClientDto(
     @SerialName("transfer_rx") val transferRx: Long = 0,
     @SerialName("transfer_tx") val transferTx: Long = 0,
 )
+
+@Serializable
+data class SecurityEventDto(
+    val type: String = "",
+    @SerialName("event_type") val eventType: String = "",
+    val severity: String = "",
+    val title: String = "",
+    val message: String = "",
+    val timestamp: String = "",
+    val data: Map<String, String> = emptyMap(),
+)

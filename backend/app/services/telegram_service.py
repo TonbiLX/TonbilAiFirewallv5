@@ -108,6 +108,15 @@ async def send_message(text: str, bot_token: str | None = None, chat_ids: list[s
 
 # --- Gorsel Bildirim Fonksiyonlari ---
 
+async def _broadcast_ws_event(event_type: str, severity: str, title: str, message: str, data: dict | None = None):
+    """WebSocket uzerinden guvenlik olayi yayinla (import dongusu onleme)."""
+    try:
+        from app.api.v1.ws import broadcast_security_event
+        await broadcast_security_event(event_type, severity, title, message, data)
+    except Exception as e:
+        logger.error(f"WS broadcast hatasi: {e}")
+
+
 async def notify_new_device(
     ip: str,
     hostname: str | None,
@@ -119,6 +128,14 @@ async def notify_new_device(
     config = await get_config()
     if not config or not config.get("notify_new_device"):
         return
+
+    # WS broadcast
+    await _broadcast_ws_event(
+        "new_device", "info",
+        "Yeni Cihaz Algilandi",
+        f"{hostname or 'Bilinmiyor'} ({ip}) - {manufacturer or 'Bilinmiyor'}",
+        {"ip": ip, "hostname": hostname, "manufacturer": manufacturer, "device_type": device_type},
+    )
 
     # Cihaz tipine göre emoji
     type_emoji = {
@@ -148,6 +165,14 @@ async def notify_new_device(
 
 async def notify_ip_blocked(ip: str, reason: str | None = None):
     """IP engelleme bildirimi gönder (gorsel format)."""
+    # WS broadcast (config'ten bagimsiz)
+    await _broadcast_ws_event(
+        "ip_blocked", "critical",
+        "IP Engellendi",
+        f"{ip} - {reason or 'Bilinmiyor'}",
+        {"ip": ip, "reason": reason},
+    )
+
     config = await get_config()
     if not config or not config.get("notify_blocked_ip"):
         return
@@ -167,6 +192,13 @@ async def notify_ip_blocked(ip: str, reason: str | None = None):
 
 async def notify_trusted_ip_threat(ip: str, reason: str):
     """Güvenilir IP'den tehdit tespiti bildirimi gönder."""
+    await _broadcast_ws_event(
+        "trusted_ip_threat", "warning",
+        "Guvenilir IP Tehdit Uyarisi",
+        f"{ip} - {reason}",
+        {"ip": ip, "reason": reason},
+    )
+
     config = await get_config()
     if not config or not config.get("notify_trusted_ip_threat"):
         return
@@ -228,6 +260,13 @@ async def notify_device_isolation_suggestion(
 
 async def notify_ai_insight(severity: str, message: str, category: str = "security"):
     """AI Insight bildirimi gönder (tum insight'lar için merkezi bildirim)."""
+    await _broadcast_ws_event(
+        "ai_insight", severity,
+        f"AI Uyari ({severity.upper()})",
+        message,
+        {"category": category},
+    )
+
     config = await get_config()
     if not config:
         logger.debug("notify_ai_insight: Telegram config bulunamadı, bildirim atlanıyor.")

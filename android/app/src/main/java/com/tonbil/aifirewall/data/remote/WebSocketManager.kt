@@ -3,6 +3,7 @@ package com.tonbil.aifirewall.data.remote
 import android.util.Log
 import com.tonbil.aifirewall.data.local.TokenManager
 import com.tonbil.aifirewall.data.remote.dto.RealtimeUpdateDto
+import com.tonbil.aifirewall.data.remote.dto.SecurityEventDto
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.websocket.Frame
@@ -35,6 +36,12 @@ class WebSocketManager(
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
     val messages: SharedFlow<RealtimeUpdateDto> = _messages.asSharedFlow()
+
+    private val _securityEvents = MutableSharedFlow<SecurityEventDto>(
+        extraBufferCapacity = 10,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val securityEvents: SharedFlow<SecurityEventDto> = _securityEvents.asSharedFlow()
 
     private val _connectionState = MutableStateFlow(WebSocketState.DISCONNECTED)
     val connectionState: StateFlow<WebSocketState> = _connectionState.asStateFlow()
@@ -131,10 +138,18 @@ class WebSocketManager(
 
                         for (frame in incoming) {
                             if (frame is Frame.Text) {
+                                val text = frame.readText()
                                 try {
-                                    val update = json.decodeFromString<RealtimeUpdateDto>(frame.readText())
-                                    if (update.type == "realtime_update") {
-                                        _messages.emit(update)
+                                    // Tip kontrolu icin minimal parse
+                                    if (text.contains("\"security_event\"")) {
+                                        val event = json.decodeFromString<SecurityEventDto>(text)
+                                        _securityEvents.emit(event)
+                                        Log.d(TAG, "Security event received: ${event.eventType}/${event.severity}")
+                                    } else {
+                                        val update = json.decodeFromString<RealtimeUpdateDto>(text)
+                                        if (update.type == "realtime_update") {
+                                            _messages.emit(update)
+                                        }
                                     }
                                 } catch (e: Exception) {
                                     Log.w(TAG, "Failed to parse WS frame: ${e.message}")

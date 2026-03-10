@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 data class PushNotificationsUiState(
     val channels: List<PushChannelDto> = emptyList(),
     val isRegistered: Boolean = false,
+    val notificationPermissionGranted: Boolean = false,
     val isLoading: Boolean = true,
     val error: String? = null,
     val successMessage: String? = null,
@@ -36,13 +37,18 @@ class PushNotificationsViewModel(
 
     init {
         loadChannels()
-        checkRegistration()
     }
 
-    private fun checkRegistration() {
-        // Backend register endpoint'i her zaman success dondurdugundan
-        // placeholder olarak isRegistered = true yap
-        _uiState.update { it.copy(isRegistered = true) }
+    fun updatePermissionStatus(granted: Boolean) {
+        _uiState.update {
+            it.copy(
+                notificationPermissionGranted = granted,
+                isRegistered = granted,
+            )
+        }
+        if (granted) {
+            _uiState.update { it.copy(successMessage = "Bildirim izni verildi") }
+        }
     }
 
     fun loadChannels() {
@@ -61,7 +67,6 @@ class PushNotificationsViewModel(
         viewModelScope.launch {
             try {
                 httpClient.post(ApiRoutes.pushChannelToggle(channelId))
-                // Optimistic update
                 _uiState.update { state ->
                     state.copy(
                         channels = state.channels.map { ch ->

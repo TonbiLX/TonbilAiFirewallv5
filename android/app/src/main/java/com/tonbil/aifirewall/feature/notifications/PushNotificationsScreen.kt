@@ -1,5 +1,12 @@
 package com.tonbil.aifirewall.feature.notifications
 
+import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -16,13 +23,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import android.os.Build
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,15 +43,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationManagerCompat
 import com.tonbil.aifirewall.data.remote.dto.PushChannelDto
 import com.tonbil.aifirewall.ui.theme.DarkBackground
 import com.tonbil.aifirewall.ui.theme.DarkSurface
@@ -59,7 +69,6 @@ import com.tonbil.aifirewall.ui.theme.TextPrimary
 import com.tonbil.aifirewall.ui.theme.TextSecondary
 import org.koin.androidx.compose.koinViewModel
 
-// Kanal kategorileri: her kanal id prefix'ine gore renk atar
 private fun channelColor(channelId: String) = when {
     channelId.startsWith("security") || channelId.startsWith("ddos") || channelId.startsWith("threat") -> NeonRed
     channelId.startsWith("device") -> NeonCyan
@@ -82,6 +91,21 @@ fun PushNotificationsScreen(
     viewModel: PushNotificationsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    // Bildirim izni durumunu kontrol et
+    val notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+
+    LaunchedEffect(notificationsEnabled) {
+        viewModel.updatePermissionStatus(notificationsEnabled)
+    }
+
+    // Android 13+ icin runtime izin isteme
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        viewModel.updatePermissionStatus(granted)
+    }
 
     Scaffold(
         containerColor = DarkBackground,
@@ -140,11 +164,27 @@ fun PushNotificationsScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
-            // Kayit durumu karti
-            RegistrationCard(
-                isRegistered = uiState.isRegistered,
+            // Bildirim izni karti
+            PermissionCard(
+                isGranted = uiState.notificationPermissionGranted,
                 isLoading = uiState.isLoading,
-                onRegister = { viewModel.registerToken(Build.MODEL) },
+                onRequestPermission = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        // Android 12 ve alti — sistem ayarlarindan ac
+                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        }
+                        context.startActivity(intent)
+                    }
+                },
+                onOpenSettings = {
+                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    }
+                    context.startActivity(intent)
+                },
             )
 
             Spacer(Modifier.height(16.dp))
@@ -167,7 +207,6 @@ fun PushNotificationsScreen(
                     Text("Kanal bulunamadi", color = TextSecondary, textAlign = TextAlign.Center)
                 }
             } else {
-                // Kanallari kategoriye gore grupla
                 val grouped = uiState.channels.groupBy { channelCategory(it.id) }
                 val categoryOrder = listOf("Guvenlik", "Cihaz", "Trafik", "Sistem")
 
@@ -197,17 +236,18 @@ fun PushNotificationsScreen(
 }
 
 @Composable
-private fun RegistrationCard(
-    isRegistered: Boolean,
+private fun PermissionCard(
+    isGranted: Boolean,
     isLoading: Boolean,
-    onRegister: () -> Unit,
+    onRequestPermission: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(GlassBg)
-            .border(1.dp, if (isRegistered) NeonGreen.copy(alpha = 0.4f) else GlassBorder, RoundedCornerShape(12.dp))
+            .border(1.dp, if (isGranted) NeonGreen.copy(alpha = 0.4f) else NeonAmber.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
             .padding(16.dp),
     ) {
         Row(
@@ -215,39 +255,51 @@ private fun RegistrationCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 Icon(
-                    imageVector = if (isRegistered) Icons.Outlined.NotificationsActive else Icons.Outlined.NotificationsOff,
+                    imageVector = if (isGranted) Icons.Outlined.NotificationsActive else Icons.Outlined.NotificationsOff,
                     contentDescription = null,
-                    tint = if (isRegistered) NeonGreen else TextSecondary,
+                    tint = if (isGranted) NeonGreen else NeonAmber,
                     modifier = Modifier.size(28.dp),
                 )
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = if (isRegistered) "Bildirimler Aktif" else "Bildirimler Pasif",
-                        color = if (isRegistered) NeonGreen else TextSecondary,
+                        text = if (isGranted) "Bildirimler Aktif" else "Bildirim Izni Gerekli",
+                        color = if (isGranted) NeonGreen else NeonAmber,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = if (isRegistered) "Bu cihaz bildirimlere kayitli" else "Bildirimleri etkinlestirin",
+                        text = if (isGranted) "Bu cihaz bildirimlere kayitli" else "Bildirimleri alabilmek icin izin verin",
                         color = TextSecondary,
                         fontSize = 11.sp,
                     )
                 }
             }
-            if (!isRegistered) {
-                Button(
-                    onClick = onRegister,
-                    enabled = !isLoading,
-                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan.copy(alpha = 0.2f)),
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(color = NeonCyan, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    } else {
-                        Text("Etkinlestir", color = NeonCyan, fontSize = 12.sp)
+            if (!isGranted) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Button(
+                        onClick = onRequestPermission,
+                        enabled = !isLoading,
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan.copy(alpha = 0.2f)),
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(color = NeonCyan, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text("Izin Ver", color = NeonCyan, fontSize = 12.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Button(
+                        onClick = onOpenSettings,
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkSurface),
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        Icon(Icons.Outlined.Settings, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Ayarlar", color = TextSecondary, fontSize = 11.sp)
                     }
                 }
             }

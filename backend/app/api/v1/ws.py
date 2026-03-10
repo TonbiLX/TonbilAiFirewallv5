@@ -80,6 +80,43 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+async def broadcast_security_event(
+    event_type: str,
+    severity: str,
+    title: str,
+    message: str,
+    data: dict | None = None,
+):
+    """Tum bagli WebSocket istemcilerine guvenlik olayi gonder."""
+    if not manager.active_connections:
+        return
+
+    payload = json.dumps({
+        "type": "security_event",
+        "event_type": event_type,
+        "severity": severity,
+        "title": title,
+        "message": message,
+        "timestamp": datetime.now().isoformat(),
+        "data": data or {},
+    })
+
+    disconnected = []
+    for ws in manager.active_connections:
+        try:
+            await ws.send_text(payload)
+        except Exception:
+            disconnected.append(ws)
+
+    for ws in disconnected:
+        manager.active_connections.remove(ws) if ws in manager.active_connections else None
+
+    logger.info(
+        f"Security event broadcast: {event_type}/{severity} -> "
+        f"{len(manager.active_connections)} client"
+    )
+
+
 async def _get_bandwidth_data() -> dict:
     """Redis'ten gercek zamanli bandwidth verisini al."""
     bw_data = {
