@@ -23,7 +23,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.tonbil.aifirewall.ui.theme.DarkSurface
 import com.tonbil.aifirewall.ui.theme.NeonCyan
@@ -34,14 +33,30 @@ data class BottomNavItem(
     val label: String,
     val icon: ImageVector,
     val route: Any,
+    val childRoutes: List<kotlin.reflect.KClass<*>> = emptyList(),
 )
 
 val bottomNavItems = listOf(
     BottomNavItem("Panel", Icons.Default.Home, DashboardRoute),
-    BottomNavItem("Cihaz", Icons.Default.Smartphone, DevicesRoute),
-    BottomNavItem("Ag", Icons.Default.Lan, NetworkRoute),
-    BottomNavItem("Guvenlik", Icons.Default.Shield, SecurityRoute),
-    BottomNavItem("Ayar", Icons.Default.Settings, SettingsRoute),
+    BottomNavItem("Cihaz", Icons.Default.Smartphone, DevicesRoute, listOf(
+        DeviceDetailRoute::class, DeviceServicesRoute::class,
+    )),
+    BottomNavItem("Ag", Icons.Default.Lan, NetworkRoute, listOf(
+        DnsBlockingRoute::class, DhcpRoute::class, VpnServerRoute::class,
+        VpnClientRoute::class, TrafficRoute::class, ContentCategoriesRoute::class,
+        WifiRoute::class,
+    )),
+    BottomNavItem("Guvenlik", Icons.Default.Shield, SecurityRoute, listOf(
+        FirewallRoute::class, DdosRoute::class, DdosMapRoute::class,
+        IpManagementRoute::class, IpReputationRoute::class,
+        SecuritySettingsRoute::class, InsightsRoute::class,
+    )),
+    BottomNavItem("Ayar", Icons.Default.Settings, SettingsRoute, listOf(
+        SystemMonitorRoute::class, SystemManagementRoute::class, SystemTimeRoute::class,
+        SystemLogsRoute::class, TlsRoute::class, AiSettingsRoute::class,
+        TelegramRoute::class, ChatRoute::class, PushNotificationsRoute::class,
+        UserSettingsRoute::class, ProfilesRoute::class,
+    )),
 )
 
 @Composable
@@ -72,13 +87,16 @@ fun CyberpunkBottomNav(navController: NavController) {
             contentColor = NeonCyan,
         ) {
             bottomNavItems.forEach { item ->
-                val selected = currentDestination?.hasRoute(item.route::class) == true
+                val selected = currentDestination?.hasRoute(item.route::class) == true ||
+                    item.childRoutes.any { currentDestination?.hasRoute(it) == true }
 
                 NavigationBarItem(
                     selected = selected,
                     onClick = {
                         navController.navigate(item.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
+                            // Always pop back to Dashboard (the real root after auth)
+                            // so that any sub-screen is cleared when switching tabs
+                            popUpTo<DashboardRoute> {
                                 saveState = true
                             }
                             launchSingleTop = true
