@@ -29,11 +29,12 @@ MAX_CONNECTIONS_PER_IP = 5    # Tek IP'den maksimum esanli baglanti
 
 
 class ConnectionManager:
-    """WebSocket bağlantı yöneticisi."""
+    """WebSocket bağlantı yöneticisi — pending event kuyruklari ile."""
 
     def __init__(self):
         self.active_connections: list[WebSocket] = []
         self._ip_counts: dict[str, int] = {}  # IP -> aktif baglanti sayisi
+        self._pending_events: dict[int, list[str]] = {}  # ws id -> event list
 
     async def connect(self, websocket: WebSocket, client_ip: str = "") -> bool:
         """Bağlantı kabul et. Global veya per-IP limit asildiysa False dondur."""
@@ -55,6 +56,7 @@ class ConnectionManager:
 
         await websocket.accept()
         self.active_connections.append(websocket)
+        self._pending_events[id(websocket)] = []
         if client_ip:
             self._ip_counts[client_ip] = current_ip_count + 1
         logger.info(
@@ -67,6 +69,7 @@ class ConnectionManager:
     def disconnect(self, websocket: WebSocket, client_ip: str = ""):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
+        self._pending_events.pop(id(websocket), None)
         if client_ip and client_ip in self._ip_counts:
             self._ip_counts[client_ip] = max(0, self._ip_counts[client_ip] - 1)
             if self._ip_counts[client_ip] == 0:
@@ -75,6 +78,21 @@ class ConnectionManager:
             f"WebSocket koptu: {client_ip}. "
             f"Aktif: {len(self.active_connections)}"
         )
+
+    def queue_event(self, payload: str):
+        """Tum bagli istemcilerin kuyruklarina event ekle."""
+        for ws in self.active_connections:
+            events = self._pending_events.get(id(ws))
+            if events is not None:
+                events.append(payload)
+
+    def drain_events(self, websocket: WebSocket) -> list[str]:
+        """Belirli bir baglantinin bekleyen event'lerini al ve temizle."""
+        ws_id = id(websocket)
+        events = self._pending_events.get(ws_id, [])
+        if events:
+            self._pending_events[ws_id] = []
+        return events
 
 
 manager = ConnectionManager()
@@ -87,7 +105,8 @@ async def broadcast_security_event(
     message: str,
     data: dict | None = None,
 ):
-    """Tum bagli WebSocket istemcilerine guvenlik olayi gonder."""
+    """Tum bagli WebSocket istemcilerinin kuyruklarina guvenlik olayi ekle.
+    Ana dongu sonraki tick'te bu event'leri gonderir (race condition onlemi)."""
     if not manager.active_connections:
         return
 
@@ -101,18 +120,10 @@ async def broadcast_security_event(
         "data": data or {},
     })
 
-    disconnected = []
-    for ws in manager.active_connections:
-        try:
-            await ws.send_text(payload)
-        except Exception:
-            disconnected.append(ws)
-
-    for ws in disconnected:
-        manager.active_connections.remove(ws) if ws in manager.active_connections else None
+    manager.queue_event(payload)
 
     logger.info(
-        f"Security event broadcast: {event_type}/{severity} -> "
+        f"Security event queued: {event_type}/{severity} -> "
         f"{len(manager.active_connections)} client"
     )
 
@@ -372,6 +383,7 @@ def _validate_ws_token(token: str | None, client_ip: str = "") -> bool:
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=None)):
     """Her 3 saniyede gercek DNS ve cihaz verisi push et.
+    Arada bekleyen security_event varsa onlari da gonder.
     Token doğrulama: ?token=xxx query parametresi veya cookie."""
     # Token kontrolü: query param > cookie
     ws_token = token or websocket.cookies.get("tonbilai_session")
@@ -389,6 +401,12 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=No
         return
     try:
         while True:
+            # Bekleyen security event'leri gonder (kuyruktan, ayni coroutine'de)
+            pending = manager.drain_events(websocket)
+            for event_payload in pending:
+                await websocket.send_text(event_payload)
+
+            # Normal realtime veri gonder
             data = await _get_realtime_data()
             await websocket.send_json(data)
             await asyncio.sleep(3)
