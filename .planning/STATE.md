@@ -51,7 +51,7 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 Phase: 9 of 15 (Device Management) - COMPLETE
 Plan: 2 of 2 complete
 Status: Phase Complete, sistem bakim oturumu tamamlandi
-Last activity: 2026-03-10 - Completed quick task 26: Android cihaz detay canli trafik akisi
+Last activity: 2026-03-10 - Completed quick task 27: Android IP Reputation sayfasi tam uyarla
 
 Progress: [██████░░░░] 40%
 
@@ -150,11 +150,12 @@ Progress: [██████░░░░] 40%
 | 24 | AbuseIPDB API + Blacklist API kullanim kontrol butonlari | 2026-03-10 | 949b0ce | [24-abuseipdb-api-usage](./quick/25-ddos-harita-paket-boyut-0-fix-savunma-me/) |
 | 25 | DDoS harita paket/boyut 0 fix + conn_limit attacker set + history counter | 2026-03-10 | 202a281 | [25-ddos-harita-paket-boyut-0-fix](./quick/25-ddos-harita-paket-boyut-0-fix-savunma-me/) |
 | 26 | Android cihaz detay canli trafik akisi — live flows listesi, 5s auto-refresh, siralama chip'leri, >10MB glow | 2026-03-10 | 3483f6d, 3a1423e | [26-android-cihaz-detay-canli-trafik-akisi-w](./quick/26-android-cihaz-detay-canli-trafik-akisi-w/) |
+| 27 | Android IP Reputation sayfasi tam uyarla — 17 DTO, 13 endpoint, 4-tab UI (ulke engelleme + API usage) | 2026-03-10 | 4c93f62, 3bc9ff3, 67a8d06 | [27-android-ip-reputation](./quick/27-android-ip-reputation-sayfasi-tam-uyarla/) |
 
 ## Session Continuity
 
 Last session: 2026-03-10
-Stopped at: Completed quick-26 Android cihaz detay canli trafik akisi
+Stopped at: Completed quick-27 Android IP Reputation sayfasi tam uyarla
 Resume file: .planning/quick/23-android-complete-app/EXECUTION-GUIDE.md
 Notes: |
   - 3 paralel ajan ile gap analizi yapildi (Android app vs Web panel vs Backend API)
