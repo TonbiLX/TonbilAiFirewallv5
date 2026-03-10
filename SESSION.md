@@ -1,5 +1,14 @@
 # Quick 23 — TAMAMLANDI
 # Quick 24 — AbuseIPDB API Kontrol Butonu — TAMAMLANDI
+# Quick 25 — DDoS harita paket/boyut fix — KISMEN (commit 20a1f18)
+# Quick 26 — Ülke auto-save — TAMAMLANDI (commit fcbf578)
+
+## DDoS Paket/Boyut Sorunu — DEVAM EDECEK
+- Kök neden: nftables per-rule counter apply_all() ile sıfırlanıyor
+- Çözüm: conntrack -L'den per-IP packets/bytes çekiliyor (sudo gerekli ✅)
+- Sorun: attack-map endpoint timeout oluyor (conntrack parse + GeoIP çözümleme yavaş)
+- Yapılacak: conntrack parse'ı optimize et (sadece attacker IP'leri filtrele, tüm listeyi parse etme)
+- Alternatif: `sudo conntrack -L -s {ip}` ile sadece bilinen IP'leri sorgula (daha hızlı)
 
 ## Quick 23 Durum: TAMAMLANDI
 - APK build basarili: `apk-output/app-debug.apk` (72MB)
