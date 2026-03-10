@@ -151,7 +151,7 @@ fun AppNavHost(
             UserSettingsScreen(
                 onBack = { navController.popBackStack() },
                 onLogout = {
-                    tokenManager.clearTokens()
+                    tokenManager.clearToken()
                     navController.navigate(LoginRoute) {
                         popUpTo(0) { inclusive = true }
                     }
