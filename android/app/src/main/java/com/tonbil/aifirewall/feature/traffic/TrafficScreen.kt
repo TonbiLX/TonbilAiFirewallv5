@@ -89,13 +89,15 @@ private fun formatBytes(bytes: Long): String {
     return "%.2f GB".format(mb / 1024.0)
 }
 
-private fun formatSpeed(bps: Long): String {
-    if (bps < 1024) return "$bps B/s"
+private fun formatSpeed(bps: Double): String {
+    if (bps < 1024) return "${bps.toLong()} B/s"
     val kbps = bps / 1024.0
     if (kbps < 1024) return "%.1f KB/s".format(kbps)
     val mbps = kbps / 1024.0
     return "%.1f MB/s".format(mbps)
 }
+
+private fun formatSpeed(bps: Long): String = formatSpeed(bps.toDouble())
 
 private fun stateColor(state: String): Color = when (state.uppercase()) {
     "ESTABLISHED" -> NeonGreen
@@ -271,7 +273,7 @@ private fun LiveFlowsTab(flows: List<LiveFlowDto>) {
 private fun LiveFlowCard(flow: LiveFlowDto) {
     val isOutbound = flow.direction == "outbound"
     val directionColor = if (isOutbound) NeonCyan else NeonMagenta
-    val stateCol = stateColor(flow.state)
+    val stateCol = stateColor(flow.state ?: "")
 
     Box(
         modifier = Modifier
@@ -330,7 +332,7 @@ private fun LiveFlowCard(flow: LiveFlowDto) {
                         .background(stateCol.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
                         .padding(horizontal = 6.dp, vertical = 1.dp),
                 ) {
-                    Text(text = flow.state, color = stateCol, fontSize = 9.sp)
+                    Text(text = flow.state ?: "", color = stateCol, fontSize = 9.sp)
                 }
             }
 
@@ -340,7 +342,7 @@ private fun LiveFlowCard(flow: LiveFlowDto) {
             val srcLabel = flow.hostname ?: flow.srcIp
             val dstLabel = flow.dstDomain ?: flow.dstIp
             Text(
-                text = "$srcLabel:${flow.srcPort}  →  $dstLabel:${flow.dstPort}",
+                text = "$srcLabel:${flow.srcPort ?: "?"}  →  $dstLabel:${flow.dstPort ?: "?"}",
                 color = TextSecondary,
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,

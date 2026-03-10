@@ -256,13 +256,31 @@ private fun LogItem(log: SystemLogDto) {
                 )
             }
             Spacer(Modifier.height(4.dp))
-            Text(
-                text = log.message,
-                color = TextPrimary,
-                fontSize = 13.sp,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (log.message.isNotBlank()) {
+                Text(
+                    text = log.message,
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    maxLines = 5,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (log.action != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "Islem: ${log.action}",
+                    color = NeonAmber,
+                    fontSize = 11.sp,
+                )
+            }
+            if (log.hostname != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "Cihaz: ${log.hostname}",
+                    color = NeonGreen,
+                    fontSize = 11.sp,
+                )
+            }
             if (log.sourceIp != null || log.domain != null) {
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

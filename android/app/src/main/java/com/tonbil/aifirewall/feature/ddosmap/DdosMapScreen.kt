@@ -127,6 +127,27 @@ fun DdosMapScreen(
                 ) {
                     item { Spacer(modifier = Modifier.height(4.dp)) }
 
+                    // World map
+                    item {
+                        DdosWorldMap(
+                            attacks = uiState.attackMap.attacks,
+                        )
+                    }
+
+                    // Legend
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                        ) {
+                            LegendDot("SYN", colors.neonRed)
+                            LegendDot("UDP", colors.neonAmber)
+                            LegendDot("ICMP", colors.neonMagenta)
+                            LegendDot("Conn", Color(0xFFA855F7))
+                            LegendDot("Hedef", colors.neonCyan)
+                        }
+                    }
+
                     // Stats bar
                     item {
                         GlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -145,7 +166,7 @@ fun DdosMapScreen(
                                     color = colors.neonAmber,
                                 )
                                 StatsBarItem(
-                                    label = "Koruma Sayisi",
+                                    label = "Koruma",
                                     value = "${uiState.status.count { it.enabled }}/${uiState.status.size}",
                                     color = colors.neonGreen,
                                 )
@@ -161,7 +182,7 @@ fun DdosMapScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                "Saldiri Listesi",
+                                "Saldiri Listesi (${uiState.attackMap.attacks.size})",
                                 color = colors.neonMagenta,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
@@ -181,7 +202,7 @@ fun DdosMapScreen(
                         }
                     }
 
-                    val sortedAttacks = uiState.attackMap.attacks.sortedByDescending { it.packetCount }
+                    val sortedAttacks = uiState.attackMap.attacks.sortedByDescending { it.packets }
 
                     if (sortedAttacks.isEmpty()) {
                         item {
@@ -229,6 +250,20 @@ fun DdosMapScreen(
 }
 
 @Composable
+private fun LegendDot(label: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(color),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(label, color = TextSecondary, fontSize = 10.sp)
+    }
+}
+
+@Composable
 private fun StatsBarItem(label: String, value: String, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = 20.sp)
@@ -242,10 +277,10 @@ private fun AttackPointCard(
     colors: com.tonbil.aifirewall.ui.theme.CyberpunkColors,
 ) {
     val attackTypeColor = when {
-        attack.attackType.contains("syn", ignoreCase = true) -> colors.neonRed
-        attack.attackType.contains("udp", ignoreCase = true) -> colors.neonAmber
-        attack.attackType.contains("icmp", ignoreCase = true) -> colors.neonMagenta
-        attack.attackType.contains("port", ignoreCase = true) -> colors.neonCyan
+        attack.type.contains("syn", ignoreCase = true) -> colors.neonRed
+        attack.type.contains("udp", ignoreCase = true) -> colors.neonAmber
+        attack.type.contains("icmp", ignoreCase = true) -> colors.neonMagenta
+        attack.type.contains("conn", ignoreCase = true) -> Color(0xFFA855F7)
         else -> colors.neonGreen
     }
 
@@ -261,7 +296,7 @@ private fun AttackPointCard(
                     fontSize = 22.sp,
                 )
                 Text(
-                    text = attack.countryName ?: attack.countryCode ?: "?",
+                    text = attack.country ?: attack.countryCode ?: "?",
                     color = TextSecondary,
                     fontSize = 10.sp,
                     maxLines = 1,
@@ -272,8 +307,9 @@ private fun AttackPointCard(
             Spacer(modifier = Modifier.width(8.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(attack.ipAddress, color = TextPrimary, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                Text(attack.ip.ifBlank { "?" }, color = TextPrimary, fontWeight = FontWeight.Medium, fontSize = 13.sp)
                 attack.city?.let { Text(it, color = TextSecondary, fontSize = 11.sp) }
+                attack.isp?.let { Text(it, color = TextSecondary, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 Spacer(modifier = Modifier.height(4.dp))
                 Box(
                     modifier = Modifier
@@ -282,20 +318,24 @@ private fun AttackPointCard(
                         .border(1.dp, attackTypeColor.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
-                    Text(attack.attackType.uppercase(), color = attackTypeColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(attack.type.uppercase(), color = attackTypeColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    formatLong(attack.packetCount),
+                    formatLong(attack.packets),
                     color = colors.neonRed,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
                 )
                 Text("paket", color = TextSecondary, fontSize = 10.sp)
-                attack.lastSeen?.let {
-                    Text(it.take(16), color = TextSecondary, fontSize = 9.sp)
+                if (attack.bytes > 0) {
+                    Text(
+                        formatBytes(attack.bytes),
+                        color = colors.neonAmber,
+                        fontSize = 11.sp,
+                    )
                 }
             }
         }
@@ -349,8 +389,15 @@ private fun formatLong(value: Long): String = when {
     else -> value.toString()
 }
 
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1_073_741_824 -> "${"%.1f".format(bytes / 1_073_741_824.0)} GB"
+    bytes >= 1_048_576 -> "${"%.1f".format(bytes / 1_048_576.0)} MB"
+    bytes >= 1_024 -> "${"%.1f".format(bytes / 1_024.0)} KB"
+    else -> "$bytes B"
+}
+
 private fun countryFlag(countryCode: String?): String {
-    if (countryCode.isNullOrBlank() || countryCode.length != 2) return "🌐"
+    if (countryCode.isNullOrBlank() || countryCode.length != 2) return "\uD83C\uDF10"
     val offset = 0x1F1E6 - 'A'.code
     return countryCode.uppercase().map { char ->
         String(Character.toChars(char.code + offset))

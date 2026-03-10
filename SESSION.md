@@ -1,30 +1,45 @@
-# Quick 23 — TAMAMLANDI
-# Quick 24 — AbuseIPDB API Kontrol Butonu — TAMAMLANDI
-# Quick 25 — DDoS harita paket/boyut fix — KISMEN (commit 20a1f18)
-# Quick 26 — Ülke auto-save — TAMAMLANDI (commit fcbf578)
+# Quick 28 — Android App Bug Fixes + DDoS Harita
 
-## DDoS Paket/Boyut Sorunu — DEVAM EDECEK
-- Kök neden: nftables per-rule counter apply_all() ile sıfırlanıyor
-- Çözüm: conntrack -L'den per-IP packets/bytes çekiliyor (sudo gerekli ✅)
-- Sorun: attack-map endpoint timeout oluyor (conntrack parse + GeoIP çözümleme yavaş)
-- Yapılacak: conntrack parse'ı optimize et (sadece attacker IP'leri filtrele, tüm listeyi parse etme)
-- Alternatif: `sudo conntrack -L -s {ip}` ile sadece bilinen IP'leri sorgula (daha hızlı)
+## Tamamlanan İşler
 
-## Quick 23 Durum: TAMAMLANDI
-- APK build basarili: `apk-output/app-debug.apk` (72MB)
-- GitHub Actions CI: `.github/workflows/android-build.yml`
-- Tum 35+ ekran tamamlandi, placeholder kalmadi
+### BUG 1: Trafik JSON Parse ✅
+- `SecurityDtos.kt` → `bpsIn/bpsOut` Long→Double
+- `TrafficScreen.kt` → `formatSpeed(Double)` overload
+- `SecurityScreen.kt` → `formatBps(Double)`
 
-## Quick 24 Durum: TAMAMLANDI
-- **Gorev:** AbuseIPDB API kalan kullanim kontrolu + sayfaya kontrol butonu ekleme
-- **Yapilan:**
-  1. Backend: `GET /api/v1/ip-reputation/api-usage` endpoint eklendi
-     - AbuseIPDB API'ye fresh sorgu yaparak X-RateLimit-Remaining ve X-RateLimit-Limit header dondurur
-     - Redis cache ve yerel sayaci otomatik senkronize eder
-     - limit, used, remaining, usage_percent alanlari doner
-  2. Frontend: `ipReputationApi.ts`'e `checkApiUsage()` fonksiyonu eklendi
-  3. Frontend: `IpReputationTab.tsx` gunluk kullanim stat kartina "Kontrol Et" butonu eklendi
-     - Buton tiklandiginda AbuseIPDB API'den canli veri cekilir
-     - Kalan istek, yuzde, kullanilan bilgileri guncellenir
-     - API anahtari yoksa buton devre disi
-  4. Deploy: 3 dosya Pi'ye yuklendi, frontend build OK, backend restart OK
+### BUG 3: Sistem Logları detay eksik ✅
+- `SystemLogsScreen.kt` → action, hostname gösterimi eklendi
+
+### BUG 4: IP Reputation mesaj yanlış ✅
+- `IpReputationViewModel.kt` → başarılı test "basarili:" prefix
+
+### Trafik Cihazlar sekmesi 0 değerler ✅
+- `ExtendedDtos.kt` → `TrafficPerDeviceDto` SerialName düzeltmesi
+  - `total_upload` → `upload_bytes`, `total_download` → `download_bytes`
+  - `upload_speed` → `upload_bps`, `download_speed` → `download_bps`
+  - `total_packets` → `connection_count`
+
+### DDoS Saldırı Haritası ✅
+- **DTO tamamen yeniden yazıldı** (`DdosFullDtos.kt`):
+  - Backend field isimleri eşleştirildi: `ip`, `lat`, `lon`, `type`, `packets`, `bytes`
+  - `DdosTargetDto`, `DdosAttackSummaryDto` eklendi (nested summary desteği)
+  - `isp`, `bytes` field'ları eklendi
+- **Canvas dünya haritası** (`DdosWorldMap.kt` — yeni dosya):
+  - Compose Canvas ile polygon tabanlı kıta konturları (filled + stroke border)
+  - 11 polygon: NA, SA, Europe, Africa, Asia, Australia, Greenland, UK, Japan, NZ, Madagascar
+  - Mercator projeksiyon, grid arka plan
+  - Saldırı çizgileri (dashed + glow) + pulsing noktalar
+  - Hedef (Türkiye) pulsing cyan nokta
+  - Renk kodlaması: SYN=kırmızı, UDP=amber, ICMP=magenta, Conn=mor
+- **DdosMapScreen.kt güncellendi**: Harita + legend + ISP/bytes gösterimi
+
+## Sonraki Oturum İçin Kalan İşler
+
+### NAV BAR: Direkt Sayfa Geçişi (ÖNCELİKLİ)
+- **İstek:** Alt navbar'dan bir ikona tıklayınca, hangi sayfada olursak olalım, direkt o sayfa açılsın. Geri çıkmaya gerek kalmasın.
+- **Çözüm:** Navigation'da `popUpTo` + `launchSingleTop` kullanılmalı. Her navbar tıklamasında mevcut backstack temizlenip hedef sayfa açılmalı.
+- **Dosyalar:** `MainNavHost.kt` veya `AppNavigation.kt` + `BottomNavBar.kt` incelenecek
+
+### DDoS Haritası — İyileştirmeler (İSTEĞE BAĞLI)
+- Harita polygon'ları daha da detaylandırılabilir
+- Zoom/pan desteği eklenebilir

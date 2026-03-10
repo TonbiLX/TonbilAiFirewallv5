@@ -1172,7 +1172,7 @@ private fun TrafficTab(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = colors.neonAmber,
                             )
-                            FlowStateBadge(state = flow.state)
+                            FlowStateBadge(state = flow.state ?: "")
                         }
                     }
                 }
@@ -1985,10 +1985,10 @@ private fun formatBytes(bytes: Long): String {
     }
 }
 
-private fun formatBps(bps: Long): String {
+private fun formatBps(bps: Double): String {
     return when {
         bps >= 1_000_000 -> String.format(Locale.getDefault(), "%.1f Mbps", bps / 1_000_000.0)
         bps >= 1_000 -> String.format(Locale.getDefault(), "%.1f Kbps", bps / 1_000.0)
-        else -> "$bps bps"
+        else -> "${bps.toLong()} bps"
     }
 }

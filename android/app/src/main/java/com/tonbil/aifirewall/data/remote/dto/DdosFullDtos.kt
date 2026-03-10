@@ -61,23 +61,45 @@ data class DdosConfigUpdateDto(
 )
 
 // GET /ddos/attack-map — top-level response
+// Backend returns: { target, attacks[], summary, last_updated }
 @Serializable
 data class DdosAttackMapDto(
+    val target: DdosTargetDto? = null,
     val attacks: List<DdosAttackPointDto> = emptyList(),
-    @SerialName("total_blocked") val totalBlocked: Long = 0,
+    val summary: DdosAttackSummaryDto? = null,
+    @SerialName("last_updated") val lastUpdated: String? = null,
+) {
+    val totalBlocked: Long get() = summary?.totalPackets ?: 0
+    val activeAttackers: Int get() = summary?.activeAttackers ?: 0
+}
+
+@Serializable
+data class DdosTargetDto(
+    val lat: Double = 39.92,
+    val lon: Double = 32.85,
+    val label: String = "TonbilAi Firewall",
+)
+
+@Serializable
+data class DdosAttackSummaryDto(
+    @SerialName("total_packets") val totalPackets: Long = 0,
+    @SerialName("total_bytes") val totalBytes: Long = 0,
+    @SerialName("by_protection") val byProtection: Map<String, DdosProtectionCounterDto> = emptyMap(),
     @SerialName("active_attackers") val activeAttackers: Int = 0,
 )
 
 // GET /ddos/attack-map — individual attack point
+// Backend fields: ip, lat, lon, country, countryCode, city, isp, type, packets, bytes
 @Serializable
 data class DdosAttackPointDto(
-    @SerialName("ip_address") val ipAddress: String = "",
-    val latitude: Double = 0.0,
-    val longitude: Double = 0.0,
-    @SerialName("country_code") val countryCode: String? = null,
-    @SerialName("country_name") val countryName: String? = null,
+    val ip: String = "",
+    val lat: Double = 0.0,
+    val lon: Double = 0.0,
+    val country: String? = null,
+    val countryCode: String? = null,
     val city: String? = null,
-    @SerialName("attack_type") val attackType: String = "",
-    @SerialName("packet_count") val packetCount: Long = 0,
-    @SerialName("last_seen") val lastSeen: String? = null,
+    val isp: String? = null,
+    val type: String = "",
+    val packets: Long = 0,
+    val bytes: Long = 0,
 )

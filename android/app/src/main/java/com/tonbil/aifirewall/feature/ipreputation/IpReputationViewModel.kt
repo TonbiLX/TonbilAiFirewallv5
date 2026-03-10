@@ -148,7 +148,7 @@ class IpReputationViewModel(
                     _uiState.update {
                         it.copy(
                             lastTestResult = result,
-                            actionMessage = if (result.success) "API testi basarili" else "API testi basarisiz: ${result.message}",
+                            actionMessage = if (result.success) "API testi basarili: ${result.message}" else "API testi basarisiz: ${result.message}",
                             isActionLoading = false,
                         )
                     }

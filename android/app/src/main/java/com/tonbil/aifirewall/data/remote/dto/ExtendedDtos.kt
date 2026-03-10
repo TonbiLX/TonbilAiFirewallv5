@@ -97,11 +97,11 @@ data class TrafficPerDeviceDto(
     @SerialName("device_id") val deviceId: Int = 0,
     val hostname: String = "",
     @SerialName("ip_address") val ipAddress: String = "",
-    @SerialName("total_upload") val totalUpload: Long = 0,
-    @SerialName("total_download") val totalDownload: Long = 0,
-    @SerialName("total_packets") val totalPackets: Long = 0,
-    @SerialName("upload_speed") val uploadSpeed: Long = 0,
-    @SerialName("download_speed") val downloadSpeed: Long = 0,
+    @SerialName("upload_bytes") val totalUpload: Long = 0,
+    @SerialName("download_bytes") val totalDownload: Long = 0,
+    @SerialName("connection_count") val totalPackets: Long = 0,
+    @SerialName("upload_bps") val uploadSpeed: Long = 0,
+    @SerialName("download_bps") val downloadSpeed: Long = 0,
 )
 
 // Trafik gecmisi sayfalama response
