@@ -51,7 +51,7 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 Phase: 9 of 15 (Device Management) - COMPLETE
 Plan: 2 of 2 complete
 Status: Phase Complete, sistem bakim oturumu tamamlandi
-Last activity: 2026-03-09 - Completed quick task 18: IP yonetimi engellenen IP sayfasina arama + sayfalama + tema fix
+Last activity: 2026-03-10 - Completed quick task 25: DDoS harita paket/boyut 0 fix + conn_limit + history counter
 
 Progress: [██████░░░░] 40%
 
@@ -147,6 +147,7 @@ Progress: [██████░░░░] 40%
 | 20 | IP reputation SQL migration — Redis-only'den SQL+Redis cache mimarisine gecis (2 model, migration SQL, dual-write worker, SQL-primary API) | 2026-03-09 | 2f8710e, 81ee466 | [20-ip-reputation-sql-migration-sorgulanan-i](./quick/20-ip-reputation-sql-migration-sorgulanan-i/) |
 | 22 | IPTV cihaz destegi: is_iptv flag, DNS bypass (iptv:device_ids Redis SET), nftables raw_iptv multicast notrack + forward accept, frontend toggle + badge | 2026-03-09 | 257f7d0, 1eebe2a | [22-iptv-cihaz-destegi-device-iptv-toggle-mu](./quick/22-iptv-cihaz-destegi-device-iptv-toggle-mu/) |
 | 23 | Android App tam web panel uyumu — gap analizi + plan (DEVAM EDECEK) | 2026-03-10 | a9b8108 | [23-android-complete-app](./quick/23-android-complete-app/) |
+| 24 | AbuseIPDB API + Blacklist API kullanim kontrol butonlari | 2026-03-10 | 949b0ce | [24-abuseipdb-api-usage](./quick/25-ddos-harita-paket-boyut-0-fix-savunma-me/) |
 | 25 | DDoS harita paket/boyut 0 fix + conn_limit attacker set + history counter | 2026-03-10 | 202a281 | [25-ddos-harita-paket-boyut-0-fix](./quick/25-ddos-harita-paket-boyut-0-fix-savunma-me/) |
 
 ## Session Continuity
