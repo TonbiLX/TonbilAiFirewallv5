@@ -51,7 +51,7 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 Phase: 9 of 15 (Device Management) - COMPLETE
 Plan: 2 of 2 complete
 Status: Phase Complete, sistem bakim oturumu tamamlandi
-Last activity: 2026-03-10 - Completed quick task 25: DDoS harita paket/boyut 0 fix + conn_limit + history counter
+Last activity: 2026-03-10 - Completed quick task 26: Android cihaz detay canli trafik akisi
 
 Progress: [██████░░░░] 40%
 
@@ -149,11 +149,12 @@ Progress: [██████░░░░] 40%
 | 23 | Android App tam web panel uyumu — gap analizi + plan (DEVAM EDECEK) | 2026-03-10 | a9b8108 | [23-android-complete-app](./quick/23-android-complete-app/) |
 | 24 | AbuseIPDB API + Blacklist API kullanim kontrol butonlari | 2026-03-10 | 949b0ce | [24-abuseipdb-api-usage](./quick/25-ddos-harita-paket-boyut-0-fix-savunma-me/) |
 | 25 | DDoS harita paket/boyut 0 fix + conn_limit attacker set + history counter | 2026-03-10 | 202a281 | [25-ddos-harita-paket-boyut-0-fix](./quick/25-ddos-harita-paket-boyut-0-fix-savunma-me/) |
+| 26 | Android cihaz detay canli trafik akisi — live flows listesi, 5s auto-refresh, siralama chip'leri, >10MB glow | 2026-03-10 | 3483f6d, 3a1423e | [26-android-cihaz-detay-canli-trafik-akisi-w](./quick/26-android-cihaz-detay-canli-trafik-akisi-w/) |
 
 ## Session Continuity
 
 Last session: 2026-03-10
-Stopped at: Completed quick-25 DDoS harita paket/boyut 0 fix + deploy
+Stopped at: Completed quick-26 Android cihaz detay canli trafik akisi
 Resume file: .planning/quick/23-android-complete-app/EXECUTION-GUIDE.md
 Notes: |
   - 3 paralel ajan ile gap analizi yapildi (Android app vs Web panel vs Backend API)
