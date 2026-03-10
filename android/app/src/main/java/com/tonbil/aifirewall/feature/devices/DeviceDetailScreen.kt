@@ -1,6 +1,15 @@
 package com.tonbil.aifirewall.feature.devices
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +23,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ArrowDownward
@@ -59,6 +70,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,14 +78,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tonbil.aifirewall.data.remote.dto.LiveFlowDto
 import com.tonbil.aifirewall.ui.components.GlassCard
 import com.tonbil.aifirewall.ui.theme.CyberpunkColors
 import com.tonbil.aifirewall.ui.theme.CyberpunkTheme
+import com.tonbil.aifirewall.ui.theme.GlassBg
+import com.tonbil.aifirewall.ui.theme.GlassBorder
+import com.tonbil.aifirewall.ui.theme.NeonAmber
+import com.tonbil.aifirewall.ui.theme.NeonCyan
+import com.tonbil.aifirewall.ui.theme.NeonGreen
+import com.tonbil.aifirewall.ui.theme.NeonMagenta
+import com.tonbil.aifirewall.ui.theme.NeonRed
+import com.tonbil.aifirewall.ui.theme.TextSecondary
+import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -184,7 +211,7 @@ fun DeviceDetailScreen(
                     // Tab content
                     when (uiState.selectedTab) {
                         0 -> OverviewTab(uiState, viewModel, colors)
-                        1 -> TrafficTab(uiState, colors)
+                        1 -> TrafficTab(uiState, viewModel, colors)
                         2 -> DnsTab(uiState, colors)
                         3 -> ManagementTab(uiState, viewModel, colors, onNavigateToServices)
                     }
@@ -415,13 +442,34 @@ private fun OverviewTab(
 @Composable
 private fun TrafficTab(
     uiState: DeviceDetailUiState,
+    viewModel: DeviceDetailViewModel,
     colors: CyberpunkColors,
 ) {
+    // Auto-refresh live flows every 5 seconds
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(5000L)
+            viewModel.loadDeviceLiveFlows()
+        }
+    }
+
+    var sortKey by remember { mutableStateOf("speed") }
+
+    val sortedFlows = remember(uiState.liveFlows, sortKey) {
+        when (sortKey) {
+            "speed" -> uiState.liveFlows.sortedByDescending { maxOf(it.bpsIn, it.bpsOut) }
+            "bytes" -> uiState.liveFlows.sortedByDescending { it.bytesIn + it.bytesOut }
+            "protocol" -> uiState.liveFlows.sortedBy { it.protocol }
+            "name" -> uiState.liveFlows.sortedBy { (it.dstDomain ?: it.dstIp).lowercase() }
+            else -> uiState.liveFlows
+        }
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // Traffic summary card
         item {
@@ -449,10 +497,59 @@ private fun TrafficTab(
             }
         }
 
+        // Live flows section header
+        item {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Canli Trafik Akislari",
+                style = MaterialTheme.typography.titleMedium,
+                color = colors.neonCyan,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
+
+        // Sort chips
+        item {
+            FlowSortChipRow(
+                options = listOf(
+                    "speed" to "Hiz \u2193",
+                    "bytes" to "Boyut \u2193",
+                    "protocol" to "Protokol",
+                    "name" to "Hedef",
+                ),
+                selected = sortKey,
+                onSelect = { sortKey = it },
+            )
+        }
+
+        // Live flow cards or empty state
+        if (sortedFlows.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "Bu cihazin aktif baglantisi yok",
+                        color = TextSecondary,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        } else {
+            items(sortedFlows, key = { it.flowId }) { flow ->
+                DeviceLiveFlowCard(flow = flow)
+            }
+        }
+
         // Top domains
         val topDomains = uiState.trafficSummary?.topDomains ?: emptyList()
         if (topDomains.isNotEmpty()) {
             item {
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "En Cok Erisilen Domainler",
                     style = MaterialTheme.typography.titleMedium,
@@ -526,6 +623,187 @@ private fun TrafficTab(
                             color = colors.neonAmber,
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FlowSortChipRow(
+    options: List<Pair<String, String>>,
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        options.forEach { (key, label) ->
+            val isSelected = selected == key
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (isSelected) NeonCyan.copy(alpha = 0.18f) else GlassBg)
+                    .border(
+                        0.5.dp,
+                        if (isSelected) NeonCyan.copy(alpha = 0.6f) else GlassBorder,
+                        RoundedCornerShape(16.dp),
+                    )
+                    .clickable { onSelect(key) }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+            ) {
+                Text(
+                    text = label,
+                    color = if (isSelected) NeonCyan else TextSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeviceLiveFlowCard(flow: LiveFlowDto) {
+    val isOutbound = flow.direction == "outbound"
+    val directionColor = if (isOutbound) NeonCyan else NeonMagenta
+    val stateCol = flowStateColor(flow.state ?: "")
+    val totalBytes = flow.bytesIn + flow.bytesOut
+    val isHuge = totalBytes > 10 * 1024 * 1024L // >10MB
+
+    val infiniteTransition = rememberInfiniteTransition(label = "glow")
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "glowAlpha",
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isHuge) NeonMagenta.copy(alpha = 0.08f) else GlassBg)
+            .border(
+                width = if (isHuge) 1.dp else 0.5.dp,
+                color = if (isHuge) NeonMagenta.copy(alpha = glowAlpha * 0.6f) else GlassBorder,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .padding(10.dp),
+    ) {
+        Column {
+            // Top row: direction + protocol + app badge + state badge
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Direction + protocol + app
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (isOutbound) Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward,
+                        contentDescription = if (isOutbound) "Giden" else "Gelen",
+                        tint = directionColor,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = flow.protocol.uppercase(),
+                        color = directionColor,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    // App/service badge
+                    val badgeText = flow.appName ?: flow.serviceName
+                    if (badgeText != null) {
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    color = directionColor.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(4.dp),
+                                )
+                                .border(0.5.dp, directionColor.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 1.dp),
+                        ) {
+                            Text(
+                                text = badgeText,
+                                color = directionColor,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
+                    }
+                    // >10MB badge
+                    if (isHuge) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(NeonMagenta.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                .border(0.5.dp, NeonMagenta.copy(alpha = glowAlpha), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 1.dp),
+                        ) {
+                            Text(
+                                text = ">10MB",
+                                color = NeonMagenta,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.alpha(glowAlpha),
+                            )
+                        }
+                    }
+                }
+                // State badge
+                Box(
+                    modifier = Modifier
+                        .background(stateCol.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                ) {
+                    Text(text = flow.state ?: "", color = stateCol, fontSize = 9.sp)
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            // Middle row: destination domain:port
+            val dstLabel = flow.dstDomain ?: flow.dstIp
+            Text(
+                text = "$dstLabel:${flow.dstPort ?: "?"}",
+                color = TextSecondary,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            // Bottom row: bytes left, speed right
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "In: ${formatBytes(flow.bytesIn)}  Out: ${formatBytes(flow.bytesOut)}",
+                    color = TextSecondary,
+                    fontSize = 10.sp,
+                )
+                val speed = maxOf(flow.bpsIn, flow.bpsOut)
+                if (speed > 0) {
+                    Text(
+                        text = formatSpeed(speed),
+                        color = directionColor,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
             }
         }
@@ -970,6 +1248,22 @@ private fun formatBytes(bytes: Long): String {
         bytes >= 1_024 -> String.format("%.1f KB", bytes / 1_024.0)
         else -> "$bytes B"
     }
+}
+
+private fun formatSpeed(bps: Double): String {
+    if (bps < 1024) return "${bps.toLong()} B/s"
+    val kbps = bps / 1024.0
+    if (kbps < 1024) return "%.1f KB/s".format(kbps)
+    val mbps = kbps / 1024.0
+    return "%.1f MB/s".format(mbps)
+}
+
+private fun flowStateColor(state: String): Color = when (state.uppercase()) {
+    "ESTABLISHED" -> NeonGreen
+    "TIME_WAIT" -> TextSecondary
+    "SYN_SENT" -> NeonAmber
+    "CLOSE_WAIT" -> NeonRed
+    else -> TextSecondary
 }
 
 private fun formatDuration(seconds: Int): String {
