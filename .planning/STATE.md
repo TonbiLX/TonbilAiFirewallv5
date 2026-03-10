@@ -147,11 +147,12 @@ Progress: [██████░░░░] 40%
 | 20 | IP reputation SQL migration — Redis-only'den SQL+Redis cache mimarisine gecis (2 model, migration SQL, dual-write worker, SQL-primary API) | 2026-03-09 | 2f8710e, 81ee466 | [20-ip-reputation-sql-migration-sorgulanan-i](./quick/20-ip-reputation-sql-migration-sorgulanan-i/) |
 | 22 | IPTV cihaz destegi: is_iptv flag, DNS bypass (iptv:device_ids Redis SET), nftables raw_iptv multicast notrack + forward accept, frontend toggle + badge | 2026-03-09 | 257f7d0, 1eebe2a | [22-iptv-cihaz-destegi-device-iptv-toggle-mu](./quick/22-iptv-cihaz-destegi-device-iptv-toggle-mu/) |
 | 23 | Android App tam web panel uyumu — gap analizi + plan (DEVAM EDECEK) | 2026-03-10 | a9b8108 | [23-android-complete-app](./quick/23-android-complete-app/) |
+| 25 | DDoS harita paket/boyut 0 fix + conn_limit attacker set + history counter | 2026-03-10 | 202a281 | [25-ddos-harita-paket-boyut-0-fix](./quick/25-ddos-harita-paket-boyut-0-fix-savunma-me/) |
 
 ## Session Continuity
 
 Last session: 2026-03-10
-Stopped at: Quick 23 BASLATILDI — Android App tam web panel uyumu. Gap analizi + plan TAMAMLANDI, execution BASLAMADI.
+Stopped at: Completed quick-25 DDoS harita paket/boyut 0 fix + deploy
 Resume file: .planning/quick/23-android-complete-app/EXECUTION-GUIDE.md
 Notes: |
   - 3 paralel ajan ile gap analizi yapildi (Android app vs Web panel vs Backend API)
