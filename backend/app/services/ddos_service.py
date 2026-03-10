@@ -756,10 +756,34 @@ async def check_ddos_anomaly_and_alert():
                     "threshold": threshold,
                 })
 
-        # Yeni degerleri Redis'e kaydet
+        # Yeni degerleri Redis'e kaydet (snapshot)
         if new_values:
             await redis.hset(DDOS_COUNTER_REDIS_KEY, mapping=new_values)
             await redis.expire(DDOS_COUNTER_REDIS_KEY, 86400)
+
+        # Kumulatif counter'lari guncelle (her 60s, alarm olsun olmasin)
+        # nftables counter'lari apply_all() ile sifirlanir, bu yuzden delta'lari biriktirelim
+        cumulative_key = "ddos:cumulative_counters"
+        last_bytes_raw = await redis.hgetall("ddos:last_bytes")
+        last_bytes = {k: int(v) for k, v in last_bytes_raw.items()} if last_bytes_raw else {}
+        new_bytes_snap = {}
+        for prot, counters in by_prot.items():
+            pkt = counters["packets"]
+            byt = counters["bytes"]
+            prev_pkt = last.get(prot, 0)
+            prev_byt = last_bytes.get(prot, 0)
+            delta_pkt = max(pkt - prev_pkt, 0)
+            delta_byt = max(byt - prev_byt, 0)
+            new_bytes_snap[prot] = str(byt)
+            if delta_pkt > 0 or delta_byt > 0:
+                if delta_pkt > 0:
+                    await redis.hincrby(cumulative_key, f"{prot}:packets", delta_pkt)
+                if delta_byt > 0:
+                    await redis.hincrby(cumulative_key, f"{prot}:bytes", delta_byt)
+        if new_bytes_snap:
+            await redis.hset("ddos:last_bytes", mapping=new_bytes_snap)
+            await redis.expire("ddos:last_bytes", 86400)
+        await redis.expire(cumulative_key, 86400)
 
         # Cooldown kontrolü — ayni koruma tipi için 30 dk içinde tekrar alarm gönderme
         if alerts:
@@ -1053,6 +1077,31 @@ async def get_attack_map_data() -> dict:
     # GeoIP cozumle
     geo_data = await resolve_attacker_geoip(list(all_ips))
 
+    # Conntrack'ten per-IP baglanti sayisi ve bytes topla
+    conntrack_data = {}  # {ip: {"conns": int, "packets": int, "bytes": int}}
+    try:
+        rc, ct_out, _ = await _run_cmd(["sudo", "conntrack", "-L"])
+        if rc == 0 and ct_out:
+            for ct_line in ct_out.splitlines():
+                src_match = re.search(r'src=(\d+\.\d+\.\d+\.\d+)', ct_line)
+                if not src_match:
+                    continue
+                src_ip = src_match.group(1)
+                if _is_private_ip(src_ip) or src_ip not in all_ips:
+                    continue
+                pkt_match = re.search(r'packets=(\d+)', ct_line)
+                byt_match = re.search(r'bytes=(\d+)', ct_line)
+                pkt = int(pkt_match.group(1)) if pkt_match else 0
+                byt = int(byt_match.group(1)) if byt_match else 0
+                if src_ip in conntrack_data:
+                    conntrack_data[src_ip]["conns"] += 1
+                    conntrack_data[src_ip]["packets"] += pkt
+                    conntrack_data[src_ip]["bytes"] += byt
+                else:
+                    conntrack_data[src_ip] = {"conns": 1, "packets": pkt, "bytes": byt}
+    except Exception as e:
+        logger.debug(f"Conntrack per-IP okuma hatasi: {e}")
+
     # Redis history'den IP bazli counter bilgisi topla
     import json as _json
     history_counters = {}  # {ip: {"type": str, "packets": int, "bytes": int}}
@@ -1078,22 +1127,47 @@ async def get_attack_map_data() -> dict:
     except Exception:
         pass
 
-    # Saldırı listesi oluştur — per-IP counter paylastirma
+    # Kumulatif counter'lari Redis'ten oku (nftables counter sifirlanir, bu kalici)
+    cumulative = {}
+    try:
+        from app.db.redis_client import get_redis as _get_redis
+        _redis = await _get_redis()
+        cum_raw = await _redis.hgetall("ddos:cumulative_counters")
+        for k, v in cum_raw.items():
+            parts = k.split(":")
+            if len(parts) == 2:
+                prot_name, metric = parts
+                if prot_name not in cumulative:
+                    cumulative[prot_name] = {"packets": 0, "bytes": 0}
+                cumulative[prot_name][metric] = int(v)
+    except Exception:
+        pass
+
+    # Saldırı listesi oluştur — kumulatif + anlik counter birlesimi
     attacks = []
     seen_ips = set()
     by_prot = summary.get("by_protection", {})
     for prot, ips in attacker_ips.items():
         external_ips = [ip for ip in ips if not _is_private_ip(ip)]
         ip_count = max(len(external_ips), 1)
-        prot_stats = by_prot.get(prot, {"packets": 0, "bytes": 0})
-        per_ip_packets = prot_stats["packets"] // ip_count
-        per_ip_bytes = prot_stats["bytes"] // ip_count
+        # Kumulatif + anlik (hangisi buyukse)
+        cum_pkt = cumulative.get(prot, {}).get("packets", 0)
+        cum_byt = cumulative.get(prot, {}).get("bytes", 0)
+        nft_pkt = by_prot.get(prot, {}).get("packets", 0)
+        nft_byt = by_prot.get(prot, {}).get("bytes", 0)
+        total_pkt = max(cum_pkt, nft_pkt)
+        total_byt = max(cum_byt, nft_byt)
+        per_ip_packets = total_pkt // ip_count
+        per_ip_bytes = total_byt // ip_count
         for ip in external_ips:
             seen_ips.add(ip)
             geo = geo_data.get(ip)
             if geo:
-                # History counter varsa ekle
+                # Conntrack verisini tercih et (gercek per-IP), yoksa history/nft
+                ct = conntrack_data.get(ip, {})
                 hist = history_counters.get(ip, {})
+                final_packets = ct.get("packets", 0) or (per_ip_packets + hist.get("packets", 0))
+                final_bytes = ct.get("bytes", 0) or (per_ip_bytes + hist.get("bytes", 0))
                 attacks.append({
                     "ip": ip,
                     "lat": geo["lat"],
@@ -1103,8 +1177,8 @@ async def get_attack_map_data() -> dict:
                     "city": geo["city"],
                     "isp": geo.get("isp", ""),
                     "type": prot,
-                    "packets": per_ip_packets + hist.get("packets", 0),
-                    "bytes": per_ip_bytes + hist.get("bytes", 0),
+                    "packets": final_packets,
+                    "bytes": final_bytes,
                 })
 
     # History'den gelen ama attacker_ips'te olmayan IP'leri de ekle
@@ -1113,6 +1187,7 @@ async def get_attack_map_data() -> dict:
             continue
         geo = geo_data.get(ip)
         if geo:
+            ct = conntrack_data.get(ip, {})
             attacks.append({
                 "ip": ip,
                 "lat": geo["lat"],
@@ -1122,21 +1197,35 @@ async def get_attack_map_data() -> dict:
                 "city": geo["city"],
                 "isp": geo.get("isp", ""),
                 "type": data["type"],
-                "packets": data["packets"],
-                "bytes": data["bytes"],
+                "packets": ct.get("packets", 0) or data["packets"],
+                "bytes": ct.get("bytes", 0) or data["bytes"],
             })
             seen_ips.add(ip)
 
     # Hedef konum (Turkiye)
     target = {"lat": 39.92, "lon": 32.85, "label": "TonbilAi Firewall"}
 
+    # Summary'de kumulatif degerleri de goster
+    summary_by_prot = {}
+    for prot_key in set(list(by_prot.keys()) + list(cumulative.keys())):
+        cum_p = cumulative.get(prot_key, {}).get("packets", 0)
+        cum_b = cumulative.get(prot_key, {}).get("bytes", 0)
+        nft_p = by_prot.get(prot_key, {}).get("packets", 0)
+        nft_b = by_prot.get(prot_key, {}).get("bytes", 0)
+        summary_by_prot[prot_key] = {
+            "packets": max(cum_p, nft_p),
+            "bytes": max(cum_b, nft_b),
+        }
+    total_pkt = sum(v["packets"] for v in summary_by_prot.values())
+    total_byt = sum(v["bytes"] for v in summary_by_prot.values())
+
     return {
         "target": target,
         "attacks": attacks,
         "summary": {
-            "total_packets": summary.get("total_dropped_packets", 0),
-            "total_bytes": summary.get("total_dropped_bytes", 0),
-            "by_protection": by_prot,
+            "total_packets": total_pkt,
+            "total_bytes": total_byt,
+            "by_protection": summary_by_prot,
             "active_attackers": len(all_ips),
         },
         "last_updated": datetime.now(timezone.utc).isoformat(),
