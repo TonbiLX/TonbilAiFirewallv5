@@ -97,9 +97,21 @@ async def flush_attacker_sets() -> dict:
     except Exception:
         pass
 
+    # Redis attack history'yi de temizle (haritada hayalet IP'ler kalmasin)
+    history_cleared = 0
+    try:
+        from app.db.redis_client import get_redis
+        r = await get_redis()
+        history_cleared = await r.zcard("ddos:attack_history")
+        await r.delete("ddos:attack_history")
+        if history_cleared > 0:
+            logger.info(f"DDoS attack history temizlendi: {history_cleared} kayit")
+    except Exception as e:
+        logger.error(f"Attack history temizleme hatasi: {e}")
+
     total = sum(v for v in flushed.values() if v > 0)
     logger.info(f"DDoS saldırgan setleri temizlendi: toplam {total} IP")
-    return {"flushed_sets": flushed, "total_cleared": total}
+    return {"flushed_sets": flushed, "total_cleared": total, "history_cleared": history_cleared}
 
 
 
@@ -853,6 +865,8 @@ async def check_ddos_anomaly_and_alert():
                     # 24 saat'ten eski kayıtları temizle
                     cutoff = now - 86400
                     await redis.zremrangebyscore("ddos:attack_history", 0, cutoff)
+                    # ZSET'e 24s TTL koy (key asla orphan kalmasin)
+                    await redis.expire("ddos:attack_history", 86400)
                 except Exception as e:
                     logger.error(f"Saldırı geçmişi kayıt hatası: {e}")
 
@@ -866,6 +880,17 @@ async def check_ddos_anomaly_and_alert():
                         cd_sec = ALERT_COOLDOWN_SECONDS
                     await redis.setex(cooldown_key, cd_sec, "1")
                     logger.info(f"DDoS {alert['protection']} için {cd_sec}sn cooldown ayarlandi")
+
+        # Periyodik temizlik: alarm olmasa bile 24s'ten eski history kayitlarini sil
+        try:
+            import time as _t
+            _now = int(_t.time())
+            _cutoff = _now - 86400
+            removed = await redis.zremrangebyscore("ddos:attack_history", 0, _cutoff)
+            if removed:
+                logger.debug(f"DDoS history temizligi: {removed} expired kayit silindi")
+        except Exception:
+            pass
 
         return alerts
 
