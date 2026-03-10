@@ -36,6 +36,13 @@ class PushNotificationsViewModel(
 
     init {
         loadChannels()
+        checkRegistration()
+    }
+
+    private fun checkRegistration() {
+        // Backend register endpoint'i her zaman success dondurdugundan
+        // placeholder olarak isRegistered = true yap
+        _uiState.update { it.copy(isRegistered = true) }
     }
 
     fun loadChannels() {

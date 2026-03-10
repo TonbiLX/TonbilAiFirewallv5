@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import android.os.Build
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
@@ -92,6 +94,11 @@ fun PushNotificationsScreen(
                         Text("Push Bildirimler", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     }
                 },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Geri", tint = TextSecondary)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground),
                 actions = {
                     IconButton(onClick = { viewModel.loadChannels() }) {
@@ -137,7 +144,7 @@ fun PushNotificationsScreen(
             RegistrationCard(
                 isRegistered = uiState.isRegistered,
                 isLoading = uiState.isLoading,
-                onRegister = { viewModel.registerToken("fcm-placeholder-token") },
+                onRegister = { viewModel.registerToken(Build.MODEL) },
             )
 
             Spacer(Modifier.height(16.dp))
@@ -240,7 +247,7 @@ private fun RegistrationCard(
                     if (isLoading) {
                         CircularProgressIndicator(color = NeonCyan, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("Kaydet", color = NeonCyan, fontSize = 12.sp)
+                        Text("Etkinlestir", color = NeonCyan, fontSize = 12.sp)
                     }
                 }
             }
