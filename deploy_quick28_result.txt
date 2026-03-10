@@ -1,0 +1,36 @@
+=== Quick 28 Deploy: Push Bildirim API ===
+
+[1/5] Jump host'a baglaniliyor pi.tonbil.com:2323...
+  Jump host baglantisi OK
+[2/5] Pi'ye tunel aciliyor 192.168.1.2:22...
+  Pi baglantisi OK
+
+[3/5] 3 dosya transfer ediliyor...
+  backend/app/schemas/push.py -> /opt/tonbilaios/backend/app/schemas/push.py
+    OK
+  backend/app/api/v1/push.py -> /opt/tonbilaios/backend/app/api/v1/push.py
+    OK
+  backend/app/api/v1/router.py -> /opt/tonbilaios/backend/app/api/v1/router.py
+    OK
+
+[4/5] Backend yeniden baslatiliyor...
+  Backend restart OK
+
+[5/5] Push API endpoint testleri...
+
+GET /push/channels:
+  - security_threats: Tehdit Bildirimleri (enabled=True)
+  - device_events: Cihaz Bildirimleri (enabled=True)
+  - trusted_ip_threats: Guvenilir IP Tehditleri (enabled=True)
+  - ai_insights: AI Icgoruleri (enabled=False)
+  BASARILI: 4 kanal donduruldu
+
+POST /push/channels/device_events/toggle:
+  {"id":"device_events","name":"Cihaz Bildirimleri","description":"Yeni cihaz baglantilari","enabled":false}
+  Toggle sonrasi geri alindi (onceki duruma dondu)
+
+POST /push/register:
+  {"success":true,"message":"Token kaydedildi"}
+  BASARILI: Register endpoint calisiyor
+
+=== Tum testler BASARILI ===
