@@ -190,7 +190,8 @@ fun DdosMapScreen(
                             }
                         }
                     } else {
-                        items(sortedAttacks, key = { it.ipAddress }) { attack ->
+                        items(sortedAttacks.size) { index ->
+                            val attack = sortedAttacks[index]
                             AttackPointCard(attack = attack, colors = colors)
                         }
                     }
