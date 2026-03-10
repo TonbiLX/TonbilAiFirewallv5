@@ -51,7 +51,7 @@ See: .planning/PROJECT.md (updated 2026-03-06)
 Phase: 9 of 15 (Device Management) - COMPLETE
 Plan: 2 of 2 complete
 Status: Phase Complete, sistem bakim oturumu tamamlandi
-Last activity: 2026-03-10 - DDoS harita hayalet IP fix + deploy + Android build setup
+Last activity: 2026-03-10 - Quick 29: WS security events + Android system notifications
 
 Progress: [██████░░░░] 40%
 
@@ -152,6 +152,7 @@ Progress: [██████░░░░] 40%
 | 26 | Android cihaz detay canli trafik akisi — live flows listesi, 5s auto-refresh, siralama chip'leri, >10MB glow | 2026-03-10 | 3483f6d, 3a1423e | [26-android-cihaz-detay-canli-trafik-akisi-w](./quick/26-android-cihaz-detay-canli-trafik-akisi-w/) |
 | 27 | Android IP Reputation sayfasi tam uyarla — 17 DTO, 13 endpoint, 4-tab UI (ulke engelleme + API usage) | 2026-03-10 | 4c93f62, 3bc9ff3, 67a8d06 | [27-android-ip-reputation](./quick/27-android-ip-reputation-sayfasi-tam-uyarla/) |
 | 28 | Android Push Bildirimleri + Backend Push API — 3 endpoint (GET channels, POST toggle, POST register), Android geri butonu + Build.MODEL, Pi deploy + test | 2026-03-10 | 4f75903, 0ffeb43, 419e978 | [28-android-push-bildirimleri](./quick/28-android-app-push-bildirimleri-ve-push-bi/) |
+| 29 | WebSocket security events + Android system notifications — broadcast_security_event(), telegram hook, NotificationHelper, test endpoint | 2026-03-10 | 94ce9aa | [29-websocket-security-events](./quick/29-websocket-security-events-android-system/) |
 
 ## Session Continuity
 
