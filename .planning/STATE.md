@@ -115,11 +115,11 @@ Progress: [██████░░░░] 40%
 ### Pending Todos
 
 - Phase 10 (DNS Filtering) planlama bekliyor
-- WebSocket backend ping/pong eklenmeli (baglanti birikimini onlemek icin)
+- WebSocket backend ping/pong TAMAMLANDI (Quick 30: asyncio.Event + 30s keepalive)
 
 ### Blockers/Concerns
 
-- WebSocket baglanti birikimi: Ayni tarayicidan 10-15 WS baglantisi acilebiliyor (backend pong timeout eksik)
+- WebSocket ping/pong eklendi (Quick 30): 30s interval, 10s timeout ile stale baglantilar otomatik temizleniyor
 - WAN input filter EKSIK: nft inet filter input policy accept, eth0 icin kural yok (KRITIK)
 - DB retention mekanizmasi YOK: connection_flows 646MB, dns_query_logs 318MB, traffic_logs 167MB (sinir yok)
 - Forward chain ct state established kurali 16+ subnet kuralindan sonra (performans)
@@ -153,11 +153,12 @@ Progress: [██████░░░░] 40%
 | 27 | Android IP Reputation sayfasi tam uyarla — 17 DTO, 13 endpoint, 4-tab UI (ulke engelleme + API usage) | 2026-03-10 | 4c93f62, 3bc9ff3, 67a8d06 | [27-android-ip-reputation](./quick/27-android-ip-reputation-sayfasi-tam-uyarla/) |
 | 28 | Android Push Bildirimleri + Backend Push API — 3 endpoint (GET channels, POST toggle, POST register), Android geri butonu + Build.MODEL, Pi deploy + test | 2026-03-10 | 4f75903, 0ffeb43, 419e978 | [28-android-push-bildirimleri](./quick/28-android-app-push-bildirimleri-ve-push-bi/) |
 | 29 | WebSocket security events + Android system notifications — broadcast_security_event(), telegram hook, NotificationHelper, test endpoint | 2026-03-10 | 94ce9aa | [29-websocket-security-events](./quick/29-websocket-security-events-android-system/) |
+| 30 | WS security event aninda gonderim — asyncio.Event tabanli instant broadcast (3s polling kaldirildi) + 30s ping/pong keepalive ile stale baglanti temizligi | 2026-03-11 | 349c720, 6c91d88 | [30-ws-instant-broadcast](./quick/30-ws-security-event-an-nda-g-nderim-asynci/) |
 
 ## Session Continuity
 
-Last session: 2026-03-10
-Stopped at: Quick 28 tamamlandi — Push bildirim API backend+Android+deploy
+Last session: 2026-03-11
+Stopped at: Quick 30 tamamlandi — WS asyncio.Event instant broadcast + ping/pong keepalive deploy
 Resume file: .planning/quick/23-android-complete-app/EXECUTION-GUIDE.md
 Notes: |
   - Quick 28: Push bildirim API (GET /channels, POST toggle, POST register), Android screen geri butonu + Build.MODEL
