@@ -446,6 +446,19 @@ async def fetch_abuseipdb_blacklist(force: bool = False) -> dict:
             logger.warning(msg)
             return {"status": "error", "count": 0, "blocked": 0, "message": msg}
 
+        # Blacklist API rate limit header'larini kaydet
+        try:
+            bl_remaining = response.headers.get("X-RateLimit-Remaining")
+            bl_limit = response.headers.get("X-RateLimit-Limit")
+            if bl_remaining is not None:
+                await redis.set("reputation:blacklist_api_remaining", str(bl_remaining), ex=86400)
+            if bl_limit is not None:
+                await redis.set("reputation:blacklist_api_limit", str(bl_limit), ex=86400)
+            if bl_remaining is not None and bl_limit is not None:
+                logger.info(f"AbuseIPDB blacklist rate limit: {bl_remaining}/{bl_limit}")
+        except Exception as rl_exc:
+            logger.debug(f"Blacklist rate limit header kaydi basarisiz: {rl_exc}")
+
         body = response.json()
         ip_list = body.get("data", [])
 

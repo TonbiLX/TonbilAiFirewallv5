@@ -18,6 +18,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Activity,
 } from "lucide-react";
 import { GlassCard } from "../common/GlassCard";
 import { NeonBadge } from "../common/NeonBadge";
@@ -29,6 +30,8 @@ import {
   fetchReputationIps,
   clearReputationCache,
   testAbuseipdbKey,
+  checkApiUsage,
+  checkBlacklistApiUsage,
   fetchBlacklist,
   triggerBlacklistFetch,
   fetchBlacklistConfig,
@@ -182,10 +185,15 @@ export function IpReputationTab() {
   const [ipPageSize, setIpPageSize] = useState(50);
   const [ipCurrentPage, setIpCurrentPage] = useState(1);
 
+  // API usage state
+  const [apiUsage, setApiUsage] = useState<{ limit: number; used: number; remaining: number; usage_percent: number } | null>(null);
+  const [checkingUsage, setCheckingUsage] = useState(false);
+
   // Blacklist state
   const [blacklistConfig, setBlacklistConfig] = useState<BlacklistConfig | null>(null);
   const [blacklistIps, setBlacklistIps] = useState<BlacklistIp[]>([]);
   const [blacklistFetching, setBlacklistFetching] = useState(false);
+  const [blacklistApiChecking, setBlacklistApiChecking] = useState(false);
   const [blacklistSearch, setBlacklistSearch] = useState("");
   const [blacklistExpanded, setBlacklistExpanded] = useState(false);
 
@@ -314,6 +322,26 @@ export function IpReputationTab() {
     });
   };
 
+  const handleCheckApiUsage = async () => {
+    setCheckingUsage(true);
+    try {
+      const res = await checkApiUsage();
+      if (res.data?.status === "ok" && res.data.data) {
+        setApiUsage(res.data.data);
+        // Summary'yi de güncelle (sync)
+        const sumRes = await fetchReputationSummary();
+        setSummary(sumRes.data);
+        showFeedback("API kullanım bilgisi güncellendi.", true);
+      } else {
+        showFeedback(res.data?.message ?? "API kullanım bilgisi alınamadı.", false);
+      }
+    } catch {
+      showFeedback("API kullanım kontrolü başarısız.", false);
+    } finally {
+      setCheckingUsage(false);
+    }
+  };
+
   const handleBlacklistFetch = async () => {
     setBlacklistFetching(true);
     try {
@@ -325,6 +353,25 @@ export function IpReputationTab() {
       console.error("Blacklist fetch hatasi:", err);
     } finally {
       setBlacklistFetching(false);
+    }
+  };
+
+  const handleBlacklistApiCheck = async () => {
+    setBlacklistApiChecking(true);
+    try {
+      const res = await checkBlacklistApiUsage();
+      const d = res.data?.data;
+      if (d && blacklistConfig) {
+        setBlacklistConfig({
+          ...blacklistConfig,
+          daily_fetches: d.used ?? blacklistConfig.daily_fetches,
+          daily_limit: d.limit ?? blacklistConfig.daily_limit,
+        });
+      }
+    } catch (err) {
+      console.error("Blacklist API usage kontrol hatasi:", err);
+    } finally {
+      setBlacklistApiChecking(false);
     }
   };
 
@@ -429,27 +476,46 @@ export function IpReputationTab() {
 
         {/* Günlük Kullanım */}
         <div className="glass-card p-4 border-l-2 border-[#39FF14]">
-          <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">
-            {hasRealApiData ? "AbuseIPDB Kullanım" : "Günlük Kullanım"}
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-xs text-gray-400 uppercase tracking-wider">
+              {hasRealApiData || apiUsage ? "AbuseIPDB Kullanım" : "Günlük Kullanım"}
+            </div>
+            <button
+              onClick={handleCheckApiUsage}
+              disabled={checkingUsage || !config?.abuseipdb_key_set}
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-[#39FF14] border border-[#39FF14]/30 rounded hover:bg-[#39FF14]/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              title="AbuseIPDB API'den güncel kullanım bilgisini çek"
+            >
+              <Activity className={`w-3 h-3 ${checkingUsage ? "animate-pulse" : ""}`} />
+              {checkingUsage ? "Kontrol..." : "Kontrol Et"}
+            </button>
           </div>
           <div className="text-2xl font-bold text-[#39FF14]">
-            {effectiveUsed}
-            <span className="text-sm font-normal text-gray-400">/{effectiveLimit}</span>
+            {apiUsage ? apiUsage.used : effectiveUsed}
+            <span className="text-sm font-normal text-gray-400">/{apiUsage ? apiUsage.limit : effectiveLimit}</span>
           </div>
           <div className="w-full bg-gray-700 rounded-full h-1 mt-1.5">
             <div
               className={`h-1 rounded-full transition-all ${
-                dailyPct >= 90 ? "bg-[#FF003C]" : dailyPct >= 70 ? "bg-[#FFB800]" : "bg-[#39FF14]"
+                (apiUsage ? apiUsage.usage_percent : dailyPct) >= 90
+                  ? "bg-[#FF003C]"
+                  : (apiUsage ? apiUsage.usage_percent : dailyPct) >= 70
+                  ? "bg-[#FFB800]"
+                  : "bg-[#39FF14]"
               }`}
-              style={{ width: `${Math.min(dailyPct, 100)}%` }}
+              style={{ width: `${Math.min(apiUsage ? apiUsage.usage_percent : dailyPct, 100)}%` }}
             />
           </div>
-          {hasRealApiData ? (
+          {apiUsage ? (
+            <div className="text-xs text-[#00F0FF] mt-1.5 font-mono">
+              {apiUsage.remaining} istek kalan ({apiUsage.usage_percent}%)
+            </div>
+          ) : hasRealApiData ? (
             <div className="text-xs text-[#00F0FF] mt-1.5 font-mono">
               {summary?.abuseipdb_remaining ?? "?"} istek kalan
             </div>
           ) : (
-            <div className="text-xs text-gray-500 mt-1.5">Yerel sayaç</div>
+            <div className="text-xs text-gray-500 mt-1.5">Yerel sayaç — kontrol et ile güncelle</div>
           )}
         </div>
       </div>
@@ -657,6 +723,15 @@ export function IpReputationTab() {
                 Günlük: {blacklistConfig.daily_fetches}/{blacklistConfig.daily_limit}
               </span>
             )}
+            <button
+              onClick={handleBlacklistApiCheck}
+              disabled={blacklistApiChecking || !config?.abuseipdb_key_set}
+              className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-gray-400 border border-gray-600 hover:border-[#FF00E5]/40 hover:text-[#FF00E5] transition-colors disabled:opacity-40"
+              title="AbuseIPDB Blacklist API limitini kontrol et"
+            >
+              <Activity className={`h-2.5 w-2.5 ${blacklistApiChecking ? 'animate-pulse' : ''}`} />
+              {blacklistApiChecking ? '...' : 'Kontrol Et'}
+            </button>
             <button
               onClick={handleBlacklistFetch}
               disabled={blacklistFetching}

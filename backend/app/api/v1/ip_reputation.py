@@ -472,6 +472,193 @@ async def test_abuseipdb_key(
         }
 
 
+@router.get("/api-usage")
+async def check_api_usage(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    AbuseIPDB API kullanım bilgisini canlı olarak kontrol et.
+
+    Her zaman AbuseIPDB API'ye fresh sorgu yaparak X-RateLimit-Remaining
+    ve X-RateLimit-Limit header'larını döndürür.
+    Bu çağrı 1 check hakkı harcar.
+    """
+    redis = await get_redis()
+
+    api_key_raw: str | None = await redis.get(REDIS_KEY_API_KEY)
+    if not api_key_raw or not api_key_raw.strip():
+        return {
+            "status": "error",
+            "message": "AbuseIPDB API anahtarı ayarlanmamış.",
+            "data": None,
+        }
+
+    api_key = api_key_raw.strip()
+
+    try:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+            response = await client.get(
+                ABUSEIPDB_URL,
+                headers={"Key": api_key, "Accept": "application/json"},
+                params={"ipAddress": "8.8.8.8", "maxAgeInDays": 1},
+            )
+
+        if response.status_code == 200:
+            h_remaining = response.headers.get("X-RateLimit-Remaining")
+            h_limit = response.headers.get("X-RateLimit-Limit")
+            h_retry = response.headers.get("Retry-After")
+
+            remaining = int(h_remaining) if h_remaining is not None else None
+            limit = int(h_limit) if h_limit is not None else None
+            used = (limit - remaining) if limit is not None and remaining is not None else None
+
+            # Redis cache güncelle
+            if remaining is not None:
+                await redis.set("reputation:abuseipdb_remaining", str(remaining), ex=86400)
+            if limit is not None:
+                await redis.set("reputation:abuseipdb_limit", str(limit), ex=86400)
+
+            # Yerel günlük sayacı senkronize et
+            if used is not None:
+                await redis.set(REDIS_KEY_DAILY_CHECKS, str(used))
+                ttl = await redis.ttl(REDIS_KEY_DAILY_CHECKS)
+                if ttl == -1:
+                    await redis.expire(REDIS_KEY_DAILY_CHECKS, 86400)
+
+            pct = round((used / limit) * 100, 1) if used is not None and limit and limit > 0 else 0
+
+            return {
+                "status": "ok",
+                "message": "API kullanım bilgisi başarıyla alındı.",
+                "data": {
+                    "limit": limit,
+                    "used": used,
+                    "remaining": remaining,
+                    "usage_percent": pct,
+                    "retry_after": h_retry,
+                },
+            }
+        elif response.status_code == 429:
+            return {
+                "status": "error",
+                "message": "AbuseIPDB günlük kotası dolmuş (HTTP 429).",
+                "data": {"limit": 0, "used": 0, "remaining": 0, "usage_percent": 100},
+            }
+        elif response.status_code == 401:
+            return {
+                "status": "error",
+                "message": "API anahtarı geçersiz veya yetkisiz (HTTP 401).",
+                "data": None,
+            }
+        else:
+            return {
+                "status": "error",
+                "message": f"AbuseIPDB beklenmedik yanıt: HTTP {response.status_code}",
+                "data": None,
+            }
+    except httpx.TimeoutException:
+        return {
+            "status": "error",
+            "message": f"AbuseIPDB bağlantısı zaman aşımına uğradı ({HTTP_TIMEOUT}s).",
+            "data": None,
+        }
+    except Exception as exc:
+        logger.error(f"API usage check hatası: {exc}")
+        return {
+            "status": "error",
+            "message": f"Kontrol sırasında hata oluştu: {exc}",
+            "data": None,
+        }
+
+
+ABUSEIPDB_BLACKLIST_URL = "https://api.abuseipdb.com/api/v2/blacklist"
+
+
+@router.get("/blacklist/api-usage")
+async def check_blacklist_api_usage(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    AbuseIPDB Blacklist API kullanım bilgisini canlı kontrol et.
+
+    Önce Redis cache'e bakar. Cache yoksa veya force ise, AbuseIPDB blacklist
+    endpoint'ine limit=1 ile minimal sorgu yaparak X-RateLimit header'larını okur.
+    Bu çağrı 1 blacklist fetch hakkı harcar (sadece cache boşsa).
+    """
+    redis = await get_redis()
+
+    daily_raw = await redis.get("reputation:blacklist_daily_fetches")
+    daily_fetches = int(daily_raw) if daily_raw else 0
+
+    # Worker tarafından kaydedilen API rate limit header verileri
+    api_remaining_raw = await redis.get("reputation:blacklist_api_remaining")
+    api_limit_raw = await redis.get("reputation:blacklist_api_limit")
+
+    api_remaining = int(api_remaining_raw) if api_remaining_raw is not None else None
+    api_limit = int(api_limit_raw) if api_limit_raw is not None else None
+
+    # Cache'de yoksa canlı sorgu yap (limit=1 ile minimal — 1 fetch hakkı harcar)
+    if api_remaining is None or api_limit is None:
+        try:
+            api_key_raw = await redis.get(REDIS_KEY_API_KEY)
+            if api_key_raw and api_key_raw.strip():
+                async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+                    resp = await client.get(
+                        ABUSEIPDB_BLACKLIST_URL,
+                        headers={"Key": api_key_raw.strip(), "Accept": "application/json"},
+                        params={"confidenceMinimum": 100, "limit": 1},
+                    )
+                    if resp.status_code == 200:
+                        h_remaining = resp.headers.get("X-RateLimit-Remaining")
+                        h_limit = resp.headers.get("X-RateLimit-Limit")
+                        if h_remaining is not None:
+                            api_remaining = int(h_remaining)
+                            await redis.set("reputation:blacklist_api_remaining", str(api_remaining), ex=86400)
+                        if h_limit is not None:
+                            api_limit = int(h_limit)
+                            await redis.set("reputation:blacklist_api_limit", str(api_limit), ex=86400)
+                        # Yerel sayacı da senkronize et
+                        if api_remaining is not None and api_limit is not None:
+                            real_used = api_limit - api_remaining
+                            await redis.set("reputation:blacklist_daily_fetches", str(real_used))
+                            daily_fetches = real_used
+                        logger.info(f"Blacklist API limit canli: {api_remaining}/{api_limit}")
+                    elif resp.status_code == 429:
+                        logger.warning("Blacklist API limit dolmus (429)")
+                    else:
+                        logger.warning(f"Blacklist API limit sorgusu: HTTP {resp.status_code}")
+        except Exception as exc:
+            logger.debug(f"Blacklist API canli limit sorgusu basarisiz: {exc}")
+
+    # Eğer API header verisi varsa, onu kullan (daha doğru)
+    if api_remaining is not None and api_limit is not None:
+        effective_used = api_limit - api_remaining
+        effective_limit = api_limit
+    else:
+        effective_used = daily_fetches
+        effective_limit = 5
+
+    pct = round((effective_used / effective_limit) * 100, 1) if effective_limit > 0 else 0
+
+    last_fetch = await redis.get("reputation:blacklist_last_fetch") or ""
+    total_count = await redis.get("reputation:blacklist_count") or "0"
+
+    return {
+        "status": "ok",
+        "data": {
+            "limit": effective_limit,
+            "used": effective_used,
+            "remaining": effective_limit - effective_used,
+            "usage_percent": pct,
+            "local_fetches": daily_fetches,
+            "api_remaining": api_remaining,
+            "api_limit": api_limit,
+            "last_fetch": last_fetch,
+            "total_ips": int(total_count),
+        },
+    }
+
+
 @router.get("/blacklist")
 async def get_blacklist_ips(
     current_user: User = Depends(get_current_user),
