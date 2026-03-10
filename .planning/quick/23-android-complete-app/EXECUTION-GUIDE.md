@@ -96,15 +96,15 @@ gradlew assembleDebug, hata duzeltme, APK
 
 | Adim | Durum | Seans |
 |------|-------|-------|
-| 1. ApiRoutes | ❌ | - |
-| 2. DTOs | ❌ | - |
-| 3. Repos | ❌ | - |
-| 4. NavRoutes | ❌ | - |
-| 5. AppNavHost | ❌ | - |
-| 6. BottomNav | ❌ | - |
-| 7. Yeni Ekranlar | ❌ | - |
+| 1. ApiRoutes | ✅ | 1 |
+| 2. DTOs | ✅ | 1 |
+| 3. Repos | ✅ | 1 |
+| 4. NavRoutes | ✅ | 1 |
+| 5. AppNavHost | ✅ (placeholder) | 1 |
+| 6. BottomNav | ✅ | 1 |
+| 7. Yeni Ekranlar | 🔄 ajanlar calisiyor | 1 |
 | 8. Mevcut Fixes | ❌ | - |
-| 9. DI Module | ❌ | - |
+| 9. DI Module | ✅ | 1 |
 | 10. Build | ❌ | - |
 
 ## Notlar

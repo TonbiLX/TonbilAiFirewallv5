@@ -118,4 +118,25 @@ class DeviceRepository(private val client: HttpClient) {
             Result.failure(e)
         }
     }
+
+    suspend fun scanDevices(): Result<DeviceScanResponseDto> {
+        return try {
+            val response: DeviceScanResponseDto = client.post(ApiRoutes.DEVICES_SCAN).body()
+            Result.success(response)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateBandwidth(id: Int, dto: DeviceBandwidthDto): Result<DeviceResponseDto> {
+        return try {
+            val response: DeviceResponseDto = client.patch(ApiRoutes.deviceBandwidth(id)) {
+                contentType(ContentType.Application.Json)
+                setBody(dto)
+            }.body()
+            Result.success(response)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

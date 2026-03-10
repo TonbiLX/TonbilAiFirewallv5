@@ -1,12 +1,9 @@
 package com.tonbil.aifirewall.ui.navigation
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Smartphone
@@ -42,6 +39,7 @@ data class BottomNavItem(
 val bottomNavItems = listOf(
     BottomNavItem("Panel", Icons.Default.Home, DashboardRoute),
     BottomNavItem("Cihaz", Icons.Default.Smartphone, DevicesRoute),
+    BottomNavItem("Ag", Icons.Default.Lan, NetworkRoute),
     BottomNavItem("Guvenlik", Icons.Default.Shield, SecurityRoute),
     BottomNavItem("Ayar", Icons.Default.Settings, SettingsRoute),
 )

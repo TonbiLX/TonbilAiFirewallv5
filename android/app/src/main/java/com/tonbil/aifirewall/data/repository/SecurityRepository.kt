@@ -287,4 +287,211 @@ class SecurityRepository(private val client: HttpClient) {
     suspend fun getChatHistory(): Result<List<ChatMessageDto>> = runCatching {
         client.get(ApiRoutes.CHAT_HISTORY).body()
     }
+
+    // ========== DDoS CONFIG ==========
+
+    suspend fun getDdosConfig(): Result<DdosConfigDto> = runCatching {
+        client.get(ApiRoutes.DDOS_CONFIG).body()
+    }
+
+    suspend fun updateDdosConfig(dto: DdosConfigUpdateDto): Result<DdosConfigDto> = runCatching {
+        client.put(ApiRoutes.DDOS_CONFIG) {
+            contentType(ContentType.Application.Json)
+            setBody(dto)
+        }.body()
+    }
+
+    suspend fun applyDdos(): Result<MessageResponseDto> = runCatching {
+        client.post(ApiRoutes.DDOS_APPLY).body()
+    }
+
+    suspend fun toggleDdosProtection(name: String): Result<MessageResponseDto> = runCatching {
+        client.post(ApiRoutes.ddosToggle(name)).body()
+    }
+
+    suspend fun flushAttackers(): Result<MessageResponseDto> = runCatching {
+        client.post(ApiRoutes.DDOS_FLUSH_ATTACKERS).body()
+    }
+
+    suspend fun getDdosAttackMap(): Result<DdosAttackMapDto> = runCatching {
+        client.get(ApiRoutes.DDOS_ATTACK_MAP).body()
+    }
+
+    // ========== SECURITY CONFIG (full) ==========
+
+    suspend fun getSecurityConfig(): Result<SecurityConfigDto> = runCatching {
+        client.get(ApiRoutes.SECURITY_CONFIG).body()
+    }
+
+    suspend fun updateSecurityConfig(dto: SecurityConfigUpdateDto): Result<SecurityConfigDto> = runCatching {
+        client.put(ApiRoutes.SECURITY_CONFIG) {
+            contentType(ContentType.Application.Json)
+            setBody(dto)
+        }.body()
+    }
+
+    suspend fun reloadSecurity(): Result<MessageResponseDto> = runCatching {
+        client.post(ApiRoutes.SECURITY_RELOAD).body()
+    }
+
+    suspend fun getSecurityDefaults(): Result<SecurityDefaultsDto> = runCatching {
+        client.get(ApiRoutes.SECURITY_DEFAULTS).body()
+    }
+
+    suspend fun resetSecurity(): Result<MessageResponseDto> = runCatching {
+        client.post(ApiRoutes.SECURITY_RESET).body()
+    }
+
+    // ========== FIREWALL EXTENDED ==========
+
+    suspend fun getFirewallScan(): Result<List<PortScanResultDto>> = runCatching {
+        client.get(ApiRoutes.FIREWALL_SCAN).body()
+    }
+
+    suspend fun getFirewallConnections(): Result<List<FirewallConnectionDto>> = runCatching {
+        client.get(ApiRoutes.FIREWALL_CONNECTIONS).body()
+    }
+
+    // ========== DNS EXTENDED ==========
+
+    suspend fun getDnsQueries(page: Int = 1, pageSize: Int = 50, blocked: Boolean? = null): Result<DnsQueryPageDto> = runCatching {
+        client.get(ApiRoutes.DNS_QUERIES) {
+            url {
+                parameters.append("page", page.toString())
+                parameters.append("page_size", pageSize.toString())
+                if (blocked != null) parameters.append("blocked", blocked.toString())
+            }
+        }.body()
+    }
+
+    suspend fun getDnsExternalSummary(): Result<DnsExternalSummaryDto> = runCatching {
+        client.get(ApiRoutes.DNS_QUERIES_EXTERNAL_SUMMARY).body()
+    }
+
+    suspend fun dnsLookup(domain: String): Result<DnsLookupDto> = runCatching {
+        client.get(ApiRoutes.dnsLookup(domain)).body()
+    }
+
+    suspend fun refreshBlocklist(id: Int): Result<MessageResponseDto> = runCatching {
+        client.post(ApiRoutes.blocklistRefresh(id)).body()
+    }
+
+    suspend fun refreshAllBlocklists(): Result<MessageResponseDto> = runCatching {
+        client.post(ApiRoutes.DNS_BLOCKLISTS_REFRESH_ALL).body()
+    }
+
+    suspend fun updateBlocklist(id: Int, dto: BlocklistCreateDto): Result<BlocklistDto> = runCatching {
+        client.patch(ApiRoutes.blocklistDetail(id)) {
+            contentType(ContentType.Application.Json)
+            setBody(dto)
+        }.body()
+    }
+
+    // ========== DHCP EXTENDED ==========
+
+    suspend fun getDhcpPools(): Result<List<DhcpPoolDto>> = runCatching {
+        client.get(ApiRoutes.DHCP_POOLS).body()
+    }
+
+    suspend fun createDhcpPool(dto: DhcpPoolCreateDto): Result<DhcpPoolDto> = runCatching {
+        client.post(ApiRoutes.DHCP_POOLS) {
+            contentType(ContentType.Application.Json)
+            setBody(dto)
+        }.body()
+    }
+
+    suspend fun updateDhcpPool(id: Int, dto: DhcpPoolCreateDto): Result<DhcpPoolDto> = runCatching {
+        client.patch(ApiRoutes.dhcpPoolDetail(id)) {
+            contentType(ContentType.Application.Json)
+            setBody(dto)
+        }.body()
+    }
+
+    suspend fun deleteDhcpPool(id: Int): Result<Unit> = runCatching {
+        client.delete(ApiRoutes.dhcpPoolDetail(id))
+    }
+
+    suspend fun toggleDhcpPool(id: Int): Result<DhcpPoolDto> = runCatching {
+        client.post(ApiRoutes.dhcpPoolToggle(id)).body()
+    }
+
+    suspend fun deleteDhcpLease(mac: String): Result<Unit> = runCatching {
+        client.delete(ApiRoutes.dhcpLeaseDelete(mac))
+    }
+
+    // ========== WIFI EXTENDED ==========
+
+    suspend fun getWifiChannels(): Result<List<WifiChannelDto>> = runCatching {
+        client.get(ApiRoutes.WIFI_CHANNELS).body()
+    }
+
+    suspend fun getWifiGuest(): Result<WifiGuestConfigDto> = runCatching {
+        client.get(ApiRoutes.WIFI_GUEST).body()
+    }
+
+    suspend fun updateWifiGuest(dto: WifiGuestConfigDto): Result<WifiGuestConfigDto> = runCatching {
+        client.put(ApiRoutes.WIFI_GUEST) {
+            contentType(ContentType.Application.Json)
+            setBody(dto)
+        }.body()
+    }
+
+    suspend fun getWifiSchedule(): Result<WifiScheduleDto> = runCatching {
+        client.get(ApiRoutes.WIFI_SCHEDULE).body()
+    }
+
+    suspend fun updateWifiSchedule(dto: WifiScheduleDto): Result<WifiScheduleDto> = runCatching {
+        client.put(ApiRoutes.WIFI_SCHEDULE) {
+            contentType(ContentType.Application.Json)
+            setBody(dto)
+        }.body()
+    }
+
+    suspend fun getWifiMacFilter(): Result<WifiMacFilterDto> = runCatching {
+        client.get(ApiRoutes.WIFI_MAC_FILTER).body()
+    }
+
+    suspend fun updateWifiMacFilter(dto: WifiMacFilterDto): Result<WifiMacFilterDto> = runCatching {
+        client.put(ApiRoutes.WIFI_MAC_FILTER) {
+            contentType(ContentType.Application.Json)
+            setBody(dto)
+        }.body()
+    }
+
+    // ========== TRAFFIC EXTENDED ==========
+
+    suspend fun getTrafficPerDevice(): Result<List<TrafficPerDeviceDto>> = runCatching {
+        client.get(ApiRoutes.TRAFFIC_PER_DEVICE).body()
+    }
+
+    suspend fun getLargeTransfers(): Result<List<LiveFlowDto>> = runCatching {
+        client.get(ApiRoutes.TRAFFIC_LARGE_TRANSFERS).body()
+    }
+
+    suspend fun getTrafficHistory(page: Int = 1, pageSize: Int = 50): Result<TrafficHistoryDto> = runCatching {
+        client.get(ApiRoutes.TRAFFIC_HISTORY) {
+            url {
+                parameters.append("page", page.toString())
+                parameters.append("page_size", pageSize.toString())
+            }
+        }.body()
+    }
+
+    suspend fun getDeviceTrafficHistory(deviceId: Int): Result<List<Map<String, Any>>> = runCatching {
+        client.get(ApiRoutes.deviceTrafficHistory(deviceId)).body()
+    }
+
+    suspend fun getDeviceConnections(deviceId: Int): Result<List<LiveFlowDto>> = runCatching {
+        client.get(ApiRoutes.deviceTrafficConnections(deviceId)).body()
+    }
+
+    suspend fun getDeviceTopDestinations(deviceId: Int): Result<List<DeviceTopDestinationDto>> = runCatching {
+        client.get(ApiRoutes.deviceTopDestinations(deviceId)).body()
+    }
+
+    // ========== CHAT EXTENDED ==========
+
+    suspend fun clearChatHistory(): Result<MessageResponseDto> = runCatching {
+        client.delete(ApiRoutes.CHAT_HISTORY_DELETE).body()
+    }
 }
