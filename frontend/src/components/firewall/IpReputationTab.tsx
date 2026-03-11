@@ -243,7 +243,6 @@ export function IpReputationTab() {
   const [checkBlockDetail, setCheckBlockDetail] = useState<CheckBlockDetail | null>(null);
   const [checkBlockExpanded, setCheckBlockExpanded] = useState(false);
   const [checkBlockApiChecking, setCheckBlockApiChecking] = useState(false);
-  const [checkBlockApiUsage, setCheckBlockApiUsage] = useState<{ limit: number; used: number; remaining: number; usage_percent: number } | null>(null);
 
   const showFeedback = (msg: string, ok: boolean) => {
     setFeedback({ msg, ok });
@@ -479,11 +478,10 @@ export function IpReputationTab() {
     try {
       const res = await checkApiUsage();
       if (res.data?.status === "ok" && res.data.data) {
-        setCheckBlockApiUsage(res.data.data);
-        // Summary'yi de güncelle
+        setApiUsage(res.data.data);
         const sumRes = await fetchReputationSummary();
         setSummary(sumRes.data);
-        showFeedback(`API: ${res.data.data.remaining}/${res.data.data.limit} kalan`, true);
+        showFeedback(`Check API: ${res.data.data.remaining}/${res.data.data.limit} kalan (check-block aynı havuz)`, true);
       } else {
         showFeedback(res.data?.message ?? "API bilgisi alınamadı.", false);
       }
@@ -993,9 +991,9 @@ export function IpReputationTab() {
             <span className="text-[10px] text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">check-block</span>
           </div>
           <div className="flex items-center gap-2">
-            {checkBlockApiUsage && (
+            {(apiUsage || hasRealApiData) && (
               <span className="text-[10px] text-gray-500">
-                API: {checkBlockApiUsage.remaining}/{checkBlockApiUsage.limit} ({checkBlockApiUsage.usage_percent}%)
+                Check API: {apiUsage ? `${apiUsage.remaining}/${apiUsage.limit}` : `${summary?.abuseipdb_remaining ?? '?'}/${summary?.abuseipdb_limit ?? '?'}`} kalan
               </span>
             )}
             <button
@@ -1005,7 +1003,7 @@ export function IpReputationTab() {
               title="AbuseIPDB Check API limitini kontrol et (check-block aynı havuzu kullanır)"
             >
               <Activity className={`h-2.5 w-2.5 ${checkBlockApiChecking ? 'animate-pulse' : ''}`} />
-              {checkBlockApiChecking ? '...' : 'API Kontrol'}
+              {checkBlockApiChecking ? '...' : 'Kontrol Et'}
             </button>
             {checkBlockResults.length > 0 && (
               <button
