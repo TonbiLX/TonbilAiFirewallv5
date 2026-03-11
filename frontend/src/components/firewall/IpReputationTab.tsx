@@ -19,6 +19,8 @@ import {
   ArrowUp,
   ArrowDown,
   Activity,
+  Network,
+  Ban,
 } from "lucide-react";
 import { GlassCard } from "../common/GlassCard";
 import { NeonBadge } from "../common/NeonBadge";
@@ -36,6 +38,9 @@ import {
   triggerBlacklistFetch,
   fetchBlacklistConfig,
   updateBlacklistConfig,
+  checkBlock,
+  fetchCheckBlockResults,
+  clearCheckBlockCache,
 } from "../../services/ipReputationApi";
 
 // ---- Tipler ----
@@ -86,6 +91,39 @@ interface BlacklistIp {
   abuse_score: number;
   country: string;
   last_reported_at: string;
+}
+
+interface CheckBlockResult {
+  network: string;
+  total_reported: number;
+  malicious_count: number;
+  subnet_blocked: boolean;
+  num_possible_hosts: number;
+  message: string;
+}
+
+interface CheckBlockReportedIp {
+  ip: string;
+  abuse_score: number;
+  num_reports: number;
+  most_recent_report: string;
+  country: string;
+}
+
+interface CheckBlockDetail {
+  status: string;
+  network: string;
+  network_address: string;
+  netmask: string;
+  min_address: string;
+  max_address: string;
+  num_possible_hosts: number;
+  address_space_desc: string;
+  reported_ips: CheckBlockReportedIp[];
+  total_reported: number;
+  malicious_count: number;
+  subnet_blocked: boolean;
+  message: string;
 }
 
 // ---- Sabitler ----
@@ -197,6 +235,14 @@ export function IpReputationTab() {
   const [blacklistSearch, setBlacklistSearch] = useState("");
   const [blacklistExpanded, setBlacklistExpanded] = useState(false);
 
+  // Check-block (subnet analizi) state
+  const [checkBlockInput, setCheckBlockInput] = useState("");
+  const [checkBlockAutoBlock, setCheckBlockAutoBlock] = useState(true);
+  const [checkBlockLoading, setCheckBlockLoading] = useState(false);
+  const [checkBlockResults, setCheckBlockResults] = useState<CheckBlockResult[]>([]);
+  const [checkBlockDetail, setCheckBlockDetail] = useState<CheckBlockDetail | null>(null);
+  const [checkBlockExpanded, setCheckBlockExpanded] = useState(false);
+
   const showFeedback = (msg: string, ok: boolean) => {
     setFeedback({ msg, ok });
     setTimeout(() => setFeedback(null), 3000);
@@ -212,6 +258,15 @@ export function IpReputationTab() {
       setBlacklistIps(listRes.data.ips || []);
     } catch (err) {
       console.error("Blacklist veri yukleme hatasi:", err);
+    }
+  }, []);
+
+  const loadCheckBlockResults = useCallback(async () => {
+    try {
+      const res = await fetchCheckBlockResults();
+      setCheckBlockResults(res.data?.results ?? []);
+    } catch {
+      // silent
     }
   }, []);
 
@@ -232,7 +287,8 @@ export function IpReputationTab() {
       setLoading(false);
     }
     await loadBlacklistData();
-  }, [loadBlacklistData]);
+    await loadCheckBlockResults();
+  }, [loadBlacklistData, loadCheckBlockResults]);
 
   const loadIps = useCallback(async () => {
     try {
@@ -391,6 +447,39 @@ export function IpReputationTab() {
       await loadBlacklistData();
     } catch (err) {
       console.error("Blacklist config guncelleme hatasi:", err);
+    }
+  };
+
+  const handleCheckBlock = async () => {
+    const network = checkBlockInput.trim();
+    if (!network) return;
+    setCheckBlockLoading(true);
+    setCheckBlockDetail(null);
+    try {
+      const res = await checkBlock(network, checkBlockAutoBlock);
+      const data = res.data;
+      if (data.status === "ok") {
+        setCheckBlockDetail(data);
+        showFeedback(data.message, true);
+        await loadCheckBlockResults();
+      } else {
+        showFeedback(data.message || "Subnet analizi başarısız.", false);
+      }
+    } catch {
+      showFeedback("Subnet analizi sırasında hata oluştu.", false);
+    } finally {
+      setCheckBlockLoading(false);
+    }
+  };
+
+  const handleClearCheckBlockCache = async () => {
+    try {
+      await clearCheckBlockCache();
+      setCheckBlockResults([]);
+      setCheckBlockDetail(null);
+      showFeedback("Subnet analiz cache'i temizlendi.", true);
+    } catch {
+      showFeedback("Cache temizlenemedi.", false);
     }
   };
 
@@ -873,7 +962,195 @@ export function IpReputationTab() {
         )}
       </GlassCard>
 
-      {/* ---- Bölüm 5: Kontrol Edilen IP'ler ---- */}
+      {/* ---- Bölüm 5: Subnet Analizi (Check-Block) ---- */}
+      <GlassCard className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Network className="h-5 w-5 text-[#FFB800]" />
+            <h3 className="text-sm font-semibold text-white">Subnet Analizi</h3>
+            <span className="text-[10px] text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">check-block</span>
+          </div>
+          {checkBlockResults.length > 0 && (
+            <button
+              onClick={handleClearCheckBlockCache}
+              className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-gray-400 border border-gray-600 hover:border-neon-red/40 hover:text-[#FF003C] transition-colors"
+            >
+              <Trash2 className="h-2.5 w-2.5" />
+              Cache Temizle
+            </button>
+          )}
+        </div>
+
+        <p className="text-xs text-gray-500 mb-3">
+          Bir IP bloğunu (CIDR) AbuseIPDB ile toplu analiz edin. Subnet içindeki tüm raporlanmış IP'ler listelenir.
+          Tehlikeli IP sayısı eşiği aşarsa subnet otomatik engellenir.
+        </p>
+
+        {/* Subnet Input */}
+        <div className="flex items-center gap-2 mb-3">
+          <input
+            type="text"
+            value={checkBlockInput}
+            onChange={(e) => setCheckBlockInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && !checkBlockLoading && handleCheckBlock()}
+            placeholder="Subnet girin (ör: 185.220.101.0/24)"
+            className="flex-1 bg-surface-800 border border-glass-border rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#FFB800]/50 transition-colors font-mono"
+          />
+          <label className="flex items-center gap-1.5 text-xs text-gray-400 whitespace-nowrap">
+            <button
+              onClick={() => setCheckBlockAutoBlock(!checkBlockAutoBlock)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                checkBlockAutoBlock ? 'bg-[#FFB800]/30 border border-[#FFB800]/50' : 'bg-gray-700 border border-gray-600'
+              }`}
+            >
+              <span className={`inline-block h-3.5 w-3.5 rounded-full transition-transform ${
+                checkBlockAutoBlock ? 'translate-x-4 bg-[#FFB800]' : 'translate-x-0.5 bg-gray-400'
+              }`} />
+            </button>
+            Oto-Engel
+          </label>
+          <button
+            onClick={handleCheckBlock}
+            disabled={checkBlockLoading || !checkBlockInput.trim() || !config?.abuseipdb_key_set}
+            className="px-4 py-2 bg-[#FFB800]/10 text-[#FFB800] border border-[#FFB800]/30 rounded-lg hover:bg-[#FFB800]/20 transition-colors text-sm font-medium flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {checkBlockLoading ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Analiz...
+              </>
+            ) : (
+              <>
+                <Search className="w-4 h-4" />
+                Analiz Et
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Detail Result */}
+        {checkBlockDetail && checkBlockDetail.status === "ok" && (
+          <div className="mb-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <span className="text-gray-400">
+                Ağ: <span className="text-white font-mono">{checkBlockDetail.network}</span>
+              </span>
+              <span className="text-gray-400">
+                Aralık: <span className="text-gray-300 font-mono">{checkBlockDetail.min_address} — {checkBlockDetail.max_address}</span>
+              </span>
+              <span className="text-gray-400">
+                Host: <span className="text-white">{checkBlockDetail.num_possible_hosts.toLocaleString()}</span>
+              </span>
+              <span className="text-gray-400">
+                Raporlanan: <span className={checkBlockDetail.total_reported > 0 ? "text-[#FFB800]" : "text-[#39FF14]"}>{checkBlockDetail.total_reported}</span>
+              </span>
+              <span className="text-gray-400">
+                Tehlikeli: <span className={checkBlockDetail.malicious_count > 0 ? "text-[#FF003C] font-bold" : "text-[#39FF14]"}>{checkBlockDetail.malicious_count}</span>
+              </span>
+              {checkBlockDetail.subnet_blocked && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-neon-red/15 text-[#FF003C] border border-[#FF003C]/40 shadow-[0_0_8px_rgba(255,0,60,0.25)]">
+                  <Ban className="w-3 h-3" />
+                  SUBNET ENGELLENDİ
+                </span>
+              )}
+            </div>
+
+            {/* Reported IPs table */}
+            {checkBlockDetail.reported_ips.length > 0 && (
+              <div className="max-h-52 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-white/5">
+                      <th className="pb-2 pr-4 text-xs font-medium text-gray-400">IP</th>
+                      <th className="pb-2 pr-4 text-xs font-medium text-gray-400">Skor</th>
+                      <th className="pb-2 pr-4 text-xs font-medium text-gray-400">Raporlar</th>
+                      <th className="pb-2 pr-4 text-xs font-medium text-gray-400">Ülke</th>
+                      <th className="pb-2 text-xs font-medium text-gray-400">Son Rapor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {checkBlockDetail.reported_ips
+                      .sort((a, b) => b.abuse_score - a.abuse_score)
+                      .map((rip) => (
+                        <tr key={rip.ip} className="border-b border-white/5 hover:bg-white/5">
+                          <td className="py-1.5 pr-4 text-xs font-mono text-[#FFB800]">{rip.ip}</td>
+                          <td className="py-1.5 pr-4">
+                            <ScoreBadge score={rip.abuse_score} />
+                          </td>
+                          <td className="py-1.5 pr-4 text-xs text-gray-300">{rip.num_reports.toLocaleString()}</td>
+                          <td className="py-1.5 pr-4 text-xs text-gray-400">
+                            {getFlag(rip.country)} {rip.country}
+                          </td>
+                          <td className="py-1.5 text-xs text-gray-500">
+                            {rip.most_recent_report ? formatDate(rip.most_recent_report) : '--'}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Previous Results */}
+        {checkBlockResults.length > 0 && (
+          <>
+            <button
+              onClick={() => setCheckBlockExpanded(!checkBlockExpanded)}
+              className="text-xs text-[#FFB800] hover:text-[#FFB800]/80 transition-colors mb-2"
+            >
+              {checkBlockExpanded ? '▼ Geçmiş Analizleri Gizle' : '▶ Geçmiş Analizler'} ({checkBlockResults.length})
+            </button>
+            {checkBlockExpanded && (
+              <div className="max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-white/5">
+                      <th className="pb-2 pr-4 text-xs font-medium text-gray-400">Subnet</th>
+                      <th className="pb-2 pr-4 text-xs font-medium text-gray-400">Host</th>
+                      <th className="pb-2 pr-4 text-xs font-medium text-gray-400">Raporlanan</th>
+                      <th className="pb-2 pr-4 text-xs font-medium text-gray-400">Tehlikeli</th>
+                      <th className="pb-2 text-xs font-medium text-gray-400">Durum</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {checkBlockResults.map((r) => (
+                      <tr key={r.network} className="border-b border-white/5 hover:bg-white/5">
+                        <td className="py-1.5 pr-4 text-xs font-mono text-[#FFB800]">{r.network}</td>
+                        <td className="py-1.5 pr-4 text-xs text-gray-300">{r.num_possible_hosts.toLocaleString()}</td>
+                        <td className="py-1.5 pr-4 text-xs text-gray-300">{r.total_reported}</td>
+                        <td className="py-1.5 pr-4">
+                          <span className={`text-xs font-bold ${r.malicious_count >= 3 ? 'text-[#FF003C]' : r.malicious_count > 0 ? 'text-[#FFB800]' : 'text-[#39FF14]'}`}>
+                            {r.malicious_count}
+                          </span>
+                        </td>
+                        <td className="py-1.5 text-xs">
+                          {r.subnet_blocked ? (
+                            <span className="inline-flex items-center gap-1 text-[#FF003C]">
+                              <Ban className="w-3 h-3" /> Engelli
+                            </span>
+                          ) : (
+                            <span className="text-gray-500">Aktif Değil</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+
+        {checkBlockResults.length === 0 && !checkBlockDetail && (
+          <p className="text-xs text-gray-600 text-center py-2">
+            Henüz subnet analizi yapılmadı. Yukarıdan bir CIDR bloğu girerek analiz başlatın.
+          </p>
+        )}
+      </GlassCard>
+
+      {/* ---- Bölüm 6: Kontrol Edilen IP'ler ---- */}
       <GlassCard>
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <div className="flex items-center gap-3">

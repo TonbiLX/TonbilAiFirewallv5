@@ -9,6 +9,14 @@ export const clearReputationCache = () => api.delete('/ip-reputation/cache');
 export const testAbuseipdbKey = () => api.post('/ip-reputation/test');
 export const checkApiUsage = () => api.get('/ip-reputation/api-usage');
 
+// AbuseIPDB Check-Block (Subnet Analizi)
+export const checkBlock = (network: string, autoBlock: boolean = true) =>
+  api.post('/ip-reputation/check-block', { network, auto_block: autoBlock });
+export const fetchCheckBlockResults = () => api.get('/ip-reputation/check-block/results');
+export const fetchCheckBlockDetail = (network: string) =>
+  api.get(`/ip-reputation/check-block/${encodeURIComponent(network)}`);
+export const clearCheckBlockCache = () => api.delete('/ip-reputation/check-block/cache');
+
 // AbuseIPDB Blacklist
 export const checkBlacklistApiUsage = () => api.get('/ip-reputation/blacklist/api-usage');
 export const fetchBlacklist = () => api.get('/ip-reputation/blacklist');

@@ -39,7 +39,8 @@ DAILY_LIMIT          = 900   # AbuseIPDB gunluk limit tamponu (max 1000, 100 tam
 GEOIP_SLEEP          = 1.5   # saniye - ip-api.com rate limit (40/dk max)
 HTTP_TIMEOUT         = 10    # saniye - HTTP istek zaman asimi
 
-ABUSEIPDB_URL   = "https://api.abuseipdb.com/api/v2/check"
+ABUSEIPDB_URL       = "https://api.abuseipdb.com/api/v2/check"
+ABUSEIPDB_CHECK_BLOCK_URL = "https://api.abuseipdb.com/api/v2/check-block"
 GEOIP_URL       = "http://ip-api.com/json/{ip}?fields=status,country,countryCode,city,isp,org,as,query"
 
 # Redis anahtarlari
@@ -63,6 +64,14 @@ REDIS_KEY_BLACKLIST_DAILY       = "reputation:blacklist_daily_fetches"
 REDIS_KEY_BLACKLIST_AUTO_BLOCK  = "reputation:blacklist_auto_block"
 REDIS_KEY_BLACKLIST_MIN_SCORE   = "reputation:blacklist_min_score"
 REDIS_KEY_BLACKLIST_LIMIT       = "reputation:blacklist_limit"
+
+# Check-block (subnet analizi) sabitleri
+ABUSEIPDB_CHECK_BLOCK_URL       = "https://api.abuseipdb.com/api/v2/check-block"
+REDIS_KEY_CHECK_BLOCK_RESULTS   = "reputation:check_block_results"
+REDIS_KEY_CHECK_BLOCK_PREFIX    = "reputation:check_block:"
+CHECK_BLOCK_CACHE_TTL           = 86400   # 24 saat
+CHECK_BLOCK_AUTO_THRESHOLD      = 3       # Subnet'te bu kadar kotu IP varsa otomatik subnet engelle
+CHECK_BLOCK_MIN_SCORE           = 50      # Kotu IP sayimi icin esik skor
 
 
 # ─── Yardimci fonksiyonlar ───────────────────────────────────────────────────
@@ -381,6 +390,9 @@ async def _process_ip(ip: str, api_key: str | None, redis) -> bool:
         await _write_ai_insight(Severity.CRITICAL, message, action)
         # OTOMATIK ENGELLEME
         await auto_block_ip(ip, f"AbuseIPDB kritik skor: {abuse_score}/100, raporlar: {total_reports}")
+        # OTOMATIK SUBNET KONTROLU — kritik IP'nin /24 blogu analiz edilir
+        if api_key:
+            asyncio.create_task(_check_block_for_critical_ip(ip, api_key))
 
     elif abuse_score >= 50:
         message = (
@@ -580,6 +592,201 @@ async def fetch_abuseipdb_blacklist(force: bool = False) -> dict:
     except Exception as exc:
         logger.error(f"Blacklist fetch hatasi: {exc}")
         return {"status": "error", "count": 0, "blocked": 0, "message": f"Hata: {exc}"}
+
+
+async def check_abuseipdb_block(subnet: str, api_key: str | None = None,
+                                auto_block: bool = True) -> dict:
+    """
+    AbuseIPDB check-block endpoint ile bir subnet'i (CIDR) analiz et.
+    Subnet icindeki raporlanmis IP'leri dondurur ve esik asilirsa otomatik subnet engeller.
+
+    Returns: {"status": "ok"/"error", "network": str, "reported_ips": list,
+              "total_reported": int, "malicious_count": int, "subnet_blocked": bool, "message": str}
+    """
+    redis = await get_redis()
+
+    # API key — parametre veya Redis'ten
+    if not api_key:
+        api_key = await redis.get(REDIS_KEY_API_KEY)
+        if api_key:
+            api_key = api_key.strip()
+    if not api_key:
+        return {"status": "error", "network": subnet, "reported_ips": [],
+                "total_reported": 0, "malicious_count": 0, "subnet_blocked": False,
+                "message": "API anahtari ayarlanmamis"}
+
+    # CIDR dogrulama
+    try:
+        net = ipaddress.ip_network(subnet, strict=False)
+        subnet = str(net)  # normalize (192.168.1.5/24 → 192.168.1.0/24)
+    except ValueError:
+        return {"status": "error", "network": subnet, "reported_ips": [],
+                "total_reported": 0, "malicious_count": 0, "subnet_blocked": False,
+                "message": f"Gecersiz CIDR formati: {subnet}"}
+
+    # Prefix sinirlama (ucretsiz plan: max /20)
+    if net.prefixlen < 20:
+        return {"status": "error", "network": subnet, "reported_ips": [],
+                "total_reported": 0, "malicious_count": 0, "subnet_blocked": False,
+                "message": f"Subnet cok genis (/{net.prefixlen}). Ucretsiz plan icin min /20 gerekli."}
+
+    # Cache kontrolu (24 saat)
+    cache_key = f"{REDIS_KEY_CHECK_BLOCK_PREFIX}{subnet}"
+    try:
+        cached = await redis.get(cache_key)
+        if cached:
+            logger.debug(f"check-block cache hit: {subnet}")
+            return json.loads(cached)
+    except Exception:
+        pass
+
+    # AbuseIPDB check-block API cagrisi
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(
+                ABUSEIPDB_CHECK_BLOCK_URL,
+                headers={"Key": api_key, "Accept": "application/json"},
+                params={"network": subnet, "maxAgeInDays": 30},
+            )
+
+        # Rate limit header kaydet (check endpoint ile ayni havuzda)
+        try:
+            remaining = response.headers.get("X-RateLimit-Remaining")
+            limit_h = response.headers.get("X-RateLimit-Limit")
+            if remaining is not None:
+                await redis.set("reputation:abuseipdb_remaining", str(remaining), ex=CACHE_TTL)
+            if limit_h is not None:
+                await redis.set("reputation:abuseipdb_limit", str(limit_h), ex=CACHE_TTL)
+        except Exception:
+            pass
+
+        if response.status_code == 402:
+            return {"status": "error", "network": subnet, "reported_ips": [],
+                    "total_reported": 0, "malicious_count": 0, "subnet_blocked": False,
+                    "message": "Subnet boyutu plan limitini asiyor (402 Payment Required)"}
+        if response.status_code == 429:
+            return {"status": "error", "network": subnet, "reported_ips": [],
+                    "total_reported": 0, "malicious_count": 0, "subnet_blocked": False,
+                    "message": "AbuseIPDB gunluk kota dolmus (429)"}
+        if response.status_code != 200:
+            return {"status": "error", "network": subnet, "reported_ips": [],
+                    "total_reported": 0, "malicious_count": 0, "subnet_blocked": False,
+                    "message": f"AbuseIPDB check-block hatasi: HTTP {response.status_code}"}
+
+        body = response.json()
+        data = body.get("data", {})
+        reported_addresses = data.get("reportedAddress", [])
+
+        # Sonuclari isle
+        reported_ips = []
+        malicious_count = 0
+        for addr in reported_addresses:
+            ip_addr = addr.get("ipAddress", "")
+            score = addr.get("abuseConfidenceScore", 0)
+            num_reports = addr.get("numReports", 0)
+            most_recent = addr.get("mostRecentReport", "")
+            country = addr.get("countryCode", "")
+
+            reported_ips.append({
+                "ip": ip_addr,
+                "abuse_score": score,
+                "num_reports": num_reports,
+                "most_recent_report": most_recent,
+                "country": country,
+            })
+            if score >= CHECK_BLOCK_MIN_SCORE:
+                malicious_count += 1
+
+        total_reported = len(reported_ips)
+        subnet_blocked = False
+
+        # Otomatik subnet engelleme: esik asilirsa nftables'a kural ekle
+        if auto_block and malicious_count >= CHECK_BLOCK_AUTO_THRESHOLD:
+            try:
+                from app.hal.linux_nftables import add_blocked_subnet
+                await add_blocked_subnet(subnet, timeout_seconds=86400)  # 24 saat
+                subnet_blocked = True
+                logger.warning(
+                    f"[SUBNET ENGEL] {subnet} otomatik engellendi: "
+                    f"{malicious_count} kotu IP (esik: {CHECK_BLOCK_AUTO_THRESHOLD})"
+                )
+                # AiInsight + Telegram
+                await _write_ai_insight(
+                    Severity.CRITICAL,
+                    f"Tehlikeli subnet tespit ve engellendi: {subnet} — "
+                    f"{malicious_count}/{total_reported} IP skoru >={CHECK_BLOCK_MIN_SCORE} "
+                    f"(toplam {data.get('numPossibleHosts', '?')} host)",
+                    f"'{subnet}' subnet'i 24 saat sure ile otomatik engellendi. "
+                    f"Engel surecini IP Yonetimi sayfasindan yonetebilirsiniz.",
+                )
+            except Exception as block_exc:
+                logger.error(f"Subnet engelleme hatasi {subnet}: {block_exc}")
+
+        result = {
+            "status": "ok",
+            "network": subnet,
+            "network_address": data.get("networkAddress", ""),
+            "netmask": data.get("netmask", ""),
+            "min_address": data.get("minAddress", ""),
+            "max_address": data.get("maxAddress", ""),
+            "num_possible_hosts": data.get("numPossibleHosts", 0),
+            "address_space_desc": data.get("addressSpaceDesc", ""),
+            "reported_ips": reported_ips,
+            "total_reported": total_reported,
+            "malicious_count": malicious_count,
+            "subnet_blocked": subnet_blocked,
+            "message": (
+                f"{subnet}: {total_reported} raporlanmis IP, {malicious_count} tehlikeli"
+                + (f" — SUBNET ENGELLENDİ" if subnet_blocked else "")
+            ),
+        }
+
+        # Cache'e yaz (24 saat)
+        try:
+            await redis.set(cache_key, json.dumps(result), ex=CHECK_BLOCK_CACHE_TTL)
+            # Sonuc listesine ekle
+            await redis.zadd(REDIS_KEY_CHECK_BLOCK_RESULTS, {subnet: malicious_count})
+            await redis.expire(REDIS_KEY_CHECK_BLOCK_RESULTS, CHECK_BLOCK_CACHE_TTL)
+        except Exception:
+            pass
+
+        # Rate limit sayacini artir
+        await _increment_daily_counter(redis)
+
+        logger.info(
+            f"check-block {subnet}: {total_reported} reported, {malicious_count} malicious"
+            + (", BLOCKED" if subnet_blocked else "")
+        )
+        return result
+
+    except httpx.TimeoutException:
+        return {"status": "error", "network": subnet, "reported_ips": [],
+                "total_reported": 0, "malicious_count": 0, "subnet_blocked": False,
+                "message": "AbuseIPDB baglantisi zaman asimina ugradi"}
+    except Exception as exc:
+        logger.error(f"check-block hatasi {subnet}: {exc}")
+        return {"status": "error", "network": subnet, "reported_ips": [],
+                "total_reported": 0, "malicious_count": 0, "subnet_blocked": False,
+                "message": f"Hata: {exc}"}
+
+
+async def _check_block_for_critical_ip(ip: str, api_key: str) -> None:
+    """
+    Kritik skor (>=80) olan bir IP'nin /24 subnet'ini otomatik kontrol et.
+    _process_ip icinden tetiklenir.
+    """
+    try:
+        net = ipaddress.ip_network(f"{ip}/24", strict=False)
+        subnet = str(net)
+        redis = await get_redis()
+        # Ayni subnet zaten kontrol edildiyse atla
+        cached = await redis.get(f"{REDIS_KEY_CHECK_BLOCK_PREFIX}{subnet}")
+        if cached:
+            return
+        logger.info(f"Kritik IP {ip} nedeniyle subnet kontrol baslatiliyor: {subnet}")
+        await check_abuseipdb_block(subnet, api_key, auto_block=True)
+    except Exception as exc:
+        logger.debug(f"Otomatik subnet kontrolu basarisiz {ip}: {exc}")
 
 
 async def _get_blocked_countries(redis) -> list[str]:

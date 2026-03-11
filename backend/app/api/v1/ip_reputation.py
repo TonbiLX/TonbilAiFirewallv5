@@ -574,6 +574,130 @@ async def check_api_usage(
 ABUSEIPDB_BLACKLIST_URL = "https://api.abuseipdb.com/api/v2/blacklist"
 
 
+# ─── Check-Block (Subnet Analizi) Endpoint'leri ────────────────────────────────
+
+
+@router.post("/check-block")
+async def trigger_check_block(
+    data: dict,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    AbuseIPDB check-block ile bir subnet'i (CIDR) analiz et.
+
+    Body: {"network": "1.2.3.0/24", "auto_block": true}
+    Subnet icindeki raporlanmis tum IP'leri dondurur.
+    auto_block=true ve tehlikeli IP sayisi esigi asarsa subnet otomatik engellenir.
+    """
+    network = data.get("network", "").strip()
+    if not network:
+        return {"status": "error", "message": "network alani zorunludur (CIDR formati, orn: 1.2.3.0/24)"}
+
+    auto_block = data.get("auto_block", True)
+
+    from app.workers.ip_reputation import check_abuseipdb_block
+    result = await check_abuseipdb_block(network, auto_block=auto_block)
+    return result
+
+
+@router.get("/check-block/results")
+async def get_check_block_results(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Daha once analiz edilmis subnet sonuclarini listele (cache'den).
+
+    Her subnet icin: network, toplam raporlanmis IP, tehlikeli IP sayisi.
+    """
+    redis = await get_redis()
+    results = []
+
+    try:
+        # ZSET'ten tum subnet'leri al (skor = malicious_count)
+        members = await redis.zrevrangebyscore(
+            "reputation:check_block_results", "+inf", "-inf", withscores=True
+        )
+        for subnet_bytes, score in members:
+            subnet = subnet_bytes if isinstance(subnet_bytes, str) else subnet_bytes.decode()
+            # Detayli sonucu cache'den oku
+            cached = await redis.get(f"reputation:check_block:{subnet}")
+            if cached:
+                detail = json.loads(cached)
+                results.append({
+                    "network": subnet,
+                    "total_reported": detail.get("total_reported", 0),
+                    "malicious_count": detail.get("malicious_count", 0),
+                    "subnet_blocked": detail.get("subnet_blocked", False),
+                    "num_possible_hosts": detail.get("num_possible_hosts", 0),
+                    "message": detail.get("message", ""),
+                })
+            else:
+                results.append({
+                    "network": subnet,
+                    "total_reported": 0,
+                    "malicious_count": int(score),
+                    "subnet_blocked": False,
+                    "num_possible_hosts": 0,
+                    "message": "Cache suresi dolmus",
+                })
+    except Exception as exc:
+        logger.error(f"check-block results hatasi: {exc}")
+
+    return {"results": results, "total": len(results)}
+
+
+@router.get("/check-block/{network:path}")
+async def get_check_block_detail(
+    network: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Belirli bir subnet'in check-block sonuc detayini dondur (cache'den).
+
+    Path param: network (URL encoded CIDR, orn: 1.2.3.0%2F24)
+    """
+    redis = await get_redis()
+    # URL decode sonrasi normalize et
+    import ipaddress as _ipa
+    try:
+        net = _ipa.ip_network(network, strict=False)
+        normalized = str(net)
+    except ValueError:
+        return {"status": "error", "message": f"Gecersiz CIDR: {network}"}
+
+    cached = await redis.get(f"reputation:check_block:{normalized}")
+    if cached:
+        return json.loads(cached)
+
+    return {"status": "error", "message": f"{normalized} icin cache'de sonuc bulunamadi. Analiz baslatmak icin POST /check-block kullanin."}
+
+
+@router.delete("/check-block/cache")
+async def clear_check_block_cache(
+    current_user: User = Depends(get_current_user),
+):
+    """Check-block cache'ini temizle."""
+    redis = await get_redis()
+    deleted = 0
+    try:
+        # Tum check_block: prefix'li key'leri sil
+        cursor = 0
+        keys_to_delete = []
+        while True:
+            cursor, keys = await redis.scan(cursor, match="reputation:check_block:*", count=200)
+            keys_to_delete.extend(keys)
+            if cursor == 0:
+                break
+        # Results ZSET'i de sil
+        keys_to_delete.append("reputation:check_block_results")
+        if keys_to_delete:
+            deleted = await redis.delete(*keys_to_delete)
+    except Exception as exc:
+        logger.error(f"check-block cache temizleme hatasi: {exc}")
+
+    return {"status": "ok", "deleted": deleted, "message": f"{deleted} subnet cache kaydi silindi."}
+
+
 @router.get("/blacklist/api-usage")
 async def check_blacklist_api_usage(
     current_user: User = Depends(get_current_user),
