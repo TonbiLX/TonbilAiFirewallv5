@@ -40,6 +40,7 @@ import {
   updateBlacklistConfig,
   checkBlock,
   fetchCheckBlockResults,
+  checkBlockApiUsage,
   clearCheckBlockCache,
 } from "../../services/ipReputationApi";
 
@@ -243,6 +244,7 @@ export function IpReputationTab() {
   const [checkBlockDetail, setCheckBlockDetail] = useState<CheckBlockDetail | null>(null);
   const [checkBlockExpanded, setCheckBlockExpanded] = useState(false);
   const [checkBlockApiChecking, setCheckBlockApiChecking] = useState(false);
+  const [checkBlockUsage, setCheckBlockUsage] = useState<{ limit: number; used: number; remaining: number; usage_percent: number } | null>(null);
 
   const showFeedback = (msg: string, ok: boolean) => {
     setFeedback({ msg, ok });
@@ -476,12 +478,10 @@ export function IpReputationTab() {
   const handleCheckBlockApiUsage = async () => {
     setCheckBlockApiChecking(true);
     try {
-      const res = await checkApiUsage();
+      const res = await checkBlockApiUsage();
       if (res.data?.status === "ok" && res.data.data) {
-        setApiUsage(res.data.data);
-        const sumRes = await fetchReputationSummary();
-        setSummary(sumRes.data);
-        showFeedback(`Check API: ${res.data.data.remaining}/${res.data.data.limit} kalan (check-block aynı havuz)`, true);
+        setCheckBlockUsage(res.data.data);
+        showFeedback(`Check-Block API: ${res.data.data.remaining}/${res.data.data.limit} kalan`, true);
       } else {
         showFeedback(res.data?.message ?? "API bilgisi alınamadı.", false);
       }
@@ -991,9 +991,9 @@ export function IpReputationTab() {
             <span className="text-[10px] text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">check-block</span>
           </div>
           <div className="flex items-center gap-2">
-            {(apiUsage || hasRealApiData) && (
+            {checkBlockUsage && (
               <span className="text-[10px] text-gray-500">
-                Check API: {apiUsage ? `${apiUsage.remaining}/${apiUsage.limit}` : `${summary?.abuseipdb_remaining ?? '?'}/${summary?.abuseipdb_limit ?? '?'}`} kalan
+                {checkBlockUsage.used}/{checkBlockUsage.limit} ({checkBlockUsage.usage_percent}%)
               </span>
             )}
             <button

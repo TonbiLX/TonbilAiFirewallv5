@@ -649,14 +649,14 @@ async def check_abuseipdb_block(subnet: str, api_key: str | None = None,
                 params={"network": subnet, "maxAgeInDays": 30},
             )
 
-        # Rate limit header kaydet (check endpoint ile ayni havuzda)
+        # Rate limit header kaydet — check-block AYRI havuz (check endpoint'ten farkli!)
         try:
             remaining = response.headers.get("X-RateLimit-Remaining")
             limit_h = response.headers.get("X-RateLimit-Limit")
             if remaining is not None:
-                await redis.set("reputation:abuseipdb_remaining", str(remaining), ex=CACHE_TTL)
+                await redis.set("reputation:check_block_api_remaining", str(remaining), ex=CACHE_TTL)
             if limit_h is not None:
-                await redis.set("reputation:abuseipdb_limit", str(limit_h), ex=CACHE_TTL)
+                await redis.set("reputation:check_block_api_limit", str(limit_h), ex=CACHE_TTL)
         except Exception:
             pass
 
@@ -749,9 +749,6 @@ async def check_abuseipdb_block(subnet: str, api_key: str | None = None,
             await redis.expire(REDIS_KEY_CHECK_BLOCK_RESULTS, CHECK_BLOCK_CACHE_TTL)
         except Exception:
             pass
-
-        # Rate limit sayacini artir
-        await _increment_daily_counter(redis)
 
         logger.info(
             f"check-block {subnet}: {total_reported} reported, {malicious_count} malicious"

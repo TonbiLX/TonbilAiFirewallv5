@@ -672,6 +672,62 @@ async def get_check_block_detail(
     return {"status": "error", "message": f"{normalized} icin cache'de sonuc bulunamadi. Analiz baslatmak icin POST /check-block kullanin."}
 
 
+@router.get("/check-block/api-usage")
+async def check_block_api_usage(
+    current_user: User = Depends(get_current_user),
+):
+    """Check-block API kullanım bilgisini dondur (ayri havuz, check endpoint'ten farkli)."""
+    redis = await get_redis()
+
+    api_remaining_raw = await redis.get("reputation:check_block_api_remaining")
+    api_limit_raw = await redis.get("reputation:check_block_api_limit")
+
+    api_remaining = int(api_remaining_raw) if api_remaining_raw is not None else None
+    api_limit = int(api_limit_raw) if api_limit_raw is not None else None
+
+    # Cache yoksa canli minimal sorgu (1 hak harcar)
+    if api_remaining is None or api_limit is None:
+        try:
+            api_key_raw = await redis.get(REDIS_KEY_API_KEY)
+            if api_key_raw and api_key_raw.strip():
+                async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+                    resp = await client.get(
+                        "https://api.abuseipdb.com/api/v2/check-block",
+                        headers={"Key": api_key_raw.strip(), "Accept": "application/json"},
+                        params={"network": "8.8.8.0/24", "maxAgeInDays": 1},
+                    )
+                    if resp.status_code == 200:
+                        h_remaining = resp.headers.get("X-RateLimit-Remaining")
+                        h_limit = resp.headers.get("X-RateLimit-Limit")
+                        if h_remaining is not None:
+                            api_remaining = int(h_remaining)
+                            await redis.set("reputation:check_block_api_remaining", str(api_remaining), ex=86400)
+                        if h_limit is not None:
+                            api_limit = int(h_limit)
+                            await redis.set("reputation:check_block_api_limit", str(api_limit), ex=86400)
+        except Exception as exc:
+            logger.debug(f"Check-block API canli limit sorgusu basarisiz: {exc}")
+
+    if api_remaining is not None and api_limit is not None:
+        used = api_limit - api_remaining
+        pct = round((used / api_limit) * 100, 1) if api_limit > 0 else 0
+    else:
+        used = 0
+        api_limit = api_limit or 0
+        api_remaining = api_remaining or 0
+        pct = 0
+
+    return {
+        "status": "ok",
+        "data": {
+            "limit": api_limit,
+            "used": used,
+            "remaining": api_remaining,
+            "usage_percent": pct,
+        },
+    }
+
+
 @router.delete("/check-block/cache")
 async def clear_check_block_cache(
     current_user: User = Depends(get_current_user),

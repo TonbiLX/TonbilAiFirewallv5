@@ -15,6 +15,7 @@ export const checkBlock = (network: string, autoBlock: boolean = true) =>
 export const fetchCheckBlockResults = () => api.get('/ip-reputation/check-block/results');
 export const fetchCheckBlockDetail = (network: string) =>
   api.get(`/ip-reputation/check-block/${encodeURIComponent(network)}`);
+export const checkBlockApiUsage = () => api.get('/ip-reputation/check-block/api-usage');
 export const clearCheckBlockCache = () => api.delete('/ip-reputation/check-block/cache');
 
 // AbuseIPDB Blacklist
