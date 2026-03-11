@@ -35,7 +35,7 @@ REDIS_KEY_COUNTRIES     = "reputation:blocked_countries"
 # Worker sabit değerleriyle senkronize (bilgi amaçlı, UI'a gönderilir)
 CHECK_INTERVAL       = 300
 MAX_CHECKS_PER_CYCLE = 10
-DAILY_LIMIT          = 900
+DAILY_LIMIT          = 1000
 
 ABUSEIPDB_URL = "https://api.abuseipdb.com/api/v2/check"
 HTTP_TIMEOUT  = 10  # saniye
@@ -539,10 +539,19 @@ async def check_api_usage(
                 },
             }
         elif response.status_code == 429:
+            h_limit = response.headers.get("X-RateLimit-Limit")
+            h_remaining = response.headers.get("X-RateLimit-Remaining")
+            limit_val = int(h_limit) if h_limit else DAILY_LIMIT
+            remaining_val = int(h_remaining) if h_remaining else 0
+            used_val = limit_val - remaining_val
+            if h_limit:
+                await redis.set("reputation:abuseipdb_limit", str(limit_val), ex=86400)
+            if h_remaining is not None:
+                await redis.set("reputation:abuseipdb_remaining", str(remaining_val), ex=86400)
             return {
-                "status": "error",
-                "message": "AbuseIPDB günlük kotası dolmuş (HTTP 429).",
-                "data": {"limit": 0, "used": 0, "remaining": 0, "usage_percent": 100},
+                "status": "ok",
+                "message": "AbuseIPDB günlük kotası dolmuş.",
+                "data": {"limit": limit_val, "used": used_val, "remaining": remaining_val, "usage_percent": 100},
             }
         elif response.status_code == 401:
             return {
@@ -646,32 +655,6 @@ async def get_check_block_results(
     return {"results": results, "total": len(results)}
 
 
-@router.get("/check-block/{network:path}")
-async def get_check_block_detail(
-    network: str,
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Belirli bir subnet'in check-block sonuc detayini dondur (cache'den).
-
-    Path param: network (URL encoded CIDR, orn: 1.2.3.0%2F24)
-    """
-    redis = await get_redis()
-    # URL decode sonrasi normalize et
-    import ipaddress as _ipa
-    try:
-        net = _ipa.ip_network(network, strict=False)
-        normalized = str(net)
-    except ValueError:
-        return {"status": "error", "message": f"Gecersiz CIDR: {network}"}
-
-    cached = await redis.get(f"reputation:check_block:{normalized}")
-    if cached:
-        return json.loads(cached)
-
-    return {"status": "error", "message": f"{normalized} icin cache'de sonuc bulunamadi. Analiz baslatmak icin POST /check-block kullanin."}
-
-
 @router.get("/check-block/api-usage")
 async def check_block_api_usage(
     current_user: User = Depends(get_current_user),
@@ -696,15 +679,14 @@ async def check_block_api_usage(
                         headers={"Key": api_key_raw.strip(), "Accept": "application/json"},
                         params={"network": "8.8.8.0/24", "maxAgeInDays": 1},
                     )
-                    if resp.status_code == 200:
-                        h_remaining = resp.headers.get("X-RateLimit-Remaining")
-                        h_limit = resp.headers.get("X-RateLimit-Limit")
-                        if h_remaining is not None:
-                            api_remaining = int(h_remaining)
-                            await redis.set("reputation:check_block_api_remaining", str(api_remaining), ex=86400)
-                        if h_limit is not None:
-                            api_limit = int(h_limit)
-                            await redis.set("reputation:check_block_api_limit", str(api_limit), ex=86400)
+                    h_remaining = resp.headers.get("X-RateLimit-Remaining")
+                    h_limit = resp.headers.get("X-RateLimit-Limit")
+                    if h_remaining is not None:
+                        api_remaining = int(h_remaining)
+                        await redis.set("reputation:check_block_api_remaining", str(api_remaining), ex=86400)
+                    if h_limit is not None:
+                        api_limit = int(h_limit)
+                        await redis.set("reputation:check_block_api_limit", str(api_limit), ex=86400)
         except Exception as exc:
             logger.debug(f"Check-block API canli limit sorgusu basarisiz: {exc}")
 
@@ -950,3 +932,26 @@ async def update_blacklist_config(
         updated.append(f"limit={val}")
 
     return {"status": "ok", "updated": updated}
+
+
+# ─── Catch-all: {network:path} EN SONA — static path'lerden sonra gelmeli ────
+
+@router.get("/check-block/{network:path}")
+async def get_check_block_detail(
+    network: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Belirli bir subnet'in check-block sonuc detayini dondur (cache'den)."""
+    redis = await get_redis()
+    import ipaddress as _ipa
+    try:
+        net = _ipa.ip_network(network, strict=False)
+        normalized = str(net)
+    except ValueError:
+        return {"status": "error", "message": f"Gecersiz CIDR: {network}"}
+
+    cached = await redis.get(f"reputation:check_block:{normalized}")
+    if cached:
+        return json.loads(cached)
+
+    return {"status": "error", "message": f"{normalized} icin cache'de sonuc bulunamadi. Analiz baslatmak icin POST /check-block kullanin."}

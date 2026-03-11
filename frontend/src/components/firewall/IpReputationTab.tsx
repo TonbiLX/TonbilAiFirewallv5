@@ -291,6 +291,20 @@ export function IpReputationTab() {
     }
     await loadBlacklistData();
     await loadCheckBlockResults();
+
+    // API usage bilgilerini de arka planda yükle (hata olursa sessizce devam et)
+    try {
+      const [blRes, cbRes] = await Promise.all([
+        checkBlacklistApiUsage().catch(() => null),
+        checkBlockApiUsage().catch(() => null),
+      ]);
+      if (blRes?.data?.status === "ok" && blRes.data.data) {
+        setBlacklistUsage(blRes.data.data);
+      }
+      if (cbRes?.data?.status === "ok" && cbRes.data.data) {
+        setCheckBlockUsage(cbRes.data.data);
+      }
+    } catch { /* silent */ }
   }, [loadBlacklistData, loadCheckBlockResults]);
 
   const loadIps = useCallback(async () => {
@@ -430,12 +444,15 @@ export function IpReputationTab() {
     try {
       const res = await checkBlacklistApiUsage();
       const d = res.data?.data;
-      if (d && blacklistConfig) {
-        setBlacklistConfig({
-          ...blacklistConfig,
-          daily_fetches: d.used ?? blacklistConfig.daily_fetches,
-          daily_limit: d.limit ?? blacklistConfig.daily_limit,
-        });
+      if (d) {
+        setBlacklistUsage(d);
+        if (blacklistConfig) {
+          setBlacklistConfig({
+            ...blacklistConfig,
+            daily_fetches: d.used ?? blacklistConfig.daily_fetches,
+            daily_limit: d.limit ?? blacklistConfig.daily_limit,
+          });
+        }
       }
     } catch (err) {
       console.error("Blacklist API usage kontrol hatasi:", err);
@@ -519,6 +536,44 @@ export function IpReputationTab() {
     }
   };
 
+  // Toplu API kullanım kontrolü
+  const [allApiChecking, setAllApiChecking] = useState(false);
+  const [blacklistUsage, setBlacklistUsage] = useState<{ limit: number; used: number; remaining: number; usage_percent: number } | null>(null);
+
+  const handleCheckAllApiUsage = async () => {
+    setAllApiChecking(true);
+    try {
+      const [checkRes, blacklistRes, blockRes] = await Promise.all([
+        checkApiUsage().catch(() => null),
+        checkBlacklistApiUsage().catch(() => null),
+        checkBlockApiUsage().catch(() => null),
+      ]);
+      if (checkRes?.data?.status === "ok" && checkRes.data.data) {
+        setApiUsage(checkRes.data.data);
+        const sumRes = await fetchReputationSummary();
+        setSummary(sumRes.data);
+      }
+      if (blacklistRes?.data?.status === "ok" && blacklistRes.data.data) {
+        setBlacklistUsage(blacklistRes.data.data);
+        if (blacklistConfig) {
+          setBlacklistConfig({
+            ...blacklistConfig,
+            daily_fetches: blacklistRes.data.data.used ?? blacklistConfig.daily_fetches,
+            daily_limit: blacklistRes.data.data.limit ?? blacklistConfig.daily_limit,
+          });
+        }
+      }
+      if (blockRes?.data?.status === "ok" && blockRes.data.data) {
+        setCheckBlockUsage(blockRes.data.data);
+      }
+      showFeedback("Tüm API kullanım bilgileri güncellendi.", true);
+    } catch {
+      showFeedback("API kullanım kontrolü kısmen başarısız.", false);
+    } finally {
+      setAllApiChecking(false);
+    }
+  };
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-20 gap-4">
       <LoadingSpinner />
@@ -535,6 +590,21 @@ export function IpReputationTab() {
     : 0;
   // Gercek AbuseIPDB verisi mevcut mu? (header'dan alindi mi?)
   const hasRealApiData = summary?.abuseipdb_limit != null && summary?.abuseipdb_remaining != null;
+
+  // API bar hesaplamalari — summary veya apiUsage varsa her zaman göster
+  const checkApiData = apiUsage ?? (summary ? {
+    limit: effectiveLimit,
+    used: effectiveUsed,
+    remaining: effectiveLimit - effectiveUsed,
+    usage_percent: dailyPct,
+  } : null);
+  const blApiData = blacklistUsage ?? (blacklistConfig ? {
+    limit: blacklistConfig.daily_limit,
+    used: blacklistConfig.daily_fetches,
+    remaining: blacklistConfig.daily_limit - blacklistConfig.daily_fetches,
+    usage_percent: blacklistConfig.daily_limit > 0 ? Math.round((blacklistConfig.daily_fetches / blacklistConfig.daily_limit) * 100) : 0,
+  } : null);
+  const cbApiData = checkBlockUsage;
 
   const filteredIps = ips.filter(ip =>
     (!filterFlagged || ip.abuse_score >= 50) &&
@@ -572,8 +642,119 @@ export function IpReputationTab() {
         </div>
       )}
 
+      {/* ---- API Kullanım Üst Barı ---- */}
+      <div className="glass-card p-4 border border-[#00F0FF]/20 bg-gradient-to-r from-[#00F0FF]/5 via-transparent to-[#FF00E5]/5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-[#00F0FF]" />
+            <h3 className="text-sm font-semibold text-white">AbuseIPDB API Kullanımı</h3>
+          </div>
+          <button
+            onClick={handleCheckAllApiUsage}
+            disabled={allApiChecking || !config?.abuseipdb_key_set}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#00F0FF] border border-[#00F0FF]/30 rounded-lg hover:bg-[#00F0FF]/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${allApiChecking ? "animate-spin" : ""}`} />
+            {allApiChecking ? "Kontrol Ediliyor..." : "Tümünü Kontrol Et"}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Check API */}
+          {(() => {
+            const d = checkApiData;
+            const pct = d?.usage_percent ?? 0;
+            const color = pct >= 90 ? "#FF003C" : pct >= 70 ? "#FFB800" : "#39FF14";
+            return (
+              <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-black/30 border border-white/5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Check (IP Sorgu)</span>
+                  {d && <span className="text-[10px] font-mono" style={{ color }}>{pct}%</span>}
+                </div>
+                {d ? (
+                  <>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-lg font-bold" style={{ color }}>{d.used.toLocaleString()}</span>
+                      <span className="text-xs text-gray-500">/ {d.limit.toLocaleString()}</span>
+                    </div>
+                    <div className="w-full bg-gray-800 rounded-full h-1.5">
+                      <div className="h-1.5 rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: color }} />
+                    </div>
+                    <span className="text-[10px] text-gray-500">{d.remaining.toLocaleString()} istek kalan</span>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-600 italic">Veri yok — kontrol et</span>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Blacklist API */}
+          {(() => {
+            const d = blApiData;
+            const pct = d?.usage_percent ?? 0;
+            const color = pct >= 90 ? "#FF003C" : pct >= 70 ? "#FFB800" : "#FF00E5";
+            return (
+              <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-black/30 border border-white/5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Blacklist (Kara Liste)</span>
+                  {d && <span className="text-[10px] font-mono" style={{ color }}>{pct}%</span>}
+                </div>
+                {d ? (
+                  <>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-lg font-bold" style={{ color }}>{d.used}</span>
+                      <span className="text-xs text-gray-500">/ {d.limit}</span>
+                    </div>
+                    <div className="w-full bg-gray-800 rounded-full h-1.5">
+                      <div className="h-1.5 rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: color }} />
+                    </div>
+                    <span className="text-[10px] text-gray-500">{d.remaining} istek kalan</span>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-600 italic">Veri yok — kontrol et</span>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Check-Block API */}
+          {(() => {
+            const d = cbApiData;
+            const pct = d?.usage_percent ?? 0;
+            const color = pct >= 90 ? "#FF003C" : pct >= 70 ? "#FFB800" : "#FFB800";
+            return (
+              <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-black/30 border border-white/5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Check-Block (Subnet)</span>
+                  {d && <span className="text-[10px] font-mono" style={{ color }}>{pct}%</span>}
+                </div>
+                {d ? (
+                  <>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-lg font-bold" style={{ color }}>{d.used}</span>
+                      <span className="text-xs text-gray-500">/ {d.limit}</span>
+                    </div>
+                    <div className="w-full bg-gray-800 rounded-full h-1.5">
+                      <div className="h-1.5 rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: color }} />
+                    </div>
+                    <span className="text-[10px] text-gray-500">{d.remaining} istek kalan</span>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-600 italic">Veri yok — kontrol et</span>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+
+        {!config?.abuseipdb_key_set && (
+          <p className="text-[10px] text-gray-600 text-center mt-2">API anahtarı ayarlanmamış — aşağıdan AbuseIPDB anahtarınızı girin</p>
+        )}
+      </div>
+
       {/* ---- Bölüm 1: Özet İstatistikler ---- */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         {/* Toplam Kontrol */}
         <div className="glass-card p-4 border-l-2 border-[#00F0FF]">
           <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">Toplam Kontrol</div>
@@ -593,51 +774,6 @@ export function IpReputationTab() {
           <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">Şüpheli IP</div>
           <div className="text-2xl font-bold text-[#FFB800]">{summary?.flagged_warning ?? 0}</div>
           <div className="text-xs text-gray-500 mt-1">Skor 50–79</div>
-        </div>
-
-        {/* Günlük Kullanım */}
-        <div className="glass-card p-4 border-l-2 border-[#39FF14]">
-          <div className="flex items-center justify-between mb-1">
-            <div className="text-xs text-gray-400 uppercase tracking-wider">
-              {hasRealApiData || apiUsage ? "AbuseIPDB Kullanım" : "Günlük Kullanım"}
-            </div>
-            <button
-              onClick={handleCheckApiUsage}
-              disabled={checkingUsage || !config?.abuseipdb_key_set}
-              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-[#39FF14] border border-[#39FF14]/30 rounded hover:bg-[#39FF14]/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              title="AbuseIPDB API'den güncel kullanım bilgisini çek"
-            >
-              <Activity className={`w-3 h-3 ${checkingUsage ? "animate-pulse" : ""}`} />
-              {checkingUsage ? "Kontrol..." : "Kontrol Et"}
-            </button>
-          </div>
-          <div className="text-2xl font-bold text-[#39FF14]">
-            {apiUsage ? apiUsage.used : effectiveUsed}
-            <span className="text-sm font-normal text-gray-400">/{apiUsage ? apiUsage.limit : effectiveLimit}</span>
-          </div>
-          <div className="w-full bg-gray-700 rounded-full h-1 mt-1.5">
-            <div
-              className={`h-1 rounded-full transition-all ${
-                (apiUsage ? apiUsage.usage_percent : dailyPct) >= 90
-                  ? "bg-[#FF003C]"
-                  : (apiUsage ? apiUsage.usage_percent : dailyPct) >= 70
-                  ? "bg-[#FFB800]"
-                  : "bg-[#39FF14]"
-              }`}
-              style={{ width: `${Math.min(apiUsage ? apiUsage.usage_percent : dailyPct, 100)}%` }}
-            />
-          </div>
-          {apiUsage ? (
-            <div className="text-xs text-[#00F0FF] mt-1.5 font-mono">
-              {apiUsage.remaining} istek kalan ({apiUsage.usage_percent}%)
-            </div>
-          ) : hasRealApiData ? (
-            <div className="text-xs text-[#00F0FF] mt-1.5 font-mono">
-              {summary?.abuseipdb_remaining ?? "?"} istek kalan
-            </div>
-          ) : (
-            <div className="text-xs text-gray-500 mt-1.5">Yerel sayaç — kontrol et ile güncelle</div>
-          )}
         </div>
       </div>
 
@@ -838,30 +974,14 @@ export function IpReputationTab() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            {blacklistConfig && (
-              <span className="text-xs text-gray-500">
-                Günlük: {blacklistConfig.daily_fetches}/{blacklistConfig.daily_limit}
-              </span>
-            )}
-            <button
-              onClick={handleBlacklistApiCheck}
-              disabled={blacklistApiChecking || !config?.abuseipdb_key_set}
-              className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-gray-400 border border-gray-600 hover:border-[#FF00E5]/40 hover:text-[#FF00E5] transition-colors disabled:opacity-40"
-              title="AbuseIPDB Blacklist API limitini kontrol et"
-            >
-              <Activity className={`h-2.5 w-2.5 ${blacklistApiChecking ? 'animate-pulse' : ''}`} />
-              {blacklistApiChecking ? '...' : 'Kontrol Et'}
-            </button>
-            <button
-              onClick={handleBlacklistFetch}
-              disabled={blacklistFetching}
-              className="flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium text-[#FF00E5] border border-[#FF00E5]/30 hover:bg-[#FF00E5]/10 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`h-3 w-3 ${blacklistFetching ? 'animate-spin' : ''}`} />
-              {blacklistFetching ? 'İndiriliyor...' : 'Şimdi Çek'}
-            </button>
-          </div>
+          <button
+            onClick={handleBlacklistFetch}
+            disabled={blacklistFetching}
+            className="flex items-center gap-1 rounded px-2.5 py-1 text-xs font-medium text-[#FF00E5] border border-[#FF00E5]/30 hover:bg-[#FF00E5]/10 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3 w-3 ${blacklistFetching ? 'animate-spin' : ''}`} />
+            {blacklistFetching ? 'İndiriliyor...' : 'Şimdi Çek'}
+          </button>
         </div>
 
         {/* Config row */}
@@ -990,31 +1110,15 @@ export function IpReputationTab() {
             <h3 className="text-sm font-semibold text-white">Subnet Analizi</h3>
             <span className="text-[10px] text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">check-block</span>
           </div>
-          <div className="flex items-center gap-2">
-            {checkBlockUsage && (
-              <span className="text-[10px] text-gray-500">
-                {checkBlockUsage.used}/{checkBlockUsage.limit} ({checkBlockUsage.usage_percent}%)
-              </span>
-            )}
+          {checkBlockResults.length > 0 && (
             <button
-              onClick={handleCheckBlockApiUsage}
-              disabled={checkBlockApiChecking || !config?.abuseipdb_key_set}
-              className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-gray-400 border border-gray-600 hover:border-[#FFB800]/40 hover:text-[#FFB800] transition-colors disabled:opacity-40"
-              title="AbuseIPDB Check API limitini kontrol et (check-block aynı havuzu kullanır)"
+              onClick={handleClearCheckBlockCache}
+              className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-gray-400 border border-gray-600 hover:border-neon-red/40 hover:text-[#FF003C] transition-colors"
             >
-              <Activity className={`h-2.5 w-2.5 ${checkBlockApiChecking ? 'animate-pulse' : ''}`} />
-              {checkBlockApiChecking ? '...' : 'Kontrol Et'}
+              <Trash2 className="h-2.5 w-2.5" />
+              Cache Temizle
             </button>
-            {checkBlockResults.length > 0 && (
-              <button
-                onClick={handleClearCheckBlockCache}
-                className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-gray-400 border border-gray-600 hover:border-neon-red/40 hover:text-[#FF003C] transition-colors"
-              >
-                <Trash2 className="h-2.5 w-2.5" />
-                Cache Temizle
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
         <p className="text-xs text-gray-500 mb-3">

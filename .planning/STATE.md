@@ -154,6 +154,7 @@ Progress: [██████░░░░] 40%
 | 28 | Android Push Bildirimleri + Backend Push API — 3 endpoint (GET channels, POST toggle, POST register), Android geri butonu + Build.MODEL, Pi deploy + test | 2026-03-10 | 4f75903, 0ffeb43, 419e978 | [28-android-push-bildirimleri](./quick/28-android-app-push-bildirimleri-ve-push-bi/) |
 | 29 | WebSocket security events + Android system notifications — broadcast_security_event(), telegram hook, NotificationHelper, test endpoint | 2026-03-10 | 94ce9aa | [29-websocket-security-events](./quick/29-websocket-security-events-android-system/) |
 | 30 | WS security event aninda gonderim — asyncio.Event tabanli instant broadcast (3s polling kaldirildi) + 30s ping/pong keepalive ile stale baglanti temizligi | 2026-03-11 | 349c720, 6c91d88 | [30-ws-instant-broadcast](./quick/30-ws-security-event-an-nda-g-nderim-asynci/) |
+| 31 | IP itibar API kullanim ust bari — 3 havuz (Check/Blacklist/Check-Block) birlesik bar, endpoint siralama fix, DAILY_LIMIT 1000, 429 header okuma | 2026-03-11 | - | [31-ip-itibar-api-kullanim-ust-bari](./quick/31-ip-itibar-api-kullanim-ust-bari/) |
 
 ## Session Continuity
 
