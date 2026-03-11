@@ -242,6 +242,8 @@ export function IpReputationTab() {
   const [checkBlockResults, setCheckBlockResults] = useState<CheckBlockResult[]>([]);
   const [checkBlockDetail, setCheckBlockDetail] = useState<CheckBlockDetail | null>(null);
   const [checkBlockExpanded, setCheckBlockExpanded] = useState(false);
+  const [checkBlockApiChecking, setCheckBlockApiChecking] = useState(false);
+  const [checkBlockApiUsage, setCheckBlockApiUsage] = useState<{ limit: number; used: number; remaining: number; usage_percent: number } | null>(null);
 
   const showFeedback = (msg: string, ok: boolean) => {
     setFeedback({ msg, ok });
@@ -469,6 +471,26 @@ export function IpReputationTab() {
       showFeedback("Subnet analizi sırasında hata oluştu.", false);
     } finally {
       setCheckBlockLoading(false);
+    }
+  };
+
+  const handleCheckBlockApiUsage = async () => {
+    setCheckBlockApiChecking(true);
+    try {
+      const res = await checkApiUsage();
+      if (res.data?.status === "ok" && res.data.data) {
+        setCheckBlockApiUsage(res.data.data);
+        // Summary'yi de güncelle
+        const sumRes = await fetchReputationSummary();
+        setSummary(sumRes.data);
+        showFeedback(`API: ${res.data.data.remaining}/${res.data.data.limit} kalan`, true);
+      } else {
+        showFeedback(res.data?.message ?? "API bilgisi alınamadı.", false);
+      }
+    } catch {
+      showFeedback("API kullanım kontrolü başarısız.", false);
+    } finally {
+      setCheckBlockApiChecking(false);
     }
   };
 
@@ -970,15 +992,31 @@ export function IpReputationTab() {
             <h3 className="text-sm font-semibold text-white">Subnet Analizi</h3>
             <span className="text-[10px] text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">check-block</span>
           </div>
-          {checkBlockResults.length > 0 && (
+          <div className="flex items-center gap-2">
+            {checkBlockApiUsage && (
+              <span className="text-[10px] text-gray-500">
+                API: {checkBlockApiUsage.remaining}/{checkBlockApiUsage.limit} ({checkBlockApiUsage.usage_percent}%)
+              </span>
+            )}
             <button
-              onClick={handleClearCheckBlockCache}
-              className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-gray-400 border border-gray-600 hover:border-neon-red/40 hover:text-[#FF003C] transition-colors"
+              onClick={handleCheckBlockApiUsage}
+              disabled={checkBlockApiChecking || !config?.abuseipdb_key_set}
+              className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-gray-400 border border-gray-600 hover:border-[#FFB800]/40 hover:text-[#FFB800] transition-colors disabled:opacity-40"
+              title="AbuseIPDB Check API limitini kontrol et (check-block aynı havuzu kullanır)"
             >
-              <Trash2 className="h-2.5 w-2.5" />
-              Cache Temizle
+              <Activity className={`h-2.5 w-2.5 ${checkBlockApiChecking ? 'animate-pulse' : ''}`} />
+              {checkBlockApiChecking ? '...' : 'API Kontrol'}
             </button>
-          )}
+            {checkBlockResults.length > 0 && (
+              <button
+                onClick={handleClearCheckBlockCache}
+                className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-gray-400 border border-gray-600 hover:border-neon-red/40 hover:text-[#FF003C] transition-colors"
+              >
+                <Trash2 className="h-2.5 w-2.5" />
+                Cache Temizle
+              </button>
+            )}
+          </div>
         </div>
 
         <p className="text-xs text-gray-500 mb-3">
