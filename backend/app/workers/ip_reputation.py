@@ -116,31 +116,31 @@ async def check_abuseipdb(ip: str, api_key: str) -> dict | None:
             headers={"Key": api_key, "Accept": "application/json"},
             params={"ipAddress": ip, "maxAgeInDays": 90},
         )
-            if response.status_code == 200:
-                body = response.json()
-                data = body.get("data", {})
+        if response.status_code == 200:
+            body = response.json()
+            data = body.get("data", {})
 
-                # AbuseIPDB gercek rate limit degerlerini Redis'e kaydet (1 saatlik TTL)
-                try:
-                    redis = await get_redis()
-                    remaining = response.headers.get("X-RateLimit-Remaining")
-                    limit = response.headers.get("X-RateLimit-Limit")
-                    if remaining is not None:
-                        await redis.set("reputation:abuseipdb_remaining", str(remaining), ex=CACHE_TTL)
-                    if limit is not None:
-                        await redis.set("reputation:abuseipdb_limit", str(limit), ex=CACHE_TTL)
-                except Exception as cache_exc:
-                    logger.debug(f"Rate limit header kaydedilemedi: {cache_exc}")
+            # AbuseIPDB gercek rate limit degerlerini Redis'e kaydet
+            try:
+                redis = await get_redis()
+                remaining = response.headers.get("X-RateLimit-Remaining")
+                limit = response.headers.get("X-RateLimit-Limit")
+                if remaining is not None:
+                    await redis.set("reputation:abuseipdb_remaining", str(remaining), ex=CACHE_TTL)
+                if limit is not None:
+                    await redis.set("reputation:abuseipdb_limit", str(limit), ex=CACHE_TTL)
+            except Exception as cache_exc:
+                logger.debug(f"Rate limit header kaydedilemedi: {cache_exc}")
 
-                return {
-                    "abuse_score": data.get("abuseConfidenceScore", 0),
-                    "total_reports": data.get("totalReports", 0),
-                    "country": data.get("countryCode", "??"),
-                }
-            elif response.status_code == 429:
-                logger.warning("AbuseIPDB rate limit asild — gunluk kota dolmus olabilir.")
-            else:
-                logger.debug(f"AbuseIPDB {ip} yaniti: HTTP {response.status_code}")
+            return {
+                "abuse_score": data.get("abuseConfidenceScore", 0),
+                "total_reports": data.get("totalReports", 0),
+                "country": data.get("countryCode", "??"),
+            }
+        elif response.status_code == 429:
+            logger.warning("AbuseIPDB rate limit asild — gunluk kota dolmus olabilir.")
+        else:
+            logger.debug(f"AbuseIPDB {ip} yaniti: HTTP {response.status_code}")
     except httpx.TimeoutException:
         logger.debug(f"AbuseIPDB {ip} sorgusu zaman asimina ugradi.")
     except Exception as exc:
