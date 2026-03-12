@@ -156,11 +156,12 @@ Progress: [██████░░░░] 40%
 | 30 | WS security event aninda gonderim — asyncio.Event tabanli instant broadcast (3s polling kaldirildi) + 30s ping/pong keepalive ile stale baglanti temizligi | 2026-03-11 | 349c720, 6c91d88 | [30-ws-instant-broadcast](./quick/30-ws-security-event-an-nda-g-nderim-asynci/) |
 | 31 | IP itibar API kullanim ust bari — 3 havuz (Check/Blacklist/Check-Block) birlesik bar, endpoint siralama fix, DAILY_LIMIT 1000, 429 header okuma | 2026-03-11 | - | [31-ip-itibar-api-kullanim-ust-bari](./quick/31-ip-itibar-api-kullanim-ust-bari/) |
 | 34 | IP Reputation tam optimizasyon — API israf fix (3 endpoint sifir hak), HTTP pool, GeoIP batch, akilli TTL (6h-7d), lokal blocklist (5 kaynak), hibrit skor, frontend cache | 2026-03-12 | 913f052, 49f2f87, d2cb03e | [34-ip-reputation-tam-optimizasyon](./quick/34-ip-reputation-tam-optimizasyon-5-faz-api/) |
+| 35 | AI Insights sayfasi tam yeniden yazim — saatlik trend grafik (AreaChart), domain reputation sorgulama, severity filtre tablari, goreceli zaman, acilir IP listesi | 2026-03-12 | 657580c | [35-ai-insights](./quick/35-ai-insights-sayfas-n-temizle-ve-anlaml-h/) |
 
 ## Session Continuity
 
 Last session: 2026-03-12
-Last activity: 2026-03-12 - Completed quick task 34: IP Reputation tam optimizasyon (5 faz)
+Last activity: 2026-03-12 - Completed quick task 35: AI Insights sayfasi tam yeniden yazim
 Resume file: .planning/quick/23-android-complete-app/EXECUTION-GUIDE.md
 Notes: |
   - Quick 28: Push bildirim API (GET /channels, POST toggle, POST register), Android screen geri butonu + Build.MODEL
