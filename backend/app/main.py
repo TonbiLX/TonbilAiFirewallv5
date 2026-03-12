@@ -592,6 +592,10 @@ async def lifespan(app: FastAPI):
     # Gunluk Telegram guvenlik ozeti (her gun 08:00)
     daily_summary_task = asyncio.create_task(start_daily_summary())
 
+    # Lokal IP blocklist sync worker — ucretsiz IP listelerini indirir (60s baslangic, 1h aralik)
+    from app.workers.ip_blocklist_sync import start_blocklist_sync as start_ip_blocklist_sync
+    ip_blocklist_task = asyncio.create_task(start_ip_blocklist_sync())
+
     # IP itibar kontrolu — AbuseIPDB + GeoIP (5dk aralik, 180s baslangic gecikmesi)
     ip_reputation_task = asyncio.create_task(start_ip_reputation())
 
@@ -630,6 +634,7 @@ async def lifespan(app: FastAPI):
     db_retention_task.cancel()
     baseline_task.cancel()
     daily_summary_task.cancel()
+    ip_blocklist_task.cancel()
     ip_reputation_task.cancel()
     watchdog_task.cancel()
     await redis_pool.aclose()

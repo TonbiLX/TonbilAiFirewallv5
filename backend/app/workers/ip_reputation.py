@@ -326,6 +326,56 @@ async def _write_ai_insight(severity: Severity, message: str, action: str, categ
         logger.error(f"AiInsight yazma hatasi: {exc}")
 
 
+async def _calculate_local_score(ip: str, redis) -> tuple[int, list[str]]:
+    """
+    Lokal sinyallerden IP risk skoru hesapla.
+    AbuseIPDB'ye gerek duymadan risk degerlendirmesi.
+    Returns: (score 0-100, reason_list)
+    """
+    score = 0
+    reasons = []
+
+    # 1. Lokal blocklist eslesmesi (50 puan)
+    try:
+        from app.workers.ip_blocklist_sync import is_ip_in_local_blocklist
+        in_blocklist, source = await is_ip_in_local_blocklist(ip)
+        if in_blocklist:
+            score += 50
+            reasons.append(f"Lokal blocklist: {source}")
+    except Exception:
+        pass
+
+    # 2. DDoS saldirgan seti (30 puan)
+    try:
+        if await redis.sismember("ddos:attacker_ips", ip):
+            score += 30
+            reasons.append("DDoS saldirgan seti")
+    except Exception:
+        pass
+
+    # 3. Daha once engellenmis (20 puan)
+    try:
+        if await redis.sismember("dns:threat:blocked", ip):
+            score += 20
+            reasons.append("Daha once engellenmis")
+    except Exception:
+        pass
+
+    # 4. Engellenen ulke (40 puan — GeoIP cache varsa)
+    try:
+        geo_cache = await redis.hgetall(f"reputation:ip:{ip}")
+        if geo_cache:
+            cc = geo_cache.get("country_code", "")
+            blocked_countries = await _get_blocked_countries(redis)
+            if cc and cc.upper() in [c.upper() for c in blocked_countries]:
+                score += 40
+                reasons.append(f"Engellenen ulke: {cc}")
+    except Exception:
+        pass
+
+    return min(100, score), reasons
+
+
 async def _process_ip(ip: str, api_key: str | None, redis, geo_data: dict | None = None) -> bool:
     """
     Tek bir IP adresini kontrol et, sonuclari cache'le ve gerekirse uyari olustur.
@@ -336,8 +386,15 @@ async def _process_ip(ip: str, api_key: str | None, redis, geo_data: dict | None
     abuse_data: dict | None = None
     used_abuseipdb = False
 
-    # ── AbuseIPDB kontrolu (API anahtari varsa ve kota dolmadiysa) ──
-    if api_key:
+    # ── Hibrit skor: once lokal sinyallerden skor hesapla ──
+    local_score, local_reasons = await _calculate_local_score(ip, redis)
+
+    # Lokal skor >= 70 ise AbuseIPDB'ye sormaya GEREK YOK (API hakki harcanmaz)
+    if local_score >= 70:
+        logger.info(f"[LOKAL] {ip} skor={local_score} (AbuseIPDB atlatildi): {', '.join(local_reasons)}")
+        # AbuseIPDB sorgusu ATLA
+    elif api_key:
+        # ── AbuseIPDB kontrolu (API anahtari varsa ve kota dolmadiysa) ──
         daily_count = await _increment_daily_counter(redis)
         # Gercek AbuseIPDB kalan hak sayisini kontrol et (X-RateLimit-Remaining header'dan)
         api_remaining = await redis.get("reputation:abuseipdb_remaining")
@@ -374,26 +431,30 @@ async def _process_ip(ip: str, api_key: str | None, redis, geo_data: dict | None
         geo_data = await check_geoip(ip)
 
     # ── Sonuclari birlestir ──
-    abuse_score    = int((abuse_data or {}).get("abuse_score", 0))
-    total_reports  = int((abuse_data or {}).get("total_reports", 0))
-    country        = (abuse_data or geo_data or {}).get("country", "")
-    country_code   = (abuse_data or {}).get("country", (geo_data or {}).get("country_code", "??"))
-    city           = (geo_data or {}).get("city", "")
-    isp            = (geo_data or {}).get("isp", "")
-    org            = (geo_data or {}).get("org", "")
-    checked_at     = format_local_time()
+    abuseipdb_score = int((abuse_data or {}).get("abuse_score", 0))
+    total_reports   = int((abuse_data or {}).get("total_reports", 0))
+    # Hibrit skor: local ve AbuseIPDB skorlarinin buyugu
+    abuse_score     = max(local_score, abuseipdb_score)
+    country         = (abuse_data or geo_data or {}).get("country", "")
+    country_code    = (abuse_data or {}).get("country", (geo_data or {}).get("country_code", "??"))
+    city            = (geo_data or {}).get("city", "")
+    isp             = (geo_data or {}).get("isp", "")
+    org             = (geo_data or {}).get("org", "")
+    checked_at      = format_local_time()
 
     # ── Redis cache ──
     cache_key = f"{REDIS_KEY_IP_PREFIX}{ip}"
     cache_payload = {
-        "abuse_score":   str(abuse_score),
-        "total_reports": str(total_reports),
-        "country":       country,
-        "country_code":  country_code,
-        "city":          city,
-        "isp":           isp,
-        "org":           org,
-        "checked_at":    checked_at,
+        "abuse_score":    str(abuse_score),
+        "total_reports":  str(total_reports),
+        "country":        country,
+        "country_code":   country_code,
+        "city":           city,
+        "isp":            isp,
+        "org":            org,
+        "checked_at":     checked_at,
+        "local_score":    str(local_score),
+        "local_reasons":  json.dumps(local_reasons),
     }
     try:
         await redis.hset(cache_key, mapping=cache_payload)
