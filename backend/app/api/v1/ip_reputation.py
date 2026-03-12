@@ -452,16 +452,39 @@ async def test_abuseipdb_key(
 
 @router.get("/api-usage")
 async def check_api_usage(
+    sync: bool = Query(False, description="True ise gercek API'den sync eder (1 check hakki harcar)"),
     current_user: User = Depends(get_current_user),
 ):
     """
-    AbuseIPDB API kullanim bilgisini Redis cache'den oku.
+    AbuseIPDB API kullanim bilgisi.
 
-    Gercek API sorgusu YAPMAZ — 0 API hakki harcar.
-    Worker dongusu sirasinda rate limit header'lari otomatik kaydedilir.
-    Cache yoksa null dondurur (worker dongusunu bekleyin).
+    - sync=false (varsayilan): Redis cache'den okur, 0 API hakki.
+    - sync=true: Gercek AbuseIPDB sorgusu yapar (1 check hakki),
+      header'lardan guncel rate limit alir ve Redis'i gunceller.
     """
     redis = await get_redis()
+    source = "cache"
+
+    if sync:
+        api_key = await redis.get(REDIS_KEY_API_KEY)
+        if api_key:
+            try:
+                from app.services.http_pool import get_client
+                client = await get_client("abuseipdb", timeout=10)
+                resp = await client.get(
+                    ABUSEIPDB_URL,
+                    headers={"Key": api_key, "Accept": "application/json"},
+                    params={"ipAddress": "8.8.8.8", "maxAgeInDays": 1},
+                )
+                rl_remaining = resp.headers.get("X-RateLimit-Remaining")
+                rl_limit = resp.headers.get("X-RateLimit-Limit")
+                if rl_remaining is not None:
+                    await redis.set("reputation:abuseipdb_remaining", str(rl_remaining), ex=86400)
+                if rl_limit is not None:
+                    await redis.set("reputation:abuseipdb_limit", str(rl_limit), ex=86400)
+                source = "api_sync"
+            except Exception as exc:
+                logger.warning(f"API usage sync hatasi: {exc}")
 
     remaining_raw = await redis.get("reputation:abuseipdb_remaining")
     limit_raw = await redis.get("reputation:abuseipdb_limit")
@@ -469,7 +492,8 @@ async def check_api_usage(
     if remaining_raw is None or limit_raw is None:
         return {
             "status": "ok",
-            "message": "API kullanim bilgisi henuz mevcut degil (worker dongusunu bekleyin).",
+            "source": source,
+            "message": "API kullanim bilgisi henuz mevcut degil.",
             "data": {"limit": None, "used": None, "remaining": None, "usage_percent": None},
         }
 
@@ -480,7 +504,8 @@ async def check_api_usage(
 
     return {
         "status": "ok",
-        "message": "Redis cache'den okundu.",
+        "source": source,
+        "message": "API'den senkronize edildi." if source == "api_sync" else "Lokal cache'den okundu.",
         "data": {
             "limit": limit,
             "used": used,
