@@ -34,14 +34,14 @@ logger = logging.getLogger("tonbilai.ip_reputation")
 STARTUP_DELAY        = 180   # saniye - baslangic gecikmesi
 CHECK_INTERVAL       = 300   # saniye - dongu araligi
 MAX_CHECKS_PER_CYCLE = 10    # dongu basina max IP kontrolu
-CACHE_TTL            = 86400 # saniye - Redis cache suresi (24 saat)
 DAILY_LIMIT          = 900   # AbuseIPDB gunluk limit tamponu (max 1000, 100 tampon)
-GEOIP_SLEEP          = 1.5   # saniye - ip-api.com rate limit (40/dk max)
+CACHE_TTL            = 86400 # saniye - meta/sayac cache suresi (24 saat)
 HTTP_TIMEOUT         = 10    # saniye - HTTP istek zaman asimi
 
 ABUSEIPDB_URL       = "https://api.abuseipdb.com/api/v2/check"
 ABUSEIPDB_CHECK_BLOCK_URL = "https://api.abuseipdb.com/api/v2/check-block"
 GEOIP_URL       = "http://ip-api.com/json/{ip}?fields=status,country,countryCode,city,isp,org,as,query"
+GEOIP_BATCH_URL = "http://ip-api.com/batch"
 
 # Redis anahtarlari
 REDIS_KEY_API_KEY       = "reputation:abuseipdb_key"
@@ -109,12 +109,13 @@ def is_public_ip(ip_str: str) -> bool:
 async def check_abuseipdb(ip: str, api_key: str) -> dict | None:
     """AbuseIPDB API'sini sorgula. Hata durumunda None dondur."""
     try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-            response = await client.get(
-                ABUSEIPDB_URL,
-                headers={"Key": api_key, "Accept": "application/json"},
-                params={"ipAddress": ip, "maxAgeInDays": 90},
-            )
+        from app.services.http_pool import get_client
+        client = await get_client("abuseipdb", timeout=HTTP_TIMEOUT)
+        response = await client.get(
+            ABUSEIPDB_URL,
+            headers={"Key": api_key, "Accept": "application/json"},
+            params={"ipAddress": ip, "maxAgeInDays": 90},
+        )
             if response.status_code == 200:
                 body = response.json()
                 data = body.get("data", {})
@@ -150,25 +151,70 @@ async def check_abuseipdb(ip: str, api_key: str) -> dict | None:
 async def check_geoip(ip: str) -> dict | None:
     """ip-api.com uzerinden GeoIP bilgisi al. Hata durumunda None dondur."""
     try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-            response = await client.get(GEOIP_URL.format(ip=ip))
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("status") == "success":
-                    return {
-                        "country":      data.get("country", ""),
-                        "country_code": data.get("countryCode", "??"),
-                        "city":         data.get("city", ""),
-                        "isp":          data.get("isp", ""),
-                        "org":          data.get("org", ""),
-                        "asn":          data.get("as", ""),
-                    }
-            logger.debug(f"GeoIP {ip} yaniti: HTTP {response.status_code}")
+        from app.services.http_pool import get_client
+        client = await get_client("geoip", timeout=HTTP_TIMEOUT)
+        response = await client.get(GEOIP_URL.format(ip=ip))
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("status") == "success":
+                return {
+                    "country":      data.get("country", ""),
+                    "country_code": data.get("countryCode", "??"),
+                    "city":         data.get("city", ""),
+                    "isp":          data.get("isp", ""),
+                    "org":          data.get("org", ""),
+                    "asn":          data.get("as", ""),
+                }
+        logger.debug(f"GeoIP {ip} yaniti: HTTP {response.status_code}")
     except httpx.TimeoutException:
         logger.debug(f"GeoIP {ip} sorgusu zaman asimina ugradi.")
     except Exception as exc:
         logger.debug(f"GeoIP {ip} hatasi: {exc}")
     return None
+
+
+async def check_geoip_batch(ips: list[str]) -> dict[str, dict]:
+    """ip-api.com batch API — 100 IP tek istekte sorgula."""
+    if not ips:
+        return {}
+    try:
+        from app.services.http_pool import get_client
+        client = await get_client("geoip", timeout=HTTP_TIMEOUT)
+        payload = [
+            {"query": ip, "fields": "status,country,countryCode,city,isp,org,as,query"}
+            for ip in ips[:100]
+        ]
+        response = await client.post(GEOIP_BATCH_URL, json=payload)
+        if response.status_code == 200:
+            results = {}
+            for item in response.json():
+                if item.get("status") == "success":
+                    results[item["query"]] = {
+                        "country":      item.get("country", ""),
+                        "country_code": item.get("countryCode", "??"),
+                        "city":         item.get("city", ""),
+                        "isp":          item.get("isp", ""),
+                        "org":          item.get("org", ""),
+                        "asn":          item.get("as", ""),
+                    }
+            logger.info(f"GeoIP batch: {len(ips)} IP sorgulanacak, {len(results)} sonuc")
+            return results
+        logger.debug(f"GeoIP batch yaniti: HTTP {response.status_code}")
+    except Exception as exc:
+        logger.warning(f"GeoIP batch hatasi: {exc}")
+    return {}
+
+
+def _get_cache_ttl(abuse_score: int) -> int:
+    """Skor bazli dinamik cache suresi (saniye)."""
+    if abuse_score >= 80:
+        return 6 * 3600      # 6 saat — kritik, sik guncelle
+    elif abuse_score >= 50:
+        return 12 * 3600     # 12 saat
+    elif abuse_score > 0:
+        return 24 * 3600     # 24 saat
+    else:
+        return 7 * 86400     # 7 gun — temiz IP
 
 
 async def get_reputation_summary() -> dict:
@@ -280,10 +326,12 @@ async def _write_ai_insight(severity: Severity, message: str, action: str, categ
         logger.error(f"AiInsight yazma hatasi: {exc}")
 
 
-async def _process_ip(ip: str, api_key: str | None, redis) -> bool:
+async def _process_ip(ip: str, api_key: str | None, redis, geo_data: dict | None = None) -> bool:
     """
     Tek bir IP adresini kontrol et, sonuclari cache'le ve gerekirse uyari olustur.
     True dondururse AbuseIPDB kullanildi (sayac artirimi icin).
+
+    geo_data: Batch GeoIP'den onhazir veri (verilmisse tek IP sorgusu yapilmaz).
     """
     abuse_data: dict | None = None
     used_abuseipdb = False
@@ -321,9 +369,9 @@ async def _process_ip(ip: str, api_key: str | None, redis) -> bool:
             # Sayaci geri al (bosu bosuna arttirdik)
             await redis.decr(REDIS_KEY_DAILY_CHECKS)
 
-    # ── GeoIP kontrolu ──
-    await asyncio.sleep(GEOIP_SLEEP)  # ip-api.com rate limiti
-    geo_data = await check_geoip(ip)
+    # ── GeoIP kontrolu (batch'ten gelmediyse tek sorgu yap) ──
+    if geo_data is None:
+        geo_data = await check_geoip(ip)
 
     # ── Sonuclari birlestir ──
     abuse_score    = int((abuse_data or {}).get("abuse_score", 0))
@@ -349,7 +397,8 @@ async def _process_ip(ip: str, api_key: str | None, redis) -> bool:
     }
     try:
         await redis.hset(cache_key, mapping=cache_payload)
-        await redis.expire(cache_key, CACHE_TTL)
+        ttl = _get_cache_ttl(abuse_score)
+        await redis.expire(cache_key, ttl)
     except Exception as exc:
         logger.warning(f"Redis cache yazma hatasi {ip}: {exc}")
 
@@ -446,12 +495,13 @@ async def fetch_abuseipdb_blacklist(force: bool = False) -> dict:
 
     # API cagirisi
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(
-                ABUSEIPDB_BLACKLIST_URL,
-                headers={"Key": api_key, "Accept": "application/json"},
-                params={"confidenceMinimum": min_score, "limit": limit},
-            )
+        from app.services.http_pool import get_client
+        client = await get_client("abuseipdb", timeout=30)
+        response = await client.get(
+            ABUSEIPDB_BLACKLIST_URL,
+            headers={"Key": api_key, "Accept": "application/json"},
+            params={"confidenceMinimum": min_score, "limit": limit},
+        )
 
         if response.status_code != 200:
             msg = f"AbuseIPDB blacklist hatasi: HTTP {response.status_code}"
@@ -642,12 +692,13 @@ async def check_abuseipdb_block(subnet: str, api_key: str | None = None,
 
     # AbuseIPDB check-block API cagrisi
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(
-                ABUSEIPDB_CHECK_BLOCK_URL,
-                headers={"Key": api_key, "Accept": "application/json"},
-                params={"network": subnet, "maxAgeInDays": 30},
-            )
+        from app.services.http_pool import get_client
+        client = await get_client("abuseipdb", timeout=30)
+        response = await client.get(
+            ABUSEIPDB_CHECK_BLOCK_URL,
+            headers={"Key": api_key, "Accept": "application/json"},
+            params={"network": subnet, "maxAgeInDays": 30},
+        )
 
         # Rate limit header kaydet — check-block AYRI havuz (check endpoint'ten farkli!)
         try:
@@ -902,12 +953,16 @@ async def _run_reputation_cycle() -> None:
         f"{len(unchecked_ips)} yeni, bu dongude {len(to_check)} kontrol edilecek."
     )
 
+    # Batch GeoIP: tum IP'ler icin tek sorgu (10 IP -> 1 istek)
+    geo_batch = await check_geoip_batch(to_check)
+
     checked_count = 0
     flagged_count = 0
 
     for ip in to_check:
         try:
-            await _process_ip(ip, api_key, redis)
+            geo_data = geo_batch.get(ip)
+            await _process_ip(ip, api_key, redis, geo_data=geo_data)
             checked_count += 1
 
             # Cache'den abuse_score ve country_code oku (flagged sayisi + ulke kontrolu icin)

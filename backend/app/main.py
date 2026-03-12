@@ -608,6 +608,9 @@ async def lifespan(app: FastAPI):
 
     # Kapanma
     logger.info("TonbilAiOS Backend kapaniyor...")
+    # HTTP connection pool temizligi
+    from app.services.http_pool import close_all as close_http_pool
+    await close_http_pool()
     blocklist_task.cancel()
     dns_proxy_task.cancel()
     discovery_task.cancel()
