@@ -1,7 +1,7 @@
 // --- Ajan: MUHAFIZ (THE GUARDIAN) ---
 // IP itibar yönetimi sekmesi: AbuseIPDB entegrasyonu, ülke engelleme, kontrol edilen IP listesi
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Shield,
   Eye,
@@ -42,6 +42,7 @@ import {
   fetchCheckBlockResults,
   checkBlockApiUsage,
   clearCheckBlockCache,
+  invalidateAllCache,
 } from "../../services/ipReputationApi";
 
 // ---- Tipler ----
@@ -246,6 +247,11 @@ export function IpReputationTab() {
   const [checkBlockApiChecking, setCheckBlockApiChecking] = useState(false);
   const [checkBlockUsage, setCheckBlockUsage] = useState<{ limit: number; used: number; remaining: number; usage_percent: number } | null>(null);
 
+  // Stale-while-revalidate: tab gecislerinde 30s icinde ayni veriyi tekrar cekme
+  const lastFetchTs = useRef<{ summary: number; ips: number; blacklist: number; checkBlock: number }>({
+    summary: 0, ips: 0, blacklist: 0, checkBlock: 0,
+  });
+
   const showFeedback = (msg: string, ok: boolean) => {
     setFeedback({ msg, ok });
     setTimeout(() => setFeedback(null), 3000);
@@ -319,6 +325,29 @@ export function IpReputationTab() {
   useEffect(() => { loadAll(); }, [loadAll]);
   useEffect(() => { loadIps(); }, [loadIps]);
 
+  // API usage arka plan yenilemesi (120s aralik) — 0 API hakki harcar (backend Redis'ten okur)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const [checkRes, blacklistRes, blockRes] = await Promise.all([
+          checkApiUsage().catch(() => null),
+          checkBlacklistApiUsage().catch(() => null),
+          checkBlockApiUsage().catch(() => null),
+        ]);
+        if (checkRes?.data?.status === "ok" && checkRes.data.data) {
+          setApiUsage(checkRes.data.data);
+        }
+        if (blacklistRes?.data?.status === "ok" && blacklistRes.data.data) {
+          setBlacklistUsage(blacklistRes.data.data);
+        }
+        if (blockRes?.data?.status === "ok" && blockRes.data.data) {
+          setCheckBlockUsage(blockRes.data.data);
+        }
+      } catch { /* silent background refresh */ }
+    }, 120_000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleSave = async () => {
     if (!config) return;
     setSaving(true);
@@ -361,11 +390,12 @@ export function IpReputationTab() {
   const handleClearCache = async () => {
     setClearing(true);
     try {
+      invalidateAllCache();
       await clearReputationCache();
       setIps([]);
-      showFeedback("IP önbelleği temizlendi.", true);
+      showFeedback("IP onbellegi temizlendi.", true);
     } catch {
-      showFeedback("Önbellek temizlenemedi.", false);
+      showFeedback("Onbellek temizlenemedi.", false);
     } finally {
       setClearing(false);
     }
@@ -663,27 +693,28 @@ export function IpReputationTab() {
           {/* Check API */}
           {(() => {
             const d = checkApiData;
-            const pct = d?.usage_percent ?? 0;
+            const hasData = d && d.limit != null && d.used != null;
+            const pct = hasData ? (d.usage_percent ?? 0) : 0;
             const color = pct >= 90 ? "#FF003C" : pct >= 70 ? "#FFB800" : "#39FF14";
             return (
               <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-black/30 border border-white/5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Check (IP Sorgu)</span>
-                  {d && <span className="text-[10px] font-mono" style={{ color }}>{pct}%</span>}
+                  {hasData && <span className="text-[10px] font-mono" style={{ color }}>{pct}%</span>}
                 </div>
-                {d ? (
+                {hasData ? (
                   <>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-lg font-bold" style={{ color }}>{d.used.toLocaleString()}</span>
-                      <span className="text-xs text-gray-500">/ {d.limit.toLocaleString()}</span>
+                      <span className="text-lg font-bold" style={{ color }}>{d.used!.toLocaleString()}</span>
+                      <span className="text-xs text-gray-500">/ {d.limit!.toLocaleString()}</span>
                     </div>
                     <div className="w-full bg-gray-800 rounded-full h-1.5">
                       <div className="h-1.5 rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: color }} />
                     </div>
-                    <span className="text-[10px] text-gray-500">{d.remaining.toLocaleString()} istek kalan</span>
+                    <span className="text-[10px] text-gray-500">{d.remaining!.toLocaleString()} istek kalan</span>
                   </>
                 ) : (
-                  <span className="text-xs text-gray-600 italic">Veri yok — kontrol et</span>
+                  <span className="text-xs text-gray-600 italic">Bilgi mevcut degil — worker dongusunu bekleyin</span>
                 )}
               </div>
             );
@@ -692,15 +723,16 @@ export function IpReputationTab() {
           {/* Blacklist API */}
           {(() => {
             const d = blApiData;
-            const pct = d?.usage_percent ?? 0;
+            const hasData = d && d.limit != null && d.used != null;
+            const pct = hasData ? (d.usage_percent ?? 0) : 0;
             const color = pct >= 90 ? "#FF003C" : pct >= 70 ? "#FFB800" : "#FF00E5";
             return (
               <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-black/30 border border-white/5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Blacklist (Kara Liste)</span>
-                  {d && <span className="text-[10px] font-mono" style={{ color }}>{pct}%</span>}
+                  {hasData && <span className="text-[10px] font-mono" style={{ color }}>{pct}%</span>}
                 </div>
-                {d ? (
+                {hasData ? (
                   <>
                     <div className="flex items-baseline gap-1">
                       <span className="text-lg font-bold" style={{ color }}>{d.used}</span>
@@ -712,7 +744,7 @@ export function IpReputationTab() {
                     <span className="text-[10px] text-gray-500">{d.remaining} istek kalan</span>
                   </>
                 ) : (
-                  <span className="text-xs text-gray-600 italic">Veri yok — kontrol et</span>
+                  <span className="text-xs text-gray-600 italic">Bilgi mevcut degil — worker dongusunu bekleyin</span>
                 )}
               </div>
             );
@@ -721,15 +753,16 @@ export function IpReputationTab() {
           {/* Check-Block API */}
           {(() => {
             const d = cbApiData;
-            const pct = d?.usage_percent ?? 0;
+            const hasData = d && d.limit != null && d.used != null;
+            const pct = hasData ? (d.usage_percent ?? 0) : 0;
             const color = pct >= 90 ? "#FF003C" : pct >= 70 ? "#FFB800" : "#FFB800";
             return (
               <div className="flex flex-col gap-1.5 p-3 rounded-lg bg-black/30 border border-white/5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Check-Block (Subnet)</span>
-                  {d && <span className="text-[10px] font-mono" style={{ color }}>{pct}%</span>}
+                  {hasData && <span className="text-[10px] font-mono" style={{ color }}>{pct}%</span>}
                 </div>
-                {d ? (
+                {hasData ? (
                   <>
                     <div className="flex items-baseline gap-1">
                       <span className="text-lg font-bold" style={{ color }}>{d.used}</span>
@@ -741,7 +774,7 @@ export function IpReputationTab() {
                     <span className="text-[10px] text-gray-500">{d.remaining} istek kalan</span>
                   </>
                 ) : (
-                  <span className="text-xs text-gray-600 italic">Veri yok — kontrol et</span>
+                  <span className="text-xs text-gray-600 italic">Bilgi mevcut degil — worker dongusunu bekleyin</span>
                 )}
               </div>
             );
