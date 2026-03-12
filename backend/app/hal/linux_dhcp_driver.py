@@ -6,6 +6,7 @@
 
 import logging
 import os
+import subprocess
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -211,9 +212,7 @@ def parse_leases_file() -> List[Dict[str, Any]]:
 
 def remove_lease_from_file(mac: str) -> bool:
     """dnsmasq lease dosyasindan belirli bir MAC'in lease'ini sil.
-    Dosya okunduktan sonra, ilgili satir cikarilarak yeniden yazilir.
-    dnsmasq çalışırken lease dosyasini okumaz (sadece başlangıçta okur),
-    ama bu sayede sync worker'in dosyadan tekrar okumasini onleriz.
+    sudo ile yazma yapilir (dosya root:root 644 oldugu icin).
     """
     if not DNSMASQ_LEASES_FILE.exists():
         return False
@@ -235,7 +234,14 @@ def remove_lease_from_file(mac: str) -> bool:
             new_lines.append(line)
 
         if removed:
-            DNSMASQ_LEASES_FILE.write_text("\n".join(new_lines) + "\n" if new_lines else "")
+            new_content = "\n".join(new_lines) + "\n" if new_lines else ""
+            proc = subprocess.run(
+                ["sudo", "tee", str(DNSMASQ_LEASES_FILE)],
+                input=new_content, capture_output=True, text=True, timeout=5,
+            )
+            if proc.returncode != 0:
+                logger.error(f"Lease dosyasina sudo yazma hatasi: {proc.stderr}")
+                return False
         return removed
     except Exception as e:
         logger.error(f"Lease dosyasindan silme hatasi: {e}")
