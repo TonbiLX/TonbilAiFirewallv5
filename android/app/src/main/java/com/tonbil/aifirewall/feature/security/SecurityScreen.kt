@@ -1,5 +1,6 @@
 package com.tonbil.aifirewall.feature.security
 
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
@@ -22,12 +23,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -67,6 +74,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -76,6 +84,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tonbil.aifirewall.data.remote.dto.AiInsightDto
 import com.tonbil.aifirewall.data.remote.dto.BlocklistDto
+import com.tonbil.aifirewall.data.remote.dto.DdosAttackMapDto
+import com.tonbil.aifirewall.data.remote.dto.DdosAttackPointDto
 import com.tonbil.aifirewall.data.remote.dto.DdosCountersDto
 import com.tonbil.aifirewall.data.remote.dto.DdosProtectionStatusDto
 import com.tonbil.aifirewall.data.remote.dto.DnsRuleDto
@@ -98,7 +108,10 @@ import org.koin.androidx.compose.koinViewModel
 private val tabs = listOf("DNS", "Firewall", "VPN", "DDoS", "Trafik", "AI")
 
 @Composable
-fun SecurityScreen(viewModel: SecurityViewModel = koinViewModel()) {
+fun SecurityScreen(
+    viewModel: SecurityViewModel = koinViewModel(),
+    onNavigateToDdosMap: () -> Unit = {},
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = CyberpunkTheme.colors
     val snackbarHostState = remember { SnackbarHostState() }
@@ -220,7 +233,10 @@ fun SecurityScreen(viewModel: SecurityViewModel = koinViewModel()) {
                             0 -> DnsTab(viewModel, uiState.dnsStats, uiState.blocklists, uiState.dnsRules)
                             1 -> FirewallTab(viewModel, uiState.firewallStats, uiState.firewallRules)
                             2 -> VpnTab(viewModel, uiState.vpnStats, uiState.vpnPeers)
-                            3 -> DdosTab(uiState.ddosProtections, uiState.ddosCounters)
+                            3 -> DdosTab(
+                                protections = uiState.ddosProtections,
+                                counters = uiState.ddosCounters,
+                            )
                             4 -> TrafficTab(uiState.liveFlows, uiState.flowStats)
                             5 -> AiTab(uiState.insights, uiState.securityStats)
                         }
@@ -264,6 +280,8 @@ fun SecurityScreen(viewModel: SecurityViewModel = koinViewModel()) {
         AddFirewallRuleDialog(
             onDismiss = { viewModel.hideAddFirewallRuleDialog() },
             onCreate = { dto -> viewModel.createFirewallRule(dto) },
+            editingRule = uiState.editingFirewallRule,
+            onUpdate = { id, dto -> viewModel.updateFirewallRule(id, dto) },
         )
     }
 
@@ -693,6 +711,11 @@ private fun FirewallTab(
                                         )
                                     }
                                 }
+                                Text(
+                                    text = "Oncelik: ${rule.priority}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                                )
                             }
                             NeonBadge(
                                 text = when (rule.action) {
@@ -708,7 +731,45 @@ private fun FirewallTab(
                                     else -> colors.neonCyan
                                 },
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            // Priority up/down buttons
+                            Column {
+                                IconButton(
+                                    onClick = { viewModel.moveRuleUp(rule) },
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ArrowUpward,
+                                        contentDescription = "Yukari",
+                                        tint = colors.neonCyan,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { viewModel.moveRuleDown(rule) },
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ArrowDownward,
+                                        contentDescription = "Asagi",
+                                        tint = colors.neonCyan,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                            // Edit button
+                            IconButton(
+                                onClick = { viewModel.showEditFirewallRuleDialog(rule) },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Edit,
+                                    contentDescription = "Duzenle",
+                                    tint = colors.neonCyan,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                            // Delete button
                             IconButton(
                                 onClick = { viewModel.deleteFirewallRule(rule.id) },
                                 modifier = Modifier.size(32.dp),
@@ -943,37 +1004,196 @@ private fun VpnTab(
 
 @Composable
 private fun DdosTab(
+    viewModel: SecurityViewModel,
     protections: List<DdosProtectionStatusDto>,
     counters: DdosCountersDto?,
+    attackMap: DdosAttackMapDto?,
+    onNavigateToDdosMap: () -> Unit,
 ) {
     val colors = CyberpunkTheme.colors
+
+    // Lazy load attack map when DDoS tab is first shown
+    LaunchedEffect(Unit) { viewModel.loadDdosAttackMap() }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // ── Koruma Durumu Ozeti ──────────────────────────────────────────────────
         item {
+            val activeModules = protections.count { it.enabled }
+            val hasActiveAttacks = (attackMap?.activeAttackers ?: 0) > 0
             GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Toplam Engellenen Paket",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = colors.neonRed,
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = formatCount((counters?.totalDroppedPackets ?: 0).toInt()),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = colors.neonRed,
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = formatBytes(counters?.totalDroppedBytes ?: 0),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Shield,
+                        contentDescription = null,
+                        tint = if (hasActiveAttacks) colors.neonRed else colors.neonGreen,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "DDoS Koruma Durumu",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (hasActiveAttacks) colors.neonRed else colors.neonGreen,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = formatCount((counters?.totalDroppedPackets ?: 0).toInt()),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.neonRed,
+                        )
+                        Text(
+                            text = "Engellenen Paket",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = "${attackMap?.activeAttackers ?: 0}",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (hasActiveAttacks) colors.neonRed else colors.neonGreen,
+                        )
+                        Text(
+                            text = "Aktif Saldirgan",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = "$activeModules/${protections.size}",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.neonGreen,
+                        )
+                        Text(
+                            text = "Aktif Modul",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                }
             }
         }
+
+        // ── Son Saldirilar + Harita Linki ────────────────────────────────────────
+        item {
+            val attacks = attackMap?.attacks?.take(5) ?: emptyList()
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Security,
+                        contentDescription = null,
+                        tint = colors.neonMagenta,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Son Saldirilar",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = colors.neonMagenta,
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                if (attacks.isEmpty()) {
+                    Text(
+                        text = "Aktif saldiri yok",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.neonGreen,
+                    )
+                } else {
+                    attacks.forEach { attack ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = attack.ip,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.neonRed,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                val location = listOfNotNull(attack.country, attack.city)
+                                    .joinToString(", ")
+                                if (location.isNotEmpty()) {
+                                    Text(
+                                        text = location,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(horizontalAlignment = Alignment.End) {
+                                NeonBadge(
+                                    text = attack.type.replace("_", " ")
+                                        .replaceFirstChar { it.titlecase(Locale.getDefault()) },
+                                    color = colors.neonAmber,
+                                )
+                                Text(
+                                    text = formatCount(attack.packets.toInt()),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                TextButton(
+                    onClick = onNavigateToDdosMap,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Map,
+                        contentDescription = null,
+                        tint = colors.neonCyan,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "DDoS Haritasini Gor",
+                        color = colors.neonCyan,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+
+        // ── Koruma Mekanizmalari (mevcut, altta) ────────────────────────────────
         if (counters != null && counters.byProtection.isNotEmpty()) {
             val protList = counters.byProtection.entries.toList()
             val protColors = listOf(colors.neonRed, colors.neonAmber, colors.neonMagenta, colors.neonCyan, colors.neonGreen)
@@ -1516,15 +1736,19 @@ private fun AddBlocklistDialog(
 private fun AddFirewallRuleDialog(
     onDismiss: () -> Unit,
     onCreate: (FirewallRuleCreateDto) -> Unit,
+    editingRule: FirewallRuleDto? = null,
+    onUpdate: (Int, FirewallRuleCreateDto) -> Unit = { _, _ -> },
 ) {
     val colors = CyberpunkTheme.colors
-    var name by remember { mutableStateOf("") }
-    var direction by remember { mutableStateOf("inbound") }
-    var protocol by remember { mutableStateOf("tcp") }
-    var port by remember { mutableStateOf("") }
-    var sourceIp by remember { mutableStateOf("") }
-    var destIp by remember { mutableStateOf("") }
-    var action by remember { mutableStateOf("drop") }
+    val isEditing = editingRule != null
+    var name by remember(editingRule) { mutableStateOf(editingRule?.name ?: "") }
+    var direction by remember(editingRule) { mutableStateOf(editingRule?.direction ?: "inbound") }
+    var protocol by remember(editingRule) { mutableStateOf(editingRule?.protocol ?: "tcp") }
+    var port by remember(editingRule) { mutableStateOf(editingRule?.port ?: "") }
+    var sourceIp by remember(editingRule) { mutableStateOf(editingRule?.sourceIp ?: "") }
+    var destIp by remember(editingRule) { mutableStateOf(editingRule?.destIp ?: "") }
+    var action by remember(editingRule) { mutableStateOf(editingRule?.action ?: "drop") }
+    var priority by remember(editingRule) { mutableStateOf((editingRule?.priority ?: 100).toString()) }
 
     // Dropdown states
     var directionExpanded by remember { mutableStateOf(false) }
@@ -1537,7 +1761,7 @@ private fun AddFirewallRuleDialog(
         shape = RoundedCornerShape(16.dp),
         title = {
             Text(
-                text = "Firewall Kurali Ekle",
+                text = if (isEditing) "Kural Duzenle" else "Firewall Kurali Ekle",
                 color = colors.neonCyan,
                 fontWeight = FontWeight.Bold,
             )
@@ -1684,24 +1908,39 @@ private fun AddFirewallRuleDialog(
                         )
                     }
                 }
+
+                // Priority field
+                OutlinedTextField(
+                    value = priority,
+                    onValueChange = { priority = it.filter { c -> c.isDigit() } },
+                    label = { Text("Oncelik", color = colors.neonCyan.copy(alpha = 0.7f)) },
+                    placeholder = { Text("100", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = cyberpunkTextFieldColors(),
+                )
             }
         },
         confirmButton = {
             Button(
                 onClick = {
                     if (name.isNotBlank()) {
-                        onCreate(
-                            FirewallRuleCreateDto(
-                                name = name.trim(),
-                                direction = direction,
-                                protocol = protocol,
-                                port = port.ifBlank { null },
-                                sourceIp = sourceIp.ifBlank { null },
-                                destIp = destIp.ifBlank { null },
-                                action = action,
-                                enabled = true,
-                            )
+                        val dto = FirewallRuleCreateDto(
+                            name = name.trim(),
+                            direction = direction,
+                            protocol = protocol,
+                            port = port.ifBlank { null },
+                            sourceIp = sourceIp.ifBlank { null },
+                            destIp = destIp.ifBlank { null },
+                            action = action,
+                            enabled = editingRule?.enabled ?: true,
+                            priority = priority.toIntOrNull() ?: 100,
                         )
+                        if (isEditing && editingRule != null) {
+                            onUpdate(editingRule.id, dto)
+                        } else {
+                            onCreate(dto)
+                        }
                     }
                 },
                 enabled = name.isNotBlank(),
@@ -1713,7 +1952,7 @@ private fun AddFirewallRuleDialog(
                 ),
                 shape = RoundedCornerShape(8.dp),
             ) {
-                Text("Ekle", fontWeight = FontWeight.Bold)
+                Text(if (isEditing) "Guncelle" else "Ekle", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -1784,6 +2023,7 @@ private fun VpnPeerConfigDialog(
     onDismiss: () -> Unit,
 ) {
     val colors = CyberpunkTheme.colors
+    val context = LocalContext.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1863,8 +2103,30 @@ private fun VpnPeerConfigDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Kapat", color = colors.neonCyan)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (config != null) {
+                    TextButton(
+                        onClick = {
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                putExtra(Intent.EXTRA_TEXT, config.configText)
+                                type = "text/plain"
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "WireGuard Config"))
+                        },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Share,
+                            contentDescription = "Paylas",
+                            tint = colors.neonMagenta,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Paylas", color = colors.neonMagenta)
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Kapat", color = colors.neonCyan)
+                }
             }
         },
     )
