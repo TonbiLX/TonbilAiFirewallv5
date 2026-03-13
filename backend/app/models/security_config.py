@@ -46,6 +46,15 @@ class SecurityConfig(Base):
     ddos_alert_invalid_packet = Column(Integer, default=100)
     ddos_alert_cooldown_sec = Column(Integer, default=1800)
 
+    # --- DNS Guvenlik Katmanlari (Kritik 1-2-3) ---
+    dnssec_enabled = Column(Boolean, default=True)
+    dnssec_mode = Column(String(20), default="log_only")  # log_only, enforce
+    dns_tunneling_enabled = Column(Boolean, default=True)
+    dns_tunneling_max_subdomain_len = Column(Integer, default=50)
+    dns_tunneling_max_labels_per_min = Column(Integer, default=100)
+    dns_tunneling_txt_ratio_threshold = Column(Integer, default=30)  # yuzde
+    doh_enabled = Column(Boolean, default=True)
+
     # --- DNS Fingerprint (dns_fingerprint.py) ---
     fingerprint_ttl = Column(Integer, default=3600)
     fingerprint_min_matches = Column(Integer, default=1)

@@ -52,6 +52,14 @@ DEFAULTS = {
     "fingerprint_ttl": 3600,
     "fingerprint_min_matches": 1,
     "fingerprint_update_cooldown": 300,
+    # DNS Guvenlik Katmanlari (Kritik 1-2-3)
+    "dnssec_enabled": True,
+    "dnssec_mode": "log_only",
+    "dns_tunneling_enabled": True,
+    "dns_tunneling_max_subdomain_len": 50,
+    "dns_tunneling_max_labels_per_min": 100,
+    "dns_tunneling_txt_ratio_threshold": 30,
+    "doh_enabled": True,
 }
 
 

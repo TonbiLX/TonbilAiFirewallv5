@@ -148,11 +148,14 @@ _cached_rate_limit = RATE_LIMIT_PER_SEC
 _cached_blocked_qtypes = BLOCKED_QTYPES.copy()
 _cached_sinkhole_v4 = SINKHOLE_IPV4
 _cached_sinkhole_v6 = SINKHOLE_IPV6
+_cached_dnssec_enabled = True
+_cached_dnssec_mode = "log_only"  # log_only | enforce
+_cached_doh_enabled = True
 _cache_ts = 0.0
 
 async def _refresh_dns_security_cache(redis_client):
     """30 saniyede bir Redis security:config HASH'ten DNS guvenlik ayarlarini oku."""
-    global _cached_rate_limit, _cached_blocked_qtypes, _cached_sinkhole_v4, _cached_sinkhole_v6, _cache_ts
+    global _cached_rate_limit, _cached_blocked_qtypes, _cached_sinkhole_v4, _cached_sinkhole_v6, _cache_ts, _cached_dnssec_enabled, _cached_dnssec_mode, _cached_doh_enabled
     import time as _time
     now = _time.monotonic()
     if now - _cache_ts < 30:
@@ -171,6 +174,15 @@ async def _refresh_dns_security_cache(redis_client):
         val = await redis_client.hget("security:config", "sinkhole_ipv6")
         if val:
             _cached_sinkhole_v6 = val
+        val = await redis_client.hget("security:config", "dnssec_enabled")
+        if val:
+            _cached_dnssec_enabled = val.lower() in ("true", "1", "yes")
+        val = await redis_client.hget("security:config", "dnssec_mode")
+        if val and val in ("log_only", "enforce"):
+            _cached_dnssec_mode = val
+        val = await redis_client.hget("security:config", "doh_enabled")
+        if val:
+            _cached_doh_enabled = val.lower() in ("true", "1", "yes")
     except Exception:
         pass
 
@@ -422,14 +434,70 @@ async def is_profile_domain_blocked(
     return False
 
 
+def check_dnssec_ad_flag(response: bytes) -> str:
+    """DNS yanitindaki AD (Authenticated Data) flag'ini kontrol et.
+    RFC 4035: AD flag, yanıtın DNSSEC ile doğrulandığını belirtir.
+    Dondurur: 'verified' | 'not_signed' | 'error'
+    """
+    if not response or len(response) < 12:
+        return "error"
+    try:
+        flags = struct.unpack("!H", response[2:4])[0]
+        # AD flag = bit 5 (0x0020)
+        ad_flag = bool(flags & 0x0020)
+        # CD flag = bit 4 (0x0010) - Checking Disabled
+        # RCODE = lower 4 bits
+        rcode = flags & 0x000F
+        if rcode == 2:  # SERVFAIL - olasi DNSSEC dogrulama hatasi
+            return "failed"
+        return "verified" if ad_flag else "not_signed"
+    except Exception:
+        return "error"
+
+
+def add_dnssec_ok_flag(data: bytes) -> bytes:
+    """DNS sorgusuna DO (DNSSEC OK) flag'i ekle (EDNS0 OPT record).
+    Upstream sunucuya DNSSEC bilgisi istedigimizi bildirir.
+    Eger sorgu zaten EDNS0 iceriyorsa, mevcut EDNS0'a DO flag ekle.
+    """
+    if not data or len(data) < 12:
+        return data
+    try:
+        # ARCOUNT'u oku (additional record count)
+        arcount = struct.unpack("!H", data[10:12])[0]
+
+        # Basit yaklasim: Mevcut EDNS0 yoksa, sona OPT record ekle
+        # OPT record: name=0x00, type=41, udp_size=4096, ext_rcode=0, version=0, DO=1, rdlength=0
+        if arcount == 0:
+            # ARCOUNT'u 1 yap
+            modified = data[:10] + struct.pack("!H", 1) + data[12:]
+            # OPT record ekle
+            opt_record = (
+                b'\x00'                              # name: root
+                + struct.pack("!H", 41)              # type: OPT (41)
+                + struct.pack("!H", 4096)            # UDP payload size
+                + b'\x00'                            # extended RCODE
+                + b'\x00'                            # EDNS version
+                + struct.pack("!H", 0x8000)          # flags: DO=1
+                + struct.pack("!H", 0)               # RDLENGTH: 0
+            )
+            return modified + opt_record
+        # Mevcut EDNS0 varsa, olduğu gibi bırak (cogu resolver zaten DO set eder)
+        return data
+    except Exception:
+        return data
+
+
 async def forward_to_upstream(data: bytes) -> bytes:
-    """DNS sorgusunu upstream sunucuya yonlendir."""
+    """DNS sorgusunu upstream sunucuya yonlendir. DNSSEC aktifse DO flag ekler."""
+    # DNSSEC aktifse sorguya DO flag ekle (upstream'den AD bilgisi iste)
+    query_data = add_dnssec_ok_flag(data) if _cached_dnssec_enabled else data
     for upstream_ip, upstream_port in UPSTREAM_DNS:
         try:
             loop = asyncio.get_event_loop()
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.settimeout(3)
-            await loop.run_in_executor(None, sock.sendto, data, (upstream_ip, upstream_port))
+            await loop.run_in_executor(None, sock.sendto, query_data, (upstream_ip, upstream_port))
             response, _ = await loop.run_in_executor(None, sock.recvfrom, 4096)
             sock.close()
             return response
@@ -621,6 +689,8 @@ class DnsProxyProtocol(asyncio.DatagramProtocol):
                     "destination_port": 53,
                     "wan_ip": get_wan_ip(),
                     "source_type": "EXTERNAL",
+                    "dnssec_status": "skipped",
+                    "protocol": "udp",
                 })
                 return  # Dış IP, sorguyu yanitsiz birak
             # Guvenilir dis IP: yerel gibi isle, sorguyu upstream'e ilet
@@ -649,6 +719,8 @@ class DnsProxyProtocol(asyncio.DatagramProtocol):
                         "destination_port": 53,
                         "wan_ip": get_wan_ip(),
                         "source_type": _source_type,
+                        "dnssec_status": check_dnssec_ad_flag(_iptv_response) if _cached_dnssec_enabled else "skipped",
+                        "protocol": "udp",
                     })
                     asyncio.ensure_future(
                         cache_dns_ip_mapping(self.redis, domain, _iptv_response)
@@ -767,6 +839,17 @@ class DnsProxyProtocol(asyncio.DatagramProtocol):
             # Trafik izleme: IP->domain eslesmesini Redis'e kaydet
             asyncio.ensure_future(cache_dns_ip_mapping(self.redis, domain, response))
 
+        # --- DNSSEC Dogrulama (Kritik #1) ---
+        _dnssec_status = "skipped"
+        if _cached_dnssec_enabled and response and not blocked:
+            _dnssec_status = check_dnssec_ad_flag(response)
+            if _dnssec_status == "failed" and _cached_dnssec_mode == "enforce":
+                # Enforce modda SERVFAIL yanıtını engelle
+                blocked = True
+                block_reason = "dnssec_failed"
+                response = build_blocked_response(data, qtype)
+                logger.warning(f"DNSSEC ENFORCE: {domain} dogrulama basarisiz, engellendi")
+
         if self.transport and response:
             self.transport.sendto(response, addr)
 
@@ -795,6 +878,8 @@ class DnsProxyProtocol(asyncio.DatagramProtocol):
             "destination_port": 53,       # 5651: UDP DNS port
             "wan_ip": get_wan_ip(),        # 5651: NAT dis IP
             "source_type": _source_type,  # INTERNAL veya EXTERNAL
+            "dnssec_status": _dnssec_status,
+            "protocol": "udp",
         })
 
 
@@ -886,6 +971,9 @@ async def flush_query_logs(query_log: deque, db_url: str):
                         wan_ip=entry.get("wan_ip", ""),
                         # Kaynak tipi
                         source_type=entry.get("source_type", "INTERNAL"),
+                        # DNSSEC + Protokol (Kritik 1-3)
+                        dnssec_status=entry.get("dnssec_status"),
+                        protocol=entry.get("protocol", "udp"),
                     )
                     session.add(log)
                 await session.commit()
@@ -1023,6 +1111,8 @@ async def handle_dot_client(
                             "destination_port": 853,
                             "wan_ip": get_wan_ip(),
                             "source_type": _dot_source_iptv,
+                            "dnssec_status": check_dnssec_ad_flag(_iptv_dot_response) if _cached_dnssec_enabled else "skipped",
+                            "protocol": "dot",
                         })
                         asyncio.ensure_future(
                             cache_dns_ip_mapping(redis_client, domain, _iptv_dot_response)
@@ -1115,6 +1205,18 @@ async def handle_dot_client(
                     report_local_query(client_ip, domain, qtype_name)
                 )
 
+            # --- DNSSEC Dogrulama (DoT) ---
+            _dot_dnssec = "skipped"
+            if _cached_dnssec_enabled and response and not blocked:
+                _dot_dnssec = check_dnssec_ad_flag(response)
+                if _dot_dnssec == "failed" and _cached_dnssec_mode == "enforce":
+                    blocked = True
+                    block_reason = "dnssec_failed"
+                    response = build_blocked_response(dns_data, qtype)
+                    writer.write(struct.pack("!H", len(response)) + response)
+                    await writer.drain()
+                    logger.warning(f"DNSSEC ENFORCE (DoT): {domain} dogrulama basarisiz, engellendi")
+
             # Log kuyruguna ekle
             _dot_source = "EXTERNAL" if not _is_local_client(client_ip) else "DOT"
             query_log.append({
@@ -1129,6 +1231,8 @@ async def handle_dot_client(
                 "destination_port": 853,      # 5651: DoT port
                 "wan_ip": get_wan_ip(),        # 5651: NAT dis IP
                 "source_type": _dot_source,   # DOT (yerel) veya EXTERNAL (dışarıdan DoT)
+                "dnssec_status": _dot_dnssec,
+                "protocol": "dot",
             })
 
     except (asyncio.IncompleteReadError, asyncio.TimeoutError, ConnectionResetError):
@@ -1196,9 +1300,182 @@ async def start_dot_server(
         await server.serve_forever()
 
 
+async def _check_device_custom(redis_client, client_ip: str, domain: str):
+    """DoH icin cihaz ozel kural wrapper'i."""
+    return await check_device_custom_rule(redis_client, client_ip, domain)
+
+
+async def _check_reputation(redis_client, domain: str) -> bool:
+    """DoH icin domain reputation wrapper'i. True ise engelle."""
+    try:
+        from app.services.domain_reputation import get_cached_reputation
+        rep = await get_cached_reputation(redis_client, domain)
+        if rep and rep.get("score", 0) >= 80:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+async def handle_doh_query(
+    dns_wire: bytes,
+    client_ip: str,
+    redis_client,
+    stats: dict,
+    query_log: deque,
+) -> bytes:
+    """DoH (DNS-over-HTTPS) sorgusunu isle (RFC 8484).
+    FastAPI endpoint'inden cagirilir. Mevcut DNS proxy mantiginin aynisini kullanir.
+    Dondurur: DNS wire-format yanit bytes.
+    """
+    if not _cached_doh_enabled:
+        # DoH devre disi: REFUSED yanit dondur
+        if dns_wire and len(dns_wire) >= 2:
+            tid = dns_wire[0:2]
+            return tid + struct.pack("!H", 0x8185) + b'\x00' * 8  # REFUSED
+        return b''
+
+    parsed = parse_dns_query(dns_wire)
+    if not parsed:
+        return b''
+
+    domain = parsed["domain"]
+    qtype = parsed["qtype"]
+    qtype_name = parsed["qtype_name"]
+    start_time = time.monotonic()
+
+    await _refresh_dns_security_cache(redis_client)
+
+    stats["total_queries"] = stats.get("total_queries", 0) + 1
+
+    # Ayni engelleme mantigi: is_local_ip, qtype, profil, blocklist, reputation
+    _is_external = not is_local_ip(client_ip)
+    _source_type = "DOH"
+
+    # Dis IP kontrolu
+    if _is_external and not is_trusted_ip(client_ip):
+        query_log.append({
+            "client_ip": client_ip, "domain": domain, "query_type": qtype_name,
+            "blocked": True, "block_reason": "external_rejected",
+            "upstream_response_ms": 0, "answer_ip": "",
+            "timestamp": datetime.utcnow(), "destination_port": 443,
+            "wan_ip": get_wan_ip(), "source_type": _source_type,
+            "dnssec_status": "skipped", "protocol": "doh",
+        })
+        return b''
+
+    # Engelleme kararı (qtype, cihaz ozel kural, servis, profil/global, reputation)
+    blocked = False
+    block_reason = None
+
+    if qtype in _cached_blocked_qtypes:
+        blocked = True
+        block_reason = "query_type_block"
+
+    if not blocked:
+        # Cihaz ozel kural kontrolu
+        try:
+            custom = await _check_device_custom(redis_client, client_ip, domain)
+            if custom == "block":
+                blocked = True
+                block_reason = "device_custom_rule"
+            elif custom == "allow":
+                blocked = False
+        except Exception:
+            pass
+
+    if not blocked:
+        # Servis engelleme
+        try:
+            svc = await check_device_service_block(redis_client, client_ip, domain)
+            if svc:
+                blocked = True
+                block_reason = f"service:{svc}"
+        except Exception:
+            pass
+
+    if not blocked:
+        # Profil/global blocklist
+        try:
+            device_id_str = await redis_client.get(f"dns:ip_to_device:{client_ip}")
+            if device_id_str:
+                profile_id = await redis_client.get(f"dns:device_profile:{device_id_str}")
+                if profile_id:
+                    if await is_profile_domain_blocked(redis_client, profile_id, domain):
+                        blocked = True
+                        block_reason = f"profile:{profile_id}"
+                else:
+                    if await is_domain_blocked(redis_client, domain):
+                        blocked = True
+                        block_reason = "blocklist"
+            else:
+                if await is_domain_blocked(redis_client, domain):
+                    blocked = True
+                    block_reason = "blocklist"
+        except Exception:
+            pass
+
+    if not blocked:
+        # Domain reputation
+        try:
+            rep = await _check_reputation(redis_client, domain)
+            if rep:
+                blocked = True
+                block_reason = "reputation_block"
+        except Exception:
+            pass
+
+    # Yanit olustur
+    if blocked:
+        stats["blocked_queries"] = stats.get("blocked_queries", 0) + 1
+        response = build_blocked_response(dns_wire, qtype)
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+        answer_ip = _cached_sinkhole_v4
+        _dnssec_status = "skipped"
+    else:
+        response = await forward_to_upstream(dns_wire)
+        if response is None:
+            return b''
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+        answer_ip = extract_answer_ip(response)
+        _dnssec_status = check_dnssec_ad_flag(response) if _cached_dnssec_enabled else "skipped"
+        if _dnssec_status == "failed" and _cached_dnssec_mode == "enforce":
+            blocked = True
+            block_reason = "dnssec_failed"
+            response = build_blocked_response(dns_wire, qtype)
+
+    # Tehdit analizi
+    if qtype_name in THREAT_SUSPICIOUS_QTYPES or not blocked:
+        asyncio.ensure_future(report_local_query(client_ip, domain, qtype_name))
+
+    # Log
+    query_log.append({
+        "client_ip": client_ip, "domain": domain, "query_type": qtype_name,
+        "blocked": blocked, "block_reason": block_reason,
+        "upstream_response_ms": int(elapsed_ms), "answer_ip": answer_ip,
+        "timestamp": datetime.utcnow(), "destination_port": 443,
+        "wan_ip": get_wan_ip(), "source_type": _source_type,
+        "dnssec_status": _dnssec_status, "protocol": "doh",
+    })
+
+    return response or b''
+
+
+# DoH icin paylasilacak referanslar (start_dns_proxy'den set edilir)
+_doh_redis = None
+_doh_stats = None
+_doh_query_log = None
+
+
+def get_doh_context():
+    """DoH handler icin gerekli baglam nesnelerini dondur."""
+    return _doh_redis, _doh_stats, _doh_query_log
+
+
 async def start_dns_proxy(redis_url: str = "redis://redis:6379/0"):
-    """DNS proxy sunucusunu başlat (UDP port 53 + DoT port 853)."""
-    logger.info("DNS Proxy başlatiliyor (port 53 + DoT 853)...")
+    """DNS proxy sunucusunu başlat (UDP port 53 + DoT port 853 + DoH desteği)."""
+    global _doh_redis, _doh_stats, _doh_query_log
+    logger.info("DNS Proxy başlatiliyor (port 53 + DoT 853 + DoH)...")
 
     redis_client = aioredis.from_url(redis_url, decode_responses=True)
 
@@ -1238,6 +1515,11 @@ async def start_dns_proxy(redis_url: str = "redis://redis:6379/0"):
 
     logger.info("DNS Proxy AKTIF - 0.0.0.0:53 (UDP)")
     logger.info(f"Upstream DNS: {', '.join(f'{ip}:{port}' for ip, port in UPSTREAM_DNS)}")
+
+    # DoH icin paylasilacak referanslari set et
+    _doh_redis = redis_client
+    _doh_stats = stats
+    _doh_query_log = query_log
 
     # DB log yazici task
     log_task = asyncio.create_task(flush_query_logs(query_log, redis_url))

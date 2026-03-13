@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   ShieldAlert, Globe, Bell, ShieldCheck, Activity,
   Save, RefreshCw, RotateCcw, Trash2, Plus, Check,
+  Lock, Search, Shield,
 } from "lucide-react";
 import { GlassCard } from "../components/common/GlassCard";
 import { StatCard } from "../components/common/StatCard";
@@ -251,6 +252,15 @@ export function SecuritySettingsPage() {
           <span className={`px-2 py-1 rounded-full text-xs font-medium ${form.scan_pattern_enabled ? "bg-neon-green/20 text-neon-green border border-neon-green/30" : "bg-gray-700 text-gray-400 border border-gray-600"}`}>
             Tarama
           </span>
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${form.dnssec_enabled ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : "bg-gray-700 text-gray-400 border border-gray-600"}`}>
+            DNSSEC
+          </span>
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${form.dns_tunneling_enabled ? "bg-neon-magenta/20 text-neon-magenta border border-neon-magenta/30" : "bg-gray-700 text-gray-400 border border-gray-600"}`}>
+            Tunneling
+          </span>
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${form.doh_enabled ? "bg-neon-green/20 text-neon-green border border-neon-green/30" : "bg-gray-700 text-gray-400 border border-gray-600"}`}>
+            DoH
+          </span>
           {stats && (
             <span className="px-2 py-1 rounded-full text-xs font-medium bg-neon-red/20 text-neon-red border border-neon-red/30">
               {stats.blocked_ip_count} Engelli IP
@@ -423,6 +433,94 @@ export function SecuritySettingsPage() {
               <InputField label="Sinkhole IPv6" field="sinkhole_ipv6" type="text" />
             </div>
 
+            {/* DNSSEC Dogrulama */}
+            <div className="border-t border-glass-border pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Shield size={18} className="text-neon-cyan" />
+                <h3 className="text-sm font-semibold text-white">DNSSEC Doğrulama</h3>
+              </div>
+              <ToggleField
+                label="DNSSEC Doğrulama"
+                field="dnssec_enabled"
+                desc="Upstream DNS yanıtlarında AD (Authenticated Data) flag kontrolü"
+              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">DNSSEC Modu</label>
+                  <select
+                    value={(form.dnssec_mode as string) || "log_only"}
+                    onChange={(e) => updateForm("dnssec_mode", e.target.value)}
+                    className="w-full bg-black/30 border border-glass-border rounded-lg px-3 py-2 text-sm text-white focus:border-neon-cyan focus:outline-none"
+                  >
+                    <option value="log_only">Sadece Logla (log_only)</option>
+                    <option value="enforce">Zorla — Doğrulanamayan engelle (enforce)</option>
+                  </select>
+                  <p className="text-xs text-gray-600 mt-1">
+                    enforce: DNSSEC doğrulaması başarısız olan domainler engellenir
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* DNS Tunneling */}
+            <div className="border-t border-glass-border pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Search size={18} className="text-neon-magenta" />
+                <h3 className="text-sm font-semibold text-white">DNS Tunneling Tespiti</h3>
+              </div>
+              <ToggleField
+                label="DNS Tunneling Dedektörü"
+                field="dns_tunneling_enabled"
+                desc="DNS üzerinden veri kaçırma girişimlerini tespit eder (3 kural)"
+              />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                <InputField
+                  label="Maks Subdomain Uzunluğu"
+                  field="dns_tunneling_max_subdomain_len"
+                  min={20}
+                  max={200}
+                  suffix="karakter"
+                />
+                <InputField
+                  label="Maks Label/dk"
+                  field="dns_tunneling_max_labels_per_min"
+                  min={10}
+                  max={1000}
+                  suffix="label/dk"
+                />
+                <InputField
+                  label="TXT Sorgu Oranı Eşiği"
+                  field="dns_tunneling_txt_ratio_threshold"
+                  min={5}
+                  max={100}
+                  suffix="%"
+                />
+              </div>
+              <div className="mt-2 p-3 rounded-lg bg-black/20 text-xs text-gray-400 space-y-1">
+                <p><strong className="text-gray-300">Kural 1:</strong> Subdomain uzunluğu eşiği aşarsa → veri kaçırma şüphesi</p>
+                <p><strong className="text-gray-300">Kural 2:</strong> Dakikada benzersiz label sayısı eşiği aşarsa → otomatik subdomain üretimi</p>
+                <p><strong className="text-gray-300">Kural 3:</strong> TXT sorgu oranı eşiği aşarsa → DNS üzerinden veri kanalı</p>
+              </div>
+            </div>
+
+            {/* DNS-over-HTTPS */}
+            <div className="border-t border-glass-border pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Lock size={18} className="text-neon-green" />
+                <h3 className="text-sm font-semibold text-white">DNS-over-HTTPS (DoH)</h3>
+              </div>
+              <ToggleField
+                label="DoH Endpoint"
+                field="doh_enabled"
+                desc="RFC 8484 uyumlu DoH endpoint: /api/v1/doh/dns-query (GET+POST)"
+              />
+              <div className="mt-2 p-3 rounded-lg bg-black/20 text-xs text-gray-400">
+                <p>DoH etkinleştirildiğinde tarayıcılar ve uygulamalar şifreli DNS sorgusu gönderebilir.</p>
+                <p className="mt-1 font-mono text-neon-cyan/60">POST /api/v1/doh/dns-query (Content-Type: application/dns-message)</p>
+                <p className="font-mono text-neon-cyan/60">GET /api/v1/doh/dns-query?dns=&lt;base64url&gt;</p>
+              </div>
+            </div>
+
             <div className="flex justify-end pt-4">
               <button
                 onClick={() => handleSave({
@@ -430,6 +528,13 @@ export function SecuritySettingsPage() {
                   dns_blocked_qtypes: form.dns_blocked_qtypes,
                   sinkhole_ipv4: form.sinkhole_ipv4,
                   sinkhole_ipv6: form.sinkhole_ipv6,
+                  dnssec_enabled: form.dnssec_enabled,
+                  dnssec_mode: form.dnssec_mode,
+                  dns_tunneling_enabled: form.dns_tunneling_enabled,
+                  dns_tunneling_max_subdomain_len: form.dns_tunneling_max_subdomain_len,
+                  dns_tunneling_max_labels_per_min: form.dns_tunneling_max_labels_per_min,
+                  dns_tunneling_txt_ratio_threshold: form.dns_tunneling_txt_ratio_threshold,
+                  doh_enabled: form.doh_enabled,
                 })}
                 disabled={saving}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/30 hover:bg-neon-cyan/20 transition-colors disabled:opacity-50"

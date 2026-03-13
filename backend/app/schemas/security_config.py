@@ -47,6 +47,15 @@ class SecurityConfigResponse(BaseModel):
     fingerprint_min_matches: int
     fingerprint_update_cooldown: int
 
+    # DNS Guvenlik Katmanlari (Kritik 1-2-3)
+    dnssec_enabled: bool = True
+    dnssec_mode: str = "log_only"
+    dns_tunneling_enabled: bool = True
+    dns_tunneling_max_subdomain_len: int = 50
+    dns_tunneling_max_labels_per_min: int = 100
+    dns_tunneling_txt_ratio_threshold: int = 30
+    doh_enabled: bool = True
+
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -94,6 +103,15 @@ class SecurityConfigUpdate(BaseModel):
     fingerprint_ttl: Optional[int] = None
     fingerprint_min_matches: Optional[int] = None
     fingerprint_update_cooldown: Optional[int] = None
+
+    # DNS Guvenlik Katmanlari (Kritik 1-2-3)
+    dnssec_enabled: Optional[bool] = None
+    dnssec_mode: Optional[str] = None
+    dns_tunneling_enabled: Optional[bool] = None
+    dns_tunneling_max_subdomain_len: Optional[int] = None
+    dns_tunneling_max_labels_per_min: Optional[int] = None
+    dns_tunneling_txt_ratio_threshold: Optional[int] = None
+    doh_enabled: Optional[bool] = None
 
 
 class SecurityStatsResponse(BaseModel):

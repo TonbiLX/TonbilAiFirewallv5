@@ -27,5 +27,11 @@ class DnsQueryLog(Base):
     destination_port = Column(Integer, nullable=True)        # Hedef port (DNS=53, DoT=853)
     wan_ip = Column(String(45), nullable=True)               # Dış IP (NAT ceviri için)
 
-    # Kaynak tipi: INTERNAL (yerel LAN), EXTERNAL (dışarıdan gelen), DOT (DNS-over-TLS)
+    # Kaynak tipi: INTERNAL (yerel LAN), EXTERNAL (dışarıdan gelen), DOT (DNS-over-TLS), DOH (DNS-over-HTTPS)
     source_type = Column(String(20), nullable=True, default="INTERNAL", index=True)
+
+    # DNSSEC dogrulama durumu: verified, not_signed, failed, error, skipped
+    dnssec_status = Column(String(20), nullable=True)
+
+    # DNS protokolü: udp, dot, doh
+    protocol = Column(String(10), nullable=True, default="udp")

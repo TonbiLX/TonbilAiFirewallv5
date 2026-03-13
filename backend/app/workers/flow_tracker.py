@@ -20,6 +20,10 @@ from app.models.connection_flow import ConnectionFlow
 from app.services.timezone_service import now_local
 
 from sqlalchemy import select, and_, update, text
+try:
+    from sqlalchemy.exc import StaleDataError
+except ImportError:
+    StaleDataError = Exception
 
 logger = logging.getLogger("tonbilai.flow_tracker")
 
@@ -622,87 +626,101 @@ async def _update_redis_flows(current_flows: dict[str, dict],
 
 
 async def _sync_to_db(current_flows: dict[str, dict]):
-    """Aktif flow'lari MariaDB'ye upsert et, bitmisleri isaretle."""
+    """Aktif flow'lari MariaDB'ye upsert et, bitmisleri isaretle.
+
+    MySQL INSERT ... ON DUPLICATE KEY UPDATE kullanilarak atomik upsert yapilir.
+    Bu yaklasim concurrent erisimde StaleDataError / "Record has changed" hatasini onler.
+    flow_id sutununda UNIQUE INDEX olmasi gerekir.
+    """
     now = now_local()
+
+    if not current_flows:
+        return
 
     try:
         async with async_session_factory() as session:
-            # 1. Mevcut aktif flow'lari DB'den al
-            active_flow_ids = list(current_flows.keys())
+            # Her flow icin MySQL upsert — SELECT+UPDATE yerine tek atomik sorgu
+            for fid, flow in current_flows.items():
+                try:
+                    await session.execute(
+                        text("""
+                            INSERT INTO connection_flows
+                                (flow_id, device_id, dst_device_id,
+                                 src_ip, src_port, dst_ip, dst_port,
+                                 dst_domain, protocol, state, direction,
+                                 bytes_sent, bytes_received,
+                                 packets_sent, packets_received,
+                                 category, first_seen, last_seen)
+                            VALUES
+                                (:flow_id, :device_id, :dst_device_id,
+                                 :src_ip, :src_port, :dst_ip, :dst_port,
+                                 :dst_domain, :protocol, :state, :direction,
+                                 :bytes_sent, :bytes_received,
+                                 :packets_sent, :packets_received,
+                                 :category, :now, :now)
+                            ON DUPLICATE KEY UPDATE
+                                bytes_sent      = VALUES(bytes_sent),
+                                bytes_received  = VALUES(bytes_received),
+                                packets_sent    = VALUES(packets_sent),
+                                packets_received = VALUES(packets_received),
+                                state           = VALUES(state),
+                                dst_domain      = COALESCE(VALUES(dst_domain), dst_domain),
+                                category        = VALUES(category),
+                                direction       = VALUES(direction),
+                                dst_device_id   = VALUES(dst_device_id),
+                                last_seen       = VALUES(last_seen)
+                        """),
+                        {
+                            "flow_id":          fid,
+                            "device_id":        flow.get("device_id"),
+                            "dst_device_id":    flow.get("dst_device_id"),
+                            "src_ip":           flow["src_ip"],
+                            "src_port":         flow["src_port"],
+                            "dst_ip":           flow["dst_ip"],
+                            "dst_port":         flow["dst_port"],
+                            "dst_domain":       flow.get("dst_domain"),
+                            "protocol":         flow["protocol"],
+                            "state":            flow.get("state"),
+                            "direction":        flow.get("direction"),
+                            "bytes_sent":       flow["bytes_sent"],
+                            "bytes_received":   flow["bytes_received"],
+                            "packets_sent":     flow["packets_sent"],
+                            "packets_received": flow["packets_received"],
+                            "category":         flow.get("category"),
+                            "now":              now,
+                        },
+                    )
+                except StaleDataError:
+                    # Concurrent sync sirasinda baska bir session ayni satiri degistirdiyse
+                    # bu flow'u atla — bir sonraki sync dongusunde tekrar denenecek
+                    logger.debug(f"StaleDataError atlatildi (flow_id={fid}), sonraki sync'e ertelendi")
+                    await session.rollback()
+                    continue
+                except Exception as flow_err:
+                    logger.warning(f"Flow upsert hatasi (flow_id={fid}): {flow_err}")
+                    # Tek flow hatasi tum sync'i durdurmasin
+                    continue
 
-            if active_flow_ids:
-                result = await session.execute(
-                    select(ConnectionFlow.id, ConnectionFlow.flow_id)
+            # Bitmis flow'lari isaretle: son _STALE_TIMEOUT sn'de guncellenmeyenler
+            stale_cutoff = now - timedelta(seconds=_STALE_TIMEOUT)
+            try:
+                await session.execute(
+                    update(ConnectionFlow)
                     .where(
                         and_(
-                            ConnectionFlow.flow_id.in_(active_flow_ids),
                             ConnectionFlow.ended_at.is_(None),
+                            ConnectionFlow.last_seen < stale_cutoff,
                         )
                     )
+                    .values(ended_at=now)
+                    .execution_options(synchronize_session=False)
                 )
-                existing = {row[1]: row[0] for row in result.all()}
-            else:
-                existing = {}
-
-            # 2. Mevcut flow'lari guncelle, yenilerini ekle
-            for fid, flow in current_flows.items():
-                if fid in existing:
-                    # UPDATE
-                    await session.execute(
-                        update(ConnectionFlow)
-                        .where(ConnectionFlow.id == existing[fid])
-                        .values(
-                            bytes_sent=flow["bytes_sent"],
-                            bytes_received=flow["bytes_received"],
-                            packets_sent=flow["packets_sent"],
-                            packets_received=flow["packets_received"],
-                            state=flow.get("state"),
-                            dst_domain=flow.get("dst_domain") or ConnectionFlow.dst_domain,
-                            category=flow.get("category"),
-                            direction=flow.get("direction"),
-                            dst_device_id=flow.get("dst_device_id"),
-                            last_seen=now,
-                        )
-                    )
-                else:
-                    # INSERT
-                    session.add(ConnectionFlow(
-                        flow_id=fid,
-                        device_id=flow.get("device_id"),
-                        dst_device_id=flow.get("dst_device_id"),
-                        src_ip=flow["src_ip"],
-                        src_port=flow["src_port"],
-                        dst_ip=flow["dst_ip"],
-                        dst_port=flow["dst_port"],
-                        dst_domain=flow.get("dst_domain"),
-                        protocol=flow["protocol"],
-                        state=flow.get("state"),
-                        direction=flow.get("direction"),
-                        bytes_sent=flow["bytes_sent"],
-                        bytes_received=flow["bytes_received"],
-                        packets_sent=flow["packets_sent"],
-                        packets_received=flow["packets_received"],
-                        category=flow.get("category"),
-                        first_seen=now,
-                        last_seen=now,
-                    ))
-
-            # 3. Bitmis flow'lari isaretle
-            # Son 2 dakikada conntrack'te gorulmeyen aktif flow'lar
-            stale_cutoff = now - timedelta(seconds=_STALE_TIMEOUT)
-            await session.execute(
-                update(ConnectionFlow)
-                .where(
-                    and_(
-                        ConnectionFlow.ended_at.is_(None),
-                        ConnectionFlow.last_seen < stale_cutoff,
-                    )
-                )
-                .values(ended_at=now)
-            )
+            except StaleDataError:
+                logger.debug("Stale flow isaretlemede StaleDataError, atlatildi")
+                await session.rollback()
 
             await session.commit()
-            logger.debug(f"DB sync: {len(current_flows)} flow guncellendi/eklendi")
+            logger.debug(f"DB sync: {len(current_flows)} flow upsert edildi")
 
     except Exception as e:
         logger.error(f"DB flow sync hatasi: {e}", exc_info=True)

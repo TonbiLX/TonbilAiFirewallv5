@@ -9,7 +9,7 @@ from app.api.v1 import (
     services, system_logs, system_time, telegram,
     ip_management, system_monitor, device_custom_rules,
     ai_settings, ddos, system_management, security_settings,
-    ip_reputation, push,
+    ip_reputation, push, doh,
 )
 
 api_v1_router = APIRouter()
@@ -42,4 +42,5 @@ api_v1_router.include_router(wifi.router, prefix="/wifi", tags=["WiFi AP"])
 api_v1_router.include_router(security_settings.router, prefix="/security", tags=["Güvenlik Ayarları"])
 api_v1_router.include_router(ip_reputation.router, prefix="/ip-reputation", tags=["IP İtibar"])
 api_v1_router.include_router(push.router, prefix="/push", tags=["Push Bildirimler"])
+api_v1_router.include_router(doh.router, prefix="/doh", tags=["DNS-over-HTTPS"])
 api_v1_router.include_router(ws.router, tags=["WebSocket"])

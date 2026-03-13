@@ -4,7 +4,7 @@
 // Yeni: source_type badge (INTERNAL/EXTERNAL/DOT), block_reason gösterimi
 
 import { useState } from "react";
-import { Ban, CheckCircle, ShieldBan, Globe, Wifi, Lock } from "lucide-react";
+import { Ban, CheckCircle, ShieldBan, Globe, Wifi, Lock, ShieldCheck, ShieldAlert, ShieldOff } from "lucide-react";
 import { GlassCard } from "../common/GlassCard";
 import { NeonBadge } from "../common/NeonBadge";
 import type { DnsQueryLog } from "../../types";
@@ -24,6 +24,7 @@ const BLOCK_REASON_LABELS: Record<string, string> = {
   query_type_block: "Sorgu tipi yasak",
   reputation_block: "Düşük itibar",
   external_rejected: "Dış IP reddedildi",
+  dnssec_failed: "DNSSEC doğrulama başarısız",
 };
 
 function getBlockReasonLabel(reason: string | null): string {
@@ -58,9 +59,59 @@ function SourceBadge({ sourceType }: { sourceType: string | null }) {
       </span>
     );
   }
+  if (sourceType === "DOH") {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-neon-green/10 text-neon-green border border-neon-green/20">
+        <Lock size={10} />
+        DoH
+      </span>
+    );
+  }
   return (
     <span className="text-xs text-gray-500">{sourceType}</span>
   );
+}
+
+function DnssecBadge({ status }: { status: string | null }) {
+  if (!status || status === "skipped") {
+    return <span className="text-xs text-gray-600">-</span>;
+  }
+  if (status === "verified") {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-neon-green/10 text-neon-green border border-neon-green/20">
+        <ShieldCheck size={10} />
+        DNSSEC
+      </span>
+    );
+  }
+  if (status === "not_signed") {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-gray-700/50 text-gray-400 border border-gray-600/30">
+        <ShieldOff size={10} />
+        imzasız
+      </span>
+    );
+  }
+  // failed / error
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-neon-red/10 text-neon-red border border-neon-red/20">
+      <ShieldAlert size={10} />
+      {status === "failed" ? "başarısız" : "hata"}
+    </span>
+  );
+}
+
+function ProtocolBadge({ protocol }: { protocol: string | null }) {
+  if (!protocol || protocol === "udp") {
+    return <span className="text-xs text-gray-500 font-mono">UDP</span>;
+  }
+  if (protocol === "dot") {
+    return <span className="text-xs text-neon-magenta font-mono">DoT</span>;
+  }
+  if (protocol === "doh") {
+    return <span className="text-xs text-neon-green font-mono">DoH</span>;
+  }
+  return <span className="text-xs text-gray-500 font-mono">{protocol.toUpperCase()}</span>;
 }
 
 export function DnsQueryTable({
@@ -95,6 +146,8 @@ export function DnsQueryTable({
               <th className="pb-3 pr-4">Domain</th>
               <th className="pb-3 pr-4">Tip</th>
               <th className="pb-3 pr-4">Durum</th>
+              <th className="pb-3 pr-4">DNSSEC</th>
+              <th className="pb-3 pr-4">Protokol</th>
               <th className="pb-3 pr-4">Sebep / Yanıt</th>
               <th className="pb-3 text-right">İşlem</th>
             </tr>
@@ -102,7 +155,7 @@ export function DnsQueryTable({
           <tbody>
             {queries.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-gray-500">
+                <td colSpan={10} className="py-8 text-center text-gray-500">
                   Kayıt bulunamadı.
                 </td>
               </tr>
@@ -141,6 +194,12 @@ export function DnsQueryTable({
                       label={q.blocked ? "ENGEL" : "IZIN"}
                       variant={q.blocked ? "red" : "green"}
                     />
+                  </td>
+                  <td className="py-2.5 pr-4">
+                    <DnssecBadge status={q.dnssec_status} />
+                  </td>
+                  <td className="py-2.5 pr-4">
+                    <ProtocolBadge protocol={q.protocol} />
                   </td>
                   <td className="py-2.5 pr-4 text-xs text-gray-400">
                     {q.blocked ? (

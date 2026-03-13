@@ -17,7 +17,9 @@ class DnsQueryLogResponse(BaseModel):
     block_reason: Optional[str] = None
     upstream_response_ms: Optional[int] = None
     answer_ip: Optional[str] = None
-    source_type: Optional[str] = "INTERNAL"   # INTERNAL / EXTERNAL / DOT
+    source_type: Optional[str] = "INTERNAL"   # INTERNAL / EXTERNAL / DOT / DOH
+    dnssec_status: Optional[str] = None        # verified / not_signed / failed / error / skipped
+    protocol: Optional[str] = "udp"            # udp / dot / doh
 
     class Config:
         from_attributes = True

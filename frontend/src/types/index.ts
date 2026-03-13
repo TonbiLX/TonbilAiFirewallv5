@@ -163,7 +163,9 @@ export interface DnsQueryLog {
   block_reason: string | null;
   upstream_response_ms: number | null;
   answer_ip: string | null;
-  source_type: string | null;  // INTERNAL | EXTERNAL | DOT
+  source_type: string | null;  // INTERNAL | EXTERNAL | DOT | DOH
+  dnssec_status: string | null;  // verified | not_signed | failed | error | skipped
+  protocol: string | null;  // udp | dot | doh
 }
 
 export interface DnsStats {
@@ -878,6 +880,14 @@ export interface SecurityConfig {
   fingerprint_ttl: number;
   fingerprint_min_matches: number;
   fingerprint_update_cooldown: number;
+  // DNS Guvenlik Katmanlari (Kritik 1-2-3)
+  dnssec_enabled: boolean;
+  dnssec_mode: string;  // log_only | enforce
+  dns_tunneling_enabled: boolean;
+  dns_tunneling_max_subdomain_len: number;
+  dns_tunneling_max_labels_per_min: number;
+  dns_tunneling_txt_ratio_threshold: number;
+  doh_enabled: boolean;
   created_at: string | null;
   updated_at: string | null;
 }

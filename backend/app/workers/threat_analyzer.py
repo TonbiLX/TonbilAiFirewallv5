@@ -965,6 +965,11 @@ async def report_local_query(
                 cooldown_key=f"dga:{client_ip}",
             )
 
+        # DNS Tunneling kontrolü (her sorguda — hafif Redis islemleri)
+        tunneling_on = await _get_sec_bool(redis, "dns_tunneling_enabled", True)
+        if tunneling_on:
+            await detect_dns_tunneling(client_ip, domain, qtype_name)
+
         # Domain reputation kontrolü (her 10 sorguda bir - performans için)
         if count % 10 == 1:
             try:
@@ -985,6 +990,141 @@ async def report_local_query(
                 pass
     except Exception as e:
         logger.debug(f"Yerel sorgu analiz hatasi: {e}")
+
+
+# --- DNS Tunneling Dedektörü (Kritik #2) ---
+
+# DNS Tunneling sabitleri (fallback — Redis hot-reload ile override edilir)
+TUNNELING_MAX_SUBDOMAIN_LEN = 50
+TUNNELING_MAX_LABELS_PER_MIN = 100
+TUNNELING_TXT_RATIO_THRESHOLD = 30  # yuzde
+
+
+async def detect_dns_tunneling(
+    client_ip: str, domain: str, qtype_name: str
+) -> bool:
+    """DNS tunneling tespiti (3 kural).
+    1) Subdomain uzunlugu esik ustu → muhtemel veri kacirma
+    2) Dakikada benzersiz label sayisi esik ustu → hizli subdomain uretimi
+    3) TXT sorgu orani esik ustu → veri kanali olarak TXT kullanimi
+
+    Returns: True ise tunneling tespit edildi.
+    """
+    try:
+        redis = await _get_redis()
+
+        # Hot-reload thresholds
+        tunneling_on = await _get_sec_bool(redis, "dns_tunneling_enabled", True)
+        if not tunneling_on:
+            return False
+
+        max_sub_len = await _get_sec_int(
+            redis, "dns_tunneling_max_subdomain_len", TUNNELING_MAX_SUBDOMAIN_LEN
+        )
+        max_labels = await _get_sec_int(
+            redis, "dns_tunneling_max_labels_per_min", TUNNELING_MAX_LABELS_PER_MIN
+        )
+        txt_ratio_thr = await _get_sec_int(
+            redis, "dns_tunneling_txt_ratio_threshold", TUNNELING_TXT_RATIO_THRESHOLD
+        )
+
+        detected = False
+        parts = domain.lower().split(".")
+        base_domain = ".".join(parts[-2:]) if len(parts) >= 2 else domain
+
+        # Kural 1: Subdomain uzunlugu kontrolu
+        # ornek: <encoded-data>.evil.com → <encoded-data> kismi cok uzunsa tunneling
+        if len(parts) > 2:
+            subdomain_part = ".".join(parts[:-2])
+            if len(subdomain_part) > max_sub_len:
+                detected = True
+                await _write_insight(
+                    severity=Severity.WARNING,
+                    message=(
+                        f"DNS Tunneling şüphesi (uzun subdomain): {client_ip} -> {domain} "
+                        f"(subdomain uzunlugu: {len(subdomain_part)}, esik: {max_sub_len}). "
+                        "Veri kacirma girisimi olabilir."
+                    ),
+                    suggested_action=(
+                        f"Cihazi (IP: {client_ip}) kontrol edin. "
+                        f"Base domain '{base_domain}' engellemeyi dusunun."
+                    ),
+                    category="tunneling",
+                    cooldown_key=f"tunneling:subdomain:{client_ip}:{base_domain}",
+                )
+
+        # Kural 2: Dakikada benzersiz label sayisi (ayni base domain icin)
+        label_key = f"dns:tunnel:labels:{client_ip}:{base_domain}"
+        # Her benzersiz subdomain'i set'e ekle
+        if len(parts) > 2:
+            subdomain_label = parts[0]  # En sol label
+            await redis.sadd(label_key, subdomain_label)
+            await redis.expire(label_key, 60)
+
+            label_count = await redis.scard(label_key)
+            if label_count >= max_labels:
+                detected = True
+                await _write_insight(
+                    severity=Severity.WARNING,
+                    message=(
+                        f"DNS Tunneling şüphesi (hizli subdomain uretimi): "
+                        f"{client_ip} -> {base_domain} "
+                        f"({label_count} benzersiz label/dk, esik: {max_labels}). "
+                        "Otomatik subdomain generasyonu tespit edildi."
+                    ),
+                    suggested_action=(
+                        f"Bu cihazda (IP: {client_ip}) malware taramas yapin. "
+                        f"'{base_domain}' domain'i engellenmeli."
+                    ),
+                    category="tunneling",
+                    cooldown_key=f"tunneling:labels:{client_ip}:{base_domain}",
+                )
+
+        # Kural 3: TXT sorgu orani
+        txt_total_key = f"dns:tunnel:txt_ratio:{client_ip}"
+        if qtype_name == "TXT":
+            await redis.hincrby(txt_total_key, "txt", 1)
+        await redis.hincrby(txt_total_key, "total", 1)
+        await redis.expire(txt_total_key, 300)  # 5 dk pencere
+
+        txt_count = int(await redis.hget(txt_total_key, "txt") or 0)
+        total_count = int(await redis.hget(txt_total_key, "total") or 0)
+        if total_count >= 20:  # Minimum 20 sorgu sonrasi oran kontrolu
+            txt_pct = (txt_count * 100) // total_count
+            if txt_pct >= txt_ratio_thr:
+                detected = True
+                await _write_insight(
+                    severity=Severity.WARNING,
+                    message=(
+                        f"DNS Tunneling şüphesi (yuksek TXT orani): "
+                        f"{client_ip} -> TXT sorgu orani %{txt_pct} "
+                        f"(esik: %{txt_ratio_thr}, {txt_count}/{total_count} sorgu). "
+                        "DNS uzerinden veri kanali olusturulmus olabilir."
+                    ),
+                    suggested_action=(
+                        f"Cihazi (IP: {client_ip}) inceleyin. "
+                        "TXT sorgularinin hedef domainlerini kontrol edin."
+                    ),
+                    category="tunneling",
+                    cooldown_key=f"tunneling:txt:{client_ip}",
+                )
+
+        # Tespit edildiyse tehdit istatistigini guncelle + Telegram
+        if detected:
+            await redis.hincrby("dns:threat:stats", "total_tunneling", 1)
+            try:
+                await notify_ai_insight(
+                    f"DNS Tunneling Tespiti: {client_ip} → {domain} "
+                    f"(qtype: {qtype_name})"
+                )
+            except Exception:
+                pass
+
+        return detected
+
+    except Exception as e:
+        logger.debug(f"DNS tunneling tespit hatasi: {e}")
+        return False
 
 
 # --- Cihaz Risk Degerlendirme (Faz 4) ---

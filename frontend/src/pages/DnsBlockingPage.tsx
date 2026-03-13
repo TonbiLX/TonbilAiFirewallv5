@@ -53,7 +53,7 @@ import { fetchDevices, blockDevice } from "../services/deviceApi";
 import type { Blocklist, BlocklistRefreshResult, BulkRefreshResult } from "../types";
 
 type Tab = "overview" | "blocklists" | "rules" | "device_rules" | "queries";
-type QueryFilter = "all" | "blocked" | "allowed" | "external" | "dot";
+type QueryFilter = "all" | "blocked" | "allowed" | "external" | "dot" | "doh";
 
 const tabs: { key: Tab; label: string; icon: typeof ShieldBan }[] = [
   { key: "overview", label: "Genel Bakış", icon: ShieldBan },
@@ -142,6 +142,7 @@ export function DnsBlockingPage() {
       else if (filter === "allowed") params = { ...params };
       else if (filter === "external") params = { ...params, source_type: "EXTERNAL" };
       else if (filter === "dot") params = { ...params, source_type: "DOT" };
+      else if (filter === "doh") params = { ...params, source_type: "DOH" };
 
       const q = await fetchDnsQueries(params);
 
@@ -707,6 +708,7 @@ export function DnsBlockingPage() {
                   { key: "allowed", label: "İzin Verilen" },
                   { key: "external", label: "Dışarıdan Gelen", icon: Globe },
                   { key: "dot", label: "DNS-over-TLS" },
+                  { key: "doh", label: "DNS-over-HTTPS" },
                 ] as Array<{ key: QueryFilter; label: string; icon?: typeof Globe }>
               ).map((f) => (
                 <button
