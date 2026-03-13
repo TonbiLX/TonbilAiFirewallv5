@@ -81,11 +81,40 @@ fun DhcpScreen(
         }
     }
 
+    var deleteConfirmMac by remember { mutableStateOf<String?>(null) }
+
     if (uiState.showAddLeaseDialog) {
         AddStaticLeaseDialog(
             onDismiss = { viewModel.hideAddLeaseDialog() },
             onConfirm = { mac, ip, hostname -> viewModel.addStaticLease(mac, ip, hostname) },
             colors = colors,
+        )
+    }
+
+    if (deleteConfirmMac != null) {
+        AlertDialog(
+            onDismissRequest = { deleteConfirmMac = null },
+            containerColor = DarkSurface,
+            title = { Text("Statik Lease Sil", color = colors.neonCyan, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "${deleteConfirmMac} MAC adresli statik atama silinecek.",
+                    color = colors.neonAmber,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deleteConfirmMac?.let { viewModel.deleteLease(it) }
+                        deleteConfirmMac = null
+                    },
+                ) { Text("Sil", color = colors.neonRed) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteConfirmMac = null }) {
+                    Text("Vazgec", color = TextSecondary)
+                }
+            },
         )
     }
 
@@ -216,7 +245,7 @@ fun DhcpScreen(
                         items(uiState.leases, key = { it.macAddress }) { lease ->
                             LeaseCard(
                                 lease = lease,
-                                onDelete = { viewModel.deleteLease(lease.macAddress) },
+                                onDelete = { deleteConfirmMac = lease.macAddress },
                                 colors = colors,
                             )
                         }
@@ -386,6 +415,8 @@ private fun AddStaticLeaseDialog(
     var mac by remember { mutableStateOf("") }
     var ip by remember { mutableStateOf("") }
     var hostname by remember { mutableStateOf("") }
+    val macRegex = Regex("^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
+    val isMacValid = mac.isEmpty() || macRegex.matches(mac)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -398,6 +429,12 @@ private fun AddStaticLeaseDialog(
                     onValueChange = { mac = it },
                     label = { Text("MAC Adresi", color = TextSecondary) },
                     singleLine = true,
+                    isError = mac.isNotEmpty() && !isMacValid,
+                    supportingText = {
+                        if (mac.isNotEmpty() && !isMacValid) {
+                            Text("Gecersiz MAC. Ornek: AA:BB:CC:DD:EE:FF", color = colors.neonRed, fontSize = 11.sp)
+                        }
+                    },
                     placeholder = { Text("AA:BB:CC:DD:EE:FF", color = TextSecondary.copy(alpha = 0.5f)) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = colors.neonCyan,
@@ -406,6 +443,8 @@ private fun AddStaticLeaseDialog(
                         cursorColor = colors.neonCyan,
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary,
+                        errorBorderColor = colors.neonRed,
+                        errorLabelColor = colors.neonRed,
                     ),
                 )
                 OutlinedTextField(
@@ -442,11 +481,11 @@ private fun AddStaticLeaseDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (mac.isNotBlank() && ip.isNotBlank()) {
+                    if (mac.isNotBlank() && ip.isNotBlank() && isMacValid) {
                         onConfirm(mac.trim(), ip.trim(), hostname.ifBlank { null })
                     }
                 },
-                enabled = mac.isNotBlank() && ip.isNotBlank(),
+                enabled = mac.isNotBlank() && ip.isNotBlank() && isMacValid,
                 colors = ButtonDefaults.buttonColors(containerColor = colors.neonCyan),
             ) { Text("Ekle", color = Color.Black) }
         },

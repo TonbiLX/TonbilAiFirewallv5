@@ -197,6 +197,45 @@ fun SecuritySettingsScreen(
                         SecurityStatsCard(stats = uiState.stats, colors = colors)
                     }
 
+                    // Save + Reload buttons
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Button(
+                                onClick = {
+                                    viewModel.updateConfig(
+                                        com.tonbil.aifirewall.data.remote.dto.SecurityConfigUpdateDto(
+                                            threatAnalysis = uiState.config.threatAnalysis,
+                                            dnsSecurity = uiState.config.dnsSecurity,
+                                            alertSettings = uiState.config.alertSettings,
+                                        )
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                enabled = !uiState.isSaving,
+                                colors = ButtonDefaults.buttonColors(containerColor = colors.neonCyan.copy(alpha = 0.2f)),
+                                shape = RoundedCornerShape(8.dp),
+                            ) {
+                                Icon(Icons.Outlined.Save, contentDescription = null, tint = colors.neonCyan)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Kaydet", color = colors.neonCyan, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = { viewModel.reloadConfig() },
+                                modifier = Modifier.weight(1f),
+                                enabled = !uiState.isSaving,
+                                colors = ButtonDefaults.buttonColors(containerColor = colors.neonAmber.copy(alpha = 0.2f)),
+                                shape = RoundedCornerShape(8.dp),
+                            ) {
+                                Icon(Icons.Outlined.Refresh, contentDescription = null, tint = colors.neonAmber)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Canli Yukle", color = colors.neonAmber, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
                     // Reset button
                     item {
                         Button(
