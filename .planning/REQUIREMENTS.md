@@ -76,16 +76,16 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Push Notifications
 
-- [ ] **NOTIF-01**: FCM push notification altyapisi — backend token kayit endpoint
-- [ ] **NOTIF-02**: Backend bildirim dispatch servisi (yeni cihaz, DDoS, DNS, VPN durum degisikligi)
-- [ ] **NOTIF-03**: Android bildirim kanallari (Guvenlik, Cihaz, Trafik, Sistem)
-- [ ] **NOTIF-04**: Bildirim ayarlari ekrani — kanal bazli ac/kapa
+- [x] **NOTIF-01**: FCM push notification altyapisi — backend token kayit endpoint
+- [x] **NOTIF-02**: Backend bildirim dispatch servisi (yeni cihaz, DDoS, DNS, VPN durum degisikligi)
+- [x] **NOTIF-03**: Android bildirim kanallari (Guvenlik, Cihaz, Trafik, Sistem)
+- [x] **NOTIF-04**: Bildirim ayarlari ekrani — kanal bazli ac/kapa
 
 ### AI Chat
 
-- [ ] **CHAT-01**: Mobil AI sohbet ekrani — mevcut /api/v1/chat endpoint kullanimi
-- [ ] **CHAT-02**: Mesaj gecmisi goruntuleme
-- [ ] **CHAT-03**: Yapilandirilmis yanit goruntuleme (JSON/tablo formati)
+- [x] **CHAT-01**: Mobil AI sohbet ekrani — mevcut /api/v1/chat endpoint kullanimi
+- [x] **CHAT-02**: Mesaj gecmisi goruntuleme
+- [x] **CHAT-03**: Yapilandirilmis yanit goruntuleme (JSON/tablo formati)
 
 ### Telegram
 
@@ -180,13 +180,13 @@ Deferred to future release.
 | TRAF-02 | Phase 12 | Complete |
 | TRAF-03 | Phase 12 | Complete |
 | TRAF-04 | Phase 12 | Complete |
-| NOTIF-01 | Phase 13 | Pending |
-| NOTIF-02 | Phase 13 | Pending |
-| NOTIF-03 | Phase 13 | Pending |
-| NOTIF-04 | Phase 13 | Pending |
-| CHAT-01 | Phase 13 | Pending |
-| CHAT-02 | Phase 13 | Pending |
-| CHAT-03 | Phase 13 | Pending |
+| NOTIF-01 | Phase 13 | Complete |
+| NOTIF-02 | Phase 13 | Complete |
+| NOTIF-03 | Phase 13 | Complete |
+| NOTIF-04 | Phase 13 | Complete |
+| CHAT-01 | Phase 13 | Complete |
+| CHAT-02 | Phase 13 | Complete |
+| CHAT-03 | Phase 13 | Complete |
 | TELE-01 | Phase 13 | Pending |
 | TELE-02 | Phase 13 | Pending |
 | WIFI-01 | Phase 13 | Pending |

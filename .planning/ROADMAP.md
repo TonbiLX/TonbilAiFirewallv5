@@ -173,7 +173,7 @@ Plans:
   3. Telegram bot token/chat ID yapilandirilabiliyor ve bildirim ayarlari degistirilebiliyor
   4. WiFi AP durumu gorulup SSID/sifre/kanal degistirilebiliyor ve AP acilip kapatilabiliyor
   5. DHCP havuz bilgileri ve statik IP atamalari goruntulenip yonetilebiliyor, guvenlik esik degerleri ayarlanip kaydedilebiliyor
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 13-01-PLAN.md — Push bildirim kanallari (4 kanal) + ChatBubble yapilandirilmis yanit render
 - [ ] 13-02-PLAN.md — Telegram, WiFi, DHCP, Guvenlik Ayarlari ekranlari dogrulama ve ince ayar
@@ -223,6 +223,6 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 10. DNS Filtering | 2/2 | Complete    | 2026-03-13 | - |
 | 11. Network Security | 2/2 | Complete    | 2026-03-13 | - |
 | 12. Traffic Monitoring | 1/1 | Complete    | 2026-03-13 | - |
-| 13. Communication & Config | v2.0 | 0/2 | Planning | - |
+| 13. Communication & Config | 1/2 | In Progress|  | - |
 | 14. Android Enhancements | v2.0 | 0/? | Not started | - |
 | 15. Release Build | v2.0 | 0/? | Not started | - |
