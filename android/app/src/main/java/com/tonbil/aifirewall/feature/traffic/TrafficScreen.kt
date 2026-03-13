@@ -42,6 +42,8 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -236,6 +238,8 @@ fun TrafficScreen(
                     2 -> HistoryTab(
                         history = uiState.history,
                         currentPage = uiState.historyPage,
+                        searchQuery = uiState.historySearchQuery,
+                        onSearchQueryChange = { viewModel.updateHistorySearchQuery(it) },
                         onPageChange = { viewModel.loadHistory(it) },
                     )
                     3 -> PerDeviceTab(devices = uiState.perDevice)
@@ -568,10 +572,30 @@ private fun LargeTransferCard(flow: LiveFlowDto) {
 private fun HistoryTab(
     history: TrafficHistoryDto?,
     currentPage: Int,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     onPageChange: (Int) -> Unit,
 ) {
     if (history == null || history.items.isEmpty()) {
-        EmptyState("Trafik gecmisi yok")
+        Column(modifier = Modifier.fillMaxSize()) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                placeholder = { Text("Domain veya IP ara...", color = TextSecondary, fontSize = 12.sp) },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = NeonCyan,
+                    unfocusedBorderColor = GlassBorder,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary,
+                    cursorColor = NeonCyan,
+                ),
+            )
+            EmptyState("Trafik gecmisi yok")
+        }
         return
     }
 
@@ -590,7 +614,34 @@ private fun HistoryTab(
         }
     }
 
+    // Domain/IP arama filtresi — lokal, anlık
+    val filteredItems = remember(sortedItems, searchQuery) {
+        if (searchQuery.isBlank()) sortedItems
+        else sortedItems.filter { item ->
+            (item.dstDomain?.contains(searchQuery, ignoreCase = true) == true) ||
+                item.dstIp.contains(searchQuery, ignoreCase = true) ||
+                item.srcIp.contains(searchQuery, ignoreCase = true)
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
+        // Arama kutusu
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            placeholder = { Text("Domain veya IP ara...", color = TextSecondary, fontSize = 12.sp) },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = NeonCyan,
+                unfocusedBorderColor = GlassBorder,
+                focusedTextColor = TextPrimary,
+                unfocusedTextColor = TextPrimary,
+                cursorColor = NeonCyan,
+            ),
+        )
         SortChipRow(
             options = listOf("time" to "Yeni Once", "time_asc" to "Eski Once", "bytes" to "Boyut \u2193", "domain" to "Hedef"),
             selected = sortKey,
@@ -601,7 +652,7 @@ private fun HistoryTab(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
         ) {
-            items(sortedItems) { item ->
+            items(filteredItems) { item ->
                 HistoryItemCard(item = item)
             }
         }

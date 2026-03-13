@@ -25,6 +25,7 @@ data class TrafficUiState(
     val error: String? = null,
     val selectedTab: Int = 0,
     val historyPage: Int = 1,
+    val historySearchQuery: String = "",
 )
 
 class TrafficViewModel(
@@ -122,5 +123,9 @@ class TrafficViewModel(
 
     fun selectTab(idx: Int) {
         _uiState.update { it.copy(selectedTab = idx) }
+    }
+
+    fun updateHistorySearchQuery(query: String) {
+        _uiState.update { it.copy(historySearchQuery = query) }
     }
 }
