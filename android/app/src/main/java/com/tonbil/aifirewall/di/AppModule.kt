@@ -54,6 +54,7 @@ import com.tonbil.aifirewall.feature.wifi.WifiViewModel
 import com.tonbil.aifirewall.feature.telegram.TelegramViewModel
 import com.tonbil.aifirewall.feature.chat.ChatViewModel
 import com.tonbil.aifirewall.feature.profiles.ProfilesViewModel
+import com.tonbil.aifirewall.feature.dnsfiltering.DnsFilteringViewModel
 import io.ktor.client.HttpClient
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
@@ -126,5 +127,6 @@ val featureModules = module {
     viewModelOf(::WifiViewModel)
     viewModelOf(::TelegramViewModel)
     viewModelOf(::ChatViewModel)
-    viewModelOf(::ProfilesViewModel)
+    viewModel { ProfilesViewModel(get<SecurityRepository>(), get<ContentCategoryRepository>()) }
+    viewModelOf(::DnsFilteringViewModel)
 }
