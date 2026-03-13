@@ -110,8 +110,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### UX Polish
 
-- [ ] **UX-01**: Haptic feedback — kritik uyarilarda titresim
-- [ ] **UX-02**: App shortcuts — uzun basma menusu (durum kontrol, cihaz engelle, AI chat)
+- [x] **UX-01**: Haptic feedback — kritik uyarilarda titresim
+- [x] **UX-02**: App shortcuts — uzun basma menusu (durum kontrol, cihaz engelle, AI chat)
 - [ ] **UX-03**: APK build — imzali release APK olusturma ve S24 Ultra'ya yukleme
 
 ## v2 Requirements
@@ -196,8 +196,8 @@ Deferred to future release.
 | DHCP-02 | Phase 13 | Complete |
 | SEC-01 | Phase 13 | Complete |
 | SEC-02 | Phase 13 | Complete |
-| UX-01 | Phase 14 | Pending |
-| UX-02 | Phase 14 | Pending |
+| UX-01 | Phase 14 | Complete |
+| UX-02 | Phase 14 | Complete |
 | UX-03 | Phase 15 | Pending |
 
 **Coverage:**

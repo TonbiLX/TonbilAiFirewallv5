@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TonbilAiOS Android App
 status: unknown
-last_updated: "2026-03-13T21:28:28.965Z"
+last_updated: "2026-03-13T21:34:32.135Z"
 last_activity: "2026-03-10 - Quick 29: WS security events + Android system notifications"
 progress:
   total_phases: 15
-  completed_phases: 13
+  completed_phases: 14
   total_plans: 23
-  completed_plans: 22
+  completed_plans: 23
   percent: 94
 ---
 
@@ -89,6 +89,7 @@ Progress: [██████░░░░] 40%
 | Phase 12-traffic-monitoring P01 | 16 | 2 tasks | 4 files |
 | Phase 13-communication-config P01 | 2 | 2 tasks | 3 files |
 | Phase 13-communication-config P02 | 5 | 2 tasks | 3 files |
+| Phase 14-android-enhancements P02 | 12 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -144,6 +145,8 @@ Progress: [██████░░░░] 40%
 - [Phase 14-android-enhancements]: Widget DataStore ayri 'tonbil_widget' adinda — server_config ile cakismiyor
 - [Phase 14-android-enhancements]: TileService ve Worker'larda Koin DI kullanmadan dogrudan HttpClient — bagimsiz surec guvenilirligi icin
 - [Phase 14-android-enhancements]: DNS QS tile: 4 alani birden toggle (dnssec+tunneling+doh+dga) — backend tek boolean sunmuyor
+- [Phase 14-android-enhancements]: HapticFeedbackConstants.REJECT critical icin, CONFIRM warning icin — izin gerektirmiyor
+- [Phase 14-android-enhancements]: navigate_to deep link: giris yapildiysa dogrudan hedef, giris yapilmamissa normal Login akisi
 
 ### Pending Todos
 
@@ -193,7 +196,7 @@ Progress: [██████░░░░] 40%
 
 ## Session Continuity
 
-Last session: 2026-03-13T21:28:22.399Z
+Last session: 2026-03-13T21:34:32.131Z
 Last activity: 2026-03-12 - Completed quick task 35: AI Insights sayfasi tam yeniden yazim
 Resume file: None
 Notes: |
