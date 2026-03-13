@@ -30,7 +30,7 @@
 - [ ] **Phase 7: Authentication** - JWT giris, biyometrik auth, token yonetimi, auto-discovery
 - [x] **Phase 8: Dashboard** - Ana dashboard ekrani, WebSocket canli veri, grafikler (completed 2026-03-06)
 - [ ] **Phase 9: Device Management** - Cihaz listesi, detay, engelleme, profil atama
-- [ ] **Phase 10: DNS Filtering** - DNS ozet, filtreleme toggle, kategoriler, profil yonetimi
+- [ ] **Phase 10: DNS Filtering** - DNS ozet, filtreleme toggle, kategoriler, profil yonetimi, guvenlik katmanlari
 - [ ] **Phase 11: Network Security** - Firewall kurallari, VPN peer yonetimi, DDoS koruma izleme
 - [ ] **Phase 12: Traffic Monitoring** - Canli akislar, buyuk transferler, gecmis, grafikler
 - [ ] **Phase 13: Communication & Config** - Push notifications, AI Chat, Telegram, WiFi AP, DHCP, Guvenlik ayarlari
@@ -123,7 +123,7 @@ Plans:
 - [ ] 09-02-PLAN.md — UI katmani: DevicesScreen (liste + block toggle + WS bandwidth), DeviceDetailScreen (3 tab + profil atama), AppNavHost wiring
 
 ### Phase 10: DNS Filtering
-**Goal**: Kullanici DNS filtreleme sistemini mobil uzerinden gorebiliyor ve yonetebiliyor — kategoriler, profiller, hizli toggle
+**Goal**: Kullanici DNS filtreleme sistemini mobil uzerinden gorebiliyor ve yonetebiliyor — kategoriler, profiller, hizli toggle, DNS guvenlik katmanlari (DNSSEC, Tunneling, DoH, DGA)
 **Depends on**: Phase 9
 **Requirements**: DNS-01, DNS-02, DNS-03, DNS-04
 **Success Criteria** (what must be TRUE):
@@ -131,7 +131,10 @@ Plans:
   2. Tek dokunusla DNS filtreleme acilip kapatilabiliyor
   3. Icerik kategorileri goruntulenebiliyor ve blocklist baglama yonetimi yapilabiliyor
   4. Profil olusturulabiliyor/duzenlenebiliyor — kategori secimi ve bandwidth limiti ayarlanabiliyor
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 10-01-PLAN.md — Veri katmani: DTO guncellemeleri (DNS guvenlik katmanlari, source type), DnsFilteringViewModel, ProfilesViewModel genisletmesi
+- [ ] 10-02-PLAN.md — UI katmani: DnsFilteringScreen (4-tab hub: Ozet, Kategoriler, Profiller, Guvenlik), ProfilesScreen content_filters, navigasyon wiring
 
 ### Phase 11: Network Security
 **Goal**: Kullanici firewall kurallarini, VPN peer'larini ve DDoS koruma durumunu mobil uzerinden yonetebiliyor
@@ -205,7 +208,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 7. Authentication | 1/2 | In Progress|  | - |
 | 8. Dashboard | 2/2 | Complete   | 2026-03-06 | - |
 | 9. Device Management | v2.0 | 0/2 | Planning | - |
-| 10. DNS Filtering | v2.0 | 0/? | Not started | - |
+| 10. DNS Filtering | v2.0 | 0/2 | Planning | - |
 | 11. Network Security | v2.0 | 0/? | Not started | - |
 | 12. Traffic Monitoring | v2.0 | 0/? | Not started | - |
 | 13. Communication & Config | v2.0 | 0/? | Not started | - |
