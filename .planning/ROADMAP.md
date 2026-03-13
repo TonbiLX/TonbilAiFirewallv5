@@ -173,9 +173,10 @@ Plans:
   3. Telegram bot token/chat ID yapilandirilabiliyor ve bildirim ayarlari degistirilebiliyor
   4. WiFi AP durumu gorulup SSID/sifre/kanal degistirilebiliyor ve AP acilip kapatilabiliyor
   5. DHCP havuz bilgileri ve statik IP atamalari goruntulenip yonetilebiliyor, guvenlik esik degerleri ayarlanip kaydedilebiliyor
-**Plans:** 1 plan
+**Plans:** 2 plans
 Plans:
-- [ ] 12-01-PLAN.md — TrafficScreen ince ayar + DeviceDetailScreen Vico grafik
+- [ ] 13-01-PLAN.md — Push bildirim kanallari (4 kanal) + ChatBubble yapilandirilmis yanit render
+- [ ] 13-02-PLAN.md — Telegram, WiFi, DHCP, Guvenlik Ayarlari ekranlari dogrulama ve ince ayar
 
 ### Phase 14: Android Enhancements
 **Goal**: Uygulama native Android ozelliklerini kullaniyor — ana ekran widget'i, Quick Settings, dokunsal geri bildirim, hizli erisim
@@ -222,6 +223,6 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 10. DNS Filtering | 2/2 | Complete    | 2026-03-13 | - |
 | 11. Network Security | 2/2 | Complete    | 2026-03-13 | - |
 | 12. Traffic Monitoring | 1/1 | Complete    | 2026-03-13 | - |
-| 13. Communication & Config | v2.0 | 0/? | Not started | - |
+| 13. Communication & Config | v2.0 | 0/2 | Planning | - |
 | 14. Android Enhancements | v2.0 | 0/? | Not started | - |
 | 15. Release Build | v2.0 | 0/? | Not started | - |
