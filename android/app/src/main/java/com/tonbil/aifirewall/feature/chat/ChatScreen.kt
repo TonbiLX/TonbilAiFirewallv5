@@ -1,6 +1,7 @@
 package com.tonbil.aifirewall.feature.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -59,7 +62,17 @@ import com.tonbil.aifirewall.ui.theme.NeonMagenta
 import com.tonbil.aifirewall.ui.theme.NeonRed
 import com.tonbil.aifirewall.ui.theme.TextPrimary
 import com.tonbil.aifirewall.ui.theme.TextSecondary
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.koin.androidx.compose.koinViewModel
+
+// File-level lenient JSON instance — kisa JSON parse icin
+private val lenientJson = Json {
+    ignoreUnknownKeys = true
+    isLenient = true
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,7 +91,7 @@ fun ChatScreen(
         }
     }
 
-    // Auto-scroll to bottom when new messages arrive
+    // Yeni mesaj geldiginde en alta kaydır
     LaunchedEffect(state.messages.size) {
         if (state.messages.isNotEmpty()) {
             listState.animateScrollToItem(state.messages.size - 1)
@@ -224,20 +237,188 @@ private fun ChatBubble(message: ChatMessageDto) {
                 .padding(12.dp),
         ) {
             Column {
-                Text(
-                    text = message.content,
-                    color = if (isUser) NeonCyan else TextPrimary,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                )
+                // Kullanici mesajlari aynen, asistan mesajlari yapilandirilmis render
+                if (isUser) {
+                    Text(
+                        text = message.content,
+                        color = NeonCyan,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                    )
+                } else {
+                    AssistantMessageContent(content = message.content)
+                }
                 message.timestamp?.let { ts ->
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = ts.takeLast(8).take(5), // HH:MM from timestamp
+                        text = ts.takeLast(8).take(5), // HH:MM
                         color = TextSecondary.copy(alpha = 0.5f),
                         fontSize = 10.sp,
                         textAlign = if (isUser) TextAlign.End else TextAlign.Start,
                         modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Asistan mesajinin icerigini analiz eder ve uygun render composable'ini cagirir.
+ * Once JSON, sonra Markdown tablo, son olarak duz metin kontrolu yapilir.
+ */
+@Composable
+private fun AssistantMessageContent(content: String) {
+    val trimmed = content.trimStart()
+    when {
+        trimmed.startsWith("{") || trimmed.startsWith("[") -> JsonContentBlock(trimmed)
+        trimmed.contains("| ---") ||
+                (trimmed.contains("| ") &&
+                        trimmed.count { it == '\n' } >= 2 &&
+                        trimmed.lines().count { it.trimStart().startsWith("|") } >= 3) ->
+            TableContentBlock(trimmed)
+        else -> Text(content, color = TextPrimary, fontSize = 13.sp, lineHeight = 18.sp)
+    }
+}
+
+/**
+ * JSON icerigini key-value listesi veya numarali liste olarak gosterir.
+ * Parse basarisiz olursa duz metin fallback kullanir.
+ */
+@Composable
+private fun JsonContentBlock(content: String) {
+    val parsed = try {
+        lenientJson.parseToJsonElement(content)
+    } catch (_: Exception) {
+        null
+    }
+
+    Box(
+        modifier = Modifier
+            .background(GlassBg, RoundedCornerShape(8.dp))
+            .padding(8.dp),
+    ) {
+        when (parsed) {
+            is JsonObject -> {
+                // Her anahtar-deger cifti bir satir olarak gosterilir
+                Column {
+                    parsed.entries.forEachIndexed { index, (key, value) ->
+                        if (index > 0) {
+                            HorizontalDivider(
+                                thickness = 0.5.dp,
+                                color = GlassBorder,
+                            )
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = key,
+                                color = NeonCyan,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(0.4f),
+                            )
+                            Text(
+                                text = try { value.jsonPrimitive.content } catch (_: Exception) { value.toString() },
+                                color = TextPrimary,
+                                fontSize = 12.sp,
+                                modifier = Modifier.weight(0.6f),
+                            )
+                        }
+                    }
+                }
+            }
+            is JsonArray -> {
+                // Dizi elemanlarini numarali liste olarak goster
+                Column {
+                    parsed.forEachIndexed { index, element ->
+                        Row(
+                            modifier = Modifier.padding(vertical = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = "${index + 1}.",
+                                color = NeonCyan,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                text = try { element.jsonPrimitive.content } catch (_: Exception) { element.toString() },
+                                color = TextPrimary,
+                                fontSize = 12.sp,
+                                lineHeight = 17.sp,
+                            )
+                        }
+                    }
+                }
+            }
+            else -> {
+                // Parse basarisiz — duz metin fallback
+                Text(content, color = TextPrimary, fontSize = 13.sp, lineHeight = 18.sp)
+            }
+        }
+    }
+}
+
+/**
+ * Markdown tablo formatini baslik + veri satirlari olarak render eder.
+ * Yatay kaydirma desteklidir (genis tablolar icin).
+ */
+@Composable
+private fun TableContentBlock(content: String) {
+    // Tablo satirlarini filtrele: | ile baslayan satirlar, ayrac satirlari haric
+    val lines = content.lines()
+        .filter { it.trimStart().startsWith("|") }
+        .filter { line ->
+            // | --- | seklindeki ayrac satirlarini atla
+            !line.replace("|", "").trim().all { it == '-' || it == ' ' || it == ':' }
+        }
+
+    if (lines.isEmpty()) {
+        Text(content, color = TextPrimary, fontSize = 13.sp, lineHeight = 18.sp)
+        return
+    }
+
+    Box(
+        modifier = Modifier
+            .background(GlassBg, RoundedCornerShape(8.dp))
+            .padding(8.dp),
+    ) {
+        val scrollState = rememberScrollState()
+        Column(
+            modifier = Modifier.horizontalScroll(scrollState),
+        ) {
+            lines.forEachIndexed { index, line ->
+                // Sutunlari | ile ayir, bos sutunlari temizle
+                val cells = line.split("|")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+
+                Row(
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    cells.forEach { cell ->
+                        Text(
+                            text = cell,
+                            color = if (index == 0) NeonCyan else TextPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = if (index == 0) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.widthIn(min = 60.dp, max = 140.dp),
+                        )
+                    }
+                }
+
+                // Baslik satirindan sonra ayrac ciz
+                if (index == 0) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 3.dp),
+                        thickness = 0.5.dp,
+                        color = NeonCyan.copy(alpha = 0.3f),
                     )
                 }
             }
