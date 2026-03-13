@@ -159,7 +159,9 @@ Plans:
   2. Buyuk transferler listesinde >1MB flow'lar ayri goruntulenebiliyor
   3. Trafik gecmisi ekraninda sayfalama ile eski kayitlar goruntulenebiliyor
   4. Per-device bant genisligi zaman serisi grafigi goruntulenebiliyor
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 12-01-PLAN.md — TrafficScreen ince ayar + DeviceDetailScreen Vico grafik
 
 ### Phase 13: Communication & Config
 **Goal**: Push bildirimler calisiyor, AI sohbet mobilde kullanilabiliyor, Telegram/WiFi/DHCP/Guvenlik ayarlari yonetilebiliyor
@@ -171,7 +173,9 @@ Plans:
   3. Telegram bot token/chat ID yapilandirilabiliyor ve bildirim ayarlari degistirilebiliyor
   4. WiFi AP durumu gorulup SSID/sifre/kanal degistirilebiliyor ve AP acilip kapatilabiliyor
   5. DHCP havuz bilgileri ve statik IP atamalari goruntulenip yonetilebiliyor, guvenlik esik degerleri ayarlanip kaydedilebiliyor
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 12-01-PLAN.md — TrafficScreen ince ayar + DeviceDetailScreen Vico grafik
 
 ### Phase 14: Android Enhancements
 **Goal**: Uygulama native Android ozelliklerini kullaniyor — ana ekran widget'i, Quick Settings, dokunsal geri bildirim, hizli erisim
@@ -182,7 +186,9 @@ Plans:
   2. Quick Settings panelinde DNS filtreleme toggle ve cihaz engelleme toggle tile'lari calisiyor
   3. Kritik uyarilarda (DDoS, engellenen cihaz) telefon titriyor
   4. Uygulama ikonuna uzun basinca durum kontrol, cihaz engelle ve AI chat kisayollari gorunuyor
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 12-01-PLAN.md — TrafficScreen ince ayar + DeviceDetailScreen Vico grafik
 
 ### Phase 15: Release Build
 **Goal**: Imzali APK uretilip S24 Ultra'ya basariyla yuklenmis — uygulama production-ready
@@ -192,7 +198,9 @@ Plans:
   1. Imzali release APK uretilmis ve S24 Ultra'ya sideload ile basariyla yuklenmis
   2. Uygulama ilk acilista giris ekranini gosteriyor, giris sonrasi tum ekranlar erisilebilir
   3. Arka planda push bildirimler calisiyor, uygulama kapatilsa bile bildirim geliyor
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 12-01-PLAN.md — TrafficScreen ince ayar + DeviceDetailScreen Vico grafik
 
 ## Progress
 
