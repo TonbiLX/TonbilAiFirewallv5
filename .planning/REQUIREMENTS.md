@@ -89,24 +89,24 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Telegram
 
-- [ ] **TELE-01**: Telegram bot yapilandirma ekrani (token, chat ID)
-- [ ] **TELE-02**: Telegram bildirim ayarlari
+- [x] **TELE-01**: Telegram bot yapilandirma ekrani (token, chat ID)
+- [x] **TELE-02**: Telegram bildirim ayarlari
 
 ### WiFi AP
 
-- [ ] **WIFI-01**: WiFi erisim noktasi durumu goruntuleme
-- [ ] **WIFI-02**: SSID, sifre, kanal degistirme
-- [ ] **WIFI-03**: WiFi AP acma/kapatma
+- [x] **WIFI-01**: WiFi erisim noktasi durumu goruntuleme
+- [x] **WIFI-02**: SSID, sifre, kanal degistirme
+- [x] **WIFI-03**: WiFi AP acma/kapatma
 
 ### DHCP
 
-- [ ] **DHCP-01**: DHCP havuz bilgileri goruntuleme
-- [ ] **DHCP-02**: Statik IP atamalari yonetimi
+- [x] **DHCP-01**: DHCP havuz bilgileri goruntuleme
+- [x] **DHCP-02**: Statik IP atamalari yonetimi
 
 ### Security Settings
 
-- [ ] **SEC-01**: Guvenlik ayarlari ekrani — tehdit/DNS/DDoS esik degerleri
-- [ ] **SEC-02**: Ayar degistirme ve kaydetme (hot-reload backend)
+- [x] **SEC-01**: Guvenlik ayarlari ekrani — tehdit/DNS/DDoS esik degerleri
+- [x] **SEC-02**: Ayar degistirme ve kaydetme (hot-reload backend)
 
 ### UX Polish
 
@@ -187,15 +187,15 @@ Deferred to future release.
 | CHAT-01 | Phase 13 | Complete |
 | CHAT-02 | Phase 13 | Complete |
 | CHAT-03 | Phase 13 | Complete |
-| TELE-01 | Phase 13 | Pending |
-| TELE-02 | Phase 13 | Pending |
-| WIFI-01 | Phase 13 | Pending |
-| WIFI-02 | Phase 13 | Pending |
-| WIFI-03 | Phase 13 | Pending |
-| DHCP-01 | Phase 13 | Pending |
-| DHCP-02 | Phase 13 | Pending |
-| SEC-01 | Phase 13 | Pending |
-| SEC-02 | Phase 13 | Pending |
+| TELE-01 | Phase 13 | Complete |
+| TELE-02 | Phase 13 | Complete |
+| WIFI-01 | Phase 13 | Complete |
+| WIFI-02 | Phase 13 | Complete |
+| WIFI-03 | Phase 13 | Complete |
+| DHCP-01 | Phase 13 | Complete |
+| DHCP-02 | Phase 13 | Complete |
+| SEC-01 | Phase 13 | Complete |
+| SEC-02 | Phase 13 | Complete |
 | UX-01 | Phase 14 | Pending |
 | UX-02 | Phase 14 | Pending |
 | UX-03 | Phase 15 | Pending |

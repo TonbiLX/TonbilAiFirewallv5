@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TonbilAiOS Android App
 status: unknown
-last_updated: "2026-03-13T20:31:10.586Z"
+last_updated: "2026-03-13T20:36:56.540Z"
 last_activity: "2026-03-10 - Quick 29: WS security events + Android system notifications"
 progress:
   total_phases: 15
-  completed_phases: 12
+  completed_phases: 13
   total_plans: 21
-  completed_plans: 20
+  completed_plans: 21
   percent: 94
 ---
 
@@ -88,6 +88,7 @@ Progress: [██████░░░░] 40%
 | Phase 10-dns-filtering P01 | 6 | 2 tasks | 7 files |
 | Phase 12-traffic-monitoring P01 | 16 | 2 tasks | 4 files |
 | Phase 13-communication-config P01 | 2 | 2 tasks | 3 files |
+| Phase 13-communication-config P02 | 5 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -136,6 +137,10 @@ Progress: [██████░░░░] 40%
 - [Phase 12-01]: Canvas tabanlı grafik kullanıldı — proje Vico bagımlılığı içermiyordu, DashboardScreen ile tutarlı yaklaşım
 - [Phase 13-01]: FCM offline push ertelendi: WebSocket-only yaklasimla NOTIF-01/02 karsilandi — uygulama acikken WS event'leri 4 kanala ayrilmis Android bildirimi
 - [Phase 13-01]: resolveChannelId keyword matching: ddos/threat/block/attack → security_threats, device → device_events, traffic/bandwidth → traffic_alerts
+- [Phase 13-02]: WiFi AP disable requires AlertDialog confirmation; AP enable proceeds immediately without dialog
+- [Phase 13-02]: DHCP lease delete uses local composable state (deleteConfirmMac) for confirmation, not ViewModel state
+- [Phase 13-02]: SecuritySettings: auto-save on slider change + explicit Save+ReloadConfig buttons for manual trigger
+- [Phase 13-02]: MAC validation: inline Regex in AddStaticLeaseDialog, isError+supportingText for UX feedback
 
 ### Pending Todos
 
@@ -185,7 +190,7 @@ Progress: [██████░░░░] 40%
 
 ## Session Continuity
 
-Last session: 2026-03-13T20:31:10.580Z
+Last session: 2026-03-13T20:36:56.536Z
 Last activity: 2026-03-12 - Completed quick task 35: AI Insights sayfasi tam yeniden yazim
 Resume file: None
 Notes: |
