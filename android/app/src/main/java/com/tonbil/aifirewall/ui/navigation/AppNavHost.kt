@@ -42,6 +42,7 @@ import com.tonbil.aifirewall.feature.ddos.DdosScreen
 import com.tonbil.aifirewall.feature.telegram.TelegramScreen
 import com.tonbil.aifirewall.feature.chat.ChatScreen
 import com.tonbil.aifirewall.feature.profiles.ProfilesScreen
+import com.tonbil.aifirewall.feature.dnsfiltering.DnsFilteringScreen
 
 @Composable
 fun AppNavHost(
@@ -122,6 +123,7 @@ fun AppNavHost(
         }
 
         // ========== Network Sub-Screens ==========
+        composable<DnsFilteringRoute> { DnsFilteringScreen(onBack = { navController.popBackStack() }) }
         composable<DnsBlockingRoute> { DnsBlockingScreen(onBack = { navController.popBackStack() }) }
         composable<DhcpRoute> { DhcpScreen(onBack = { navController.popBackStack() }) }
         composable<VpnServerRoute> { VpnServerScreen(onBack = { navController.popBackStack() }) }

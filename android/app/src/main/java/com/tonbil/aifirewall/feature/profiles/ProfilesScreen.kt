@@ -1,6 +1,7 @@
 package com.tonbil.aifirewall.feature.profiles
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,12 +17,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Shield
@@ -29,6 +32,8 @@ import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -57,6 +62,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tonbil.aifirewall.data.remote.dto.ContentCategoryDto
 import com.tonbil.aifirewall.data.remote.dto.ProfileResponseDto
 import com.tonbil.aifirewall.ui.components.GlassCard
 import com.tonbil.aifirewall.ui.theme.DarkBackground
@@ -70,6 +76,21 @@ import com.tonbil.aifirewall.ui.theme.NeonRed
 import com.tonbil.aifirewall.ui.theme.TextPrimary
 import com.tonbil.aifirewall.ui.theme.TextSecondary
 import org.koin.androidx.compose.koinViewModel
+
+// Renk hex string → Compose Color donusturme
+private fun parseHexColor(hex: String): Color {
+    return try {
+        val cleaned = hex.removePrefix("#")
+        val argb = when (cleaned.length) {
+            6 -> "FF$cleaned"
+            8 -> cleaned
+            else -> "FF00F0FF"
+        }
+        Color(android.graphics.Color.parseColor("#$argb"))
+    } catch (_: Exception) {
+        NeonCyan
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,15 +108,16 @@ fun ProfilesScreen(
         }
     }
 
-    // Add dialog
+    // Add/Edit dialog
     if (state.showAddDialog) {
-        AddProfileDialog(
-            name = state.addName,
-            bandwidth = state.addBandwidth,
-            isAdding = state.isAdding,
+        ProfileDialog(
+            state = state,
             onNameChange = viewModel::setAddName,
             onBandwidthChange = viewModel::setAddBandwidth,
-            onConfirm = viewModel::createProfile,
+            onToggleFilter = viewModel::toggleContentFilter,
+            onConfirm = {
+                if (state.editTarget != null) viewModel.updateProfile() else viewModel.createProfile()
+            },
             onDismiss = viewModel::dismissAddDialog,
         )
     }
@@ -147,11 +169,6 @@ fun ProfilesScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text("Profiller", color = NeonGreen, fontWeight = FontWeight.Bold)
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = "Geri", tint = TextSecondary)
                     }
                 },
                 actions = {
@@ -227,6 +244,7 @@ fun ProfilesScreen(
                 ProfileCard(
                     profile = profile,
                     onDelete = { viewModel.showDeleteConfirm(profile) },
+                    onEdit = { viewModel.showEditDialog(profile) },
                 )
             }
         }
@@ -238,6 +256,7 @@ fun ProfilesScreen(
 private fun ProfileCard(
     profile: ProfileResponseDto,
     onDelete: () -> Unit,
+    onEdit: () -> Unit,
 ) {
     GlassCard(glowColor = NeonGreen.copy(alpha = 0.3f)) {
         Row(
@@ -259,6 +278,9 @@ private fun ProfileCard(
                         fontSize = 11.sp,
                     )
                 }
+            }
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Outlined.Edit, contentDescription = "Duzenle", tint = NeonCyan, modifier = Modifier.size(20.dp))
             }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Outlined.DeleteOutline, contentDescription = "Sil", tint = NeonRed.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
@@ -327,30 +349,46 @@ private fun FilterChip(label: String) {
     }
 }
 
+// Unified Add/Edit dialog
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AddProfileDialog(
-    name: String,
-    bandwidth: String,
-    isAdding: Boolean,
+private fun ProfileDialog(
+    state: ProfilesUiState,
     onNameChange: (String) -> Unit,
     onBandwidthChange: (String) -> Unit,
+    onToggleFilter: (String) -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val isEditMode = state.editTarget != null
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = DarkSurface,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Add, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(20.dp))
+                Icon(
+                    if (isEditMode) Icons.Outlined.Edit else Icons.Outlined.Add,
+                    contentDescription = null,
+                    tint = NeonGreen,
+                    modifier = Modifier.size(20.dp),
+                )
                 Spacer(Modifier.width(8.dp))
-                Text("Yeni Profil", color = NeonGreen, fontWeight = FontWeight.Bold)
+                Text(
+                    if (isEditMode) "Profil Duzenle" else "Yeni Profil",
+                    color = NeonGreen,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // Profil Adi
                 OutlinedTextField(
-                    value = name,
+                    value = state.addName,
                     onValueChange = onNameChange,
                     label = { Text("Profil Adi", fontSize = 12.sp) },
                     placeholder = { Text("ornegin: Cocuk", color = TextSecondary) },
@@ -367,8 +405,9 @@ private fun AddProfileDialog(
                     ),
                 )
 
+                // Bandwidth Limiti
                 OutlinedTextField(
-                    value = bandwidth,
+                    value = state.addBandwidth,
                     onValueChange = onBandwidthChange,
                     label = { Text("Bant Genisligi Limiti (Mbps)", fontSize = 12.sp) },
                     placeholder = { Text("ornegin: 50", color = TextSecondary) },
@@ -385,23 +424,43 @@ private fun AddProfileDialog(
                         cursorColor = NeonAmber,
                     ),
                 )
+
+                // Icerik Filtreleri
+                if (state.categories.isNotEmpty()) {
+                    Text(
+                        text = "Icerik Filtreleri",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        state.categories.forEach { category ->
+                            val isChecked = category.key in state.addContentFilters
+                            CategoryCheckRow(
+                                category = category,
+                                isChecked = isChecked,
+                                onToggle = { onToggleFilter(category.key) },
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                enabled = name.isNotBlank() && !isAdding,
+                enabled = state.addName.isNotBlank() && !state.isAdding,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = NeonGreen.copy(alpha = 0.2f),
                     contentColor = NeonGreen,
                 ),
                 shape = RoundedCornerShape(8.dp),
             ) {
-                if (isAdding) {
+                if (state.isAdding) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), color = NeonGreen, strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
                 }
-                Text("Olustur", fontWeight = FontWeight.SemiBold)
+                Text(if (isEditMode) "Kaydet" else "Olustur", fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {
@@ -410,4 +469,39 @@ private fun AddProfileDialog(
             }
         },
     )
+}
+
+@Composable
+private fun CategoryCheckRow(
+    category: ContentCategoryDto,
+    isChecked: Boolean,
+    onToggle: () -> Unit,
+) {
+    val categoryColor = try {
+        parseHexColor(category.color)
+    } catch (_: Exception) {
+        NeonCyan
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle() }
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(
+            checked = isChecked,
+            onCheckedChange = { onToggle() },
+            colors = CheckboxDefaults.colors(
+                checkedColor = categoryColor,
+                uncheckedColor = TextSecondary,
+            ),
+        )
+        Text(category.name, color = TextPrimary, fontSize = 13.sp)
+        if (category.domainCount > 0) {
+            Spacer(Modifier.width(4.dp))
+            Text("(${category.domainCount})", color = TextSecondary, fontSize = 11.sp)
+        }
+    }
 }

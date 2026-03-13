@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Router
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.ShowChart
@@ -29,9 +28,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tonbil.aifirewall.ui.navigation.ContentCategoriesRoute
 import com.tonbil.aifirewall.ui.navigation.DhcpRoute
-import com.tonbil.aifirewall.ui.navigation.DnsBlockingRoute
+import com.tonbil.aifirewall.ui.navigation.DnsFilteringRoute
 import com.tonbil.aifirewall.ui.navigation.TrafficRoute
 import com.tonbil.aifirewall.ui.navigation.VpnClientRoute
 import com.tonbil.aifirewall.ui.navigation.VpnServerRoute
@@ -49,12 +47,11 @@ data class HubItem(
 @Composable
 fun NetworkHubScreen(onNavigate: (Any) -> Unit) {
     val items = listOf(
-        HubItem("DNS Engelleme", Icons.Outlined.Shield, NeonCyan, DnsBlockingRoute),
+        HubItem("DNS Filtreleme", Icons.Outlined.Shield, NeonCyan, DnsFilteringRoute),
         HubItem("DHCP Sunucu", Icons.Outlined.Router, NeonGreen, DhcpRoute),
         HubItem("VPN Sunucu", Icons.Outlined.VpnKey, NeonMagenta, VpnServerRoute),
         HubItem("VPN Istemci", Icons.Outlined.VpnLock, NeonAmber, VpnClientRoute),
         HubItem("Trafik Izleme", Icons.Outlined.ShowChart, NeonCyan, TrafficRoute),
-        HubItem("Icerik Filtreleri", Icons.Outlined.FilterList, NeonRed, ContentCategoriesRoute),
         HubItem("WiFi AP", Icons.Outlined.Wifi, NeonGreen, WifiRoute),
     )
 
