@@ -145,7 +145,10 @@ Plans:
   2. VPN peer listesi goruntulenebiliyor, yeni peer eklenebiliyor/silinebiliyor ve peer QR kodu goruntulenip paylasılabiliyor
   3. VPN durumu (aktif/pasif) goruntulenebiliyor
   4. DDoS koruma durumu, basitlestirilmis saldiri haritasi ve canli saldiri akisi goruntulenebiliyor
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 11-01-PLAN.md — Firewall edit dialog + priority siralama + VPN ShareSheet + VPN durum gostergesi
+- [ ] 11-02-PLAN.md — DDoS koruma durumu ozeti + saldiri listesi + harita navigasyonu
 
 ### Phase 12: Traffic Monitoring
 **Goal**: Kullanici ag trafigini detayli izleyebiliyor — canli akislar, buyuk transferler, gecmis ve per-device grafikler
