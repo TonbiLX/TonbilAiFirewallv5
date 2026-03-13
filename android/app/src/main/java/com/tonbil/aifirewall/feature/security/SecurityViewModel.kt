@@ -31,6 +31,7 @@ data class SecurityUiState(
     // DDoS
     val ddosProtections: List<DdosProtectionStatusDto> = emptyList(),
     val ddosCounters: DdosCountersDto? = null,
+    val ddosAttackMap: DdosAttackMapDto? = null,
     // Traffic
     val liveFlows: List<LiveFlowDto> = emptyList(),
     val flowStats: FlowStatsDto? = null,
@@ -41,6 +42,7 @@ data class SecurityUiState(
     val showAddDnsRuleDialog: Boolean = false,
     val showAddBlocklistDialog: Boolean = false,
     val showAddFirewallRuleDialog: Boolean = false,
+    val editingFirewallRule: FirewallRuleDto? = null,
     val showAddVpnPeerDialog: Boolean = false,
     val showVpnPeerConfigDialog: String? = null, // peer name
     val vpnPeerConfig: VpnPeerConfigDto? = null,
@@ -85,7 +87,7 @@ class SecurityViewModel(
                             blocklists = bl.await().getOrElse { emptyList() },
                             dnsRules = rules.await().getOrElse { emptyList() },
                             firewallStats = fw.await().getOrNull(),
-                            firewallRules = fwRules.await().getOrElse { emptyList() },
+                            firewallRules = fwRules.await().getOrElse { emptyList() }.sortedBy { it.priority },
                             vpnStats = vpn.await().getOrNull(),
                             vpnPeers = peers.await().getOrElse { emptyList() },
                             ddosProtections = ddos.await().getOrElse { emptyList() },
@@ -114,12 +116,25 @@ class SecurityViewModel(
     }
 
     fun refresh() {
-        _uiState.update { it.copy(isRefreshing = true) }
+        _uiState.update { it.copy(isRefreshing = true, ddosAttackMap = null) }
         loadAll()
     }
 
     fun clearActionMessage() {
         _uiState.update { it.copy(actionMessage = null) }
+    }
+
+    // ========== DDoS Actions ==========
+
+    fun loadDdosAttackMap() {
+        if (_uiState.value.ddosAttackMap != null) return // already loaded
+        viewModelScope.launch {
+            securityRepository.getDdosAttackMap()
+                .onSuccess { map ->
+                    _uiState.update { it.copy(ddosAttackMap = map) }
+                }
+                .onFailure { /* silently skip, existing DDoS tab data is sufficient */ }
+        }
     }
 
     // ========== DNS Actions ==========
@@ -197,8 +212,84 @@ class SecurityViewModel(
 
     // ========== FIREWALL Actions ==========
 
-    fun showAddFirewallRuleDialog() = _uiState.update { it.copy(showAddFirewallRuleDialog = true) }
-    fun hideAddFirewallRuleDialog() = _uiState.update { it.copy(showAddFirewallRuleDialog = false) }
+    fun showAddFirewallRuleDialog() = _uiState.update { it.copy(showAddFirewallRuleDialog = true, editingFirewallRule = null) }
+    fun hideAddFirewallRuleDialog() = _uiState.update { it.copy(showAddFirewallRuleDialog = false, editingFirewallRule = null) }
+
+    fun showEditFirewallRuleDialog(rule: FirewallRuleDto) {
+        _uiState.update { it.copy(showAddFirewallRuleDialog = true, editingFirewallRule = rule) }
+    }
+
+    fun updateFirewallRule(id: Int, dto: FirewallRuleCreateDto) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isActionLoading = true, showAddFirewallRuleDialog = false, editingFirewallRule = null) }
+            securityRepository.updateFirewallRule(id, dto)
+                .onSuccess {
+                    _uiState.update { it.copy(actionMessage = "Firewall kurali guncellendi", isActionLoading = false) }
+                    refresh()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(actionMessage = "Hata: ${e.message}", isActionLoading = false) }
+                }
+        }
+    }
+
+    fun moveRuleUp(rule: FirewallRuleDto) {
+        viewModelScope.launch {
+            val sortedRules = _uiState.value.firewallRules.sortedBy { it.priority }
+            val index = sortedRules.indexOfFirst { it.id == rule.id }
+            if (index <= 0) return@launch
+            val above = sortedRules[index - 1]
+            // Swap priorities
+            securityRepository.updateFirewallRule(
+                rule.id,
+                FirewallRuleCreateDto(
+                    name = rule.name, direction = rule.direction, protocol = rule.protocol,
+                    port = rule.port, sourceIp = rule.sourceIp, destIp = rule.destIp,
+                    action = rule.action, enabled = rule.enabled, priority = above.priority,
+                    description = rule.description,
+                ),
+            )
+            securityRepository.updateFirewallRule(
+                above.id,
+                FirewallRuleCreateDto(
+                    name = above.name, direction = above.direction, protocol = above.protocol,
+                    port = above.port, sourceIp = above.sourceIp, destIp = above.destIp,
+                    action = above.action, enabled = above.enabled, priority = rule.priority,
+                    description = above.description,
+                ),
+            )
+            refresh()
+        }
+    }
+
+    fun moveRuleDown(rule: FirewallRuleDto) {
+        viewModelScope.launch {
+            val sortedRules = _uiState.value.firewallRules.sortedBy { it.priority }
+            val index = sortedRules.indexOfFirst { it.id == rule.id }
+            if (index < 0 || index >= sortedRules.size - 1) return@launch
+            val below = sortedRules[index + 1]
+            // Swap priorities
+            securityRepository.updateFirewallRule(
+                rule.id,
+                FirewallRuleCreateDto(
+                    name = rule.name, direction = rule.direction, protocol = rule.protocol,
+                    port = rule.port, sourceIp = rule.sourceIp, destIp = rule.destIp,
+                    action = rule.action, enabled = rule.enabled, priority = below.priority,
+                    description = rule.description,
+                ),
+            )
+            securityRepository.updateFirewallRule(
+                below.id,
+                FirewallRuleCreateDto(
+                    name = below.name, direction = below.direction, protocol = below.protocol,
+                    port = below.port, sourceIp = below.sourceIp, destIp = below.destIp,
+                    action = below.action, enabled = below.enabled, priority = rule.priority,
+                    description = below.description,
+                ),
+            )
+            refresh()
+        }
+    }
 
     fun createFirewallRule(dto: FirewallRuleCreateDto) {
         viewModelScope.launch {

@@ -147,6 +147,8 @@ data class FirewallRuleDto(
     @SerialName("dest_ip") val destIp: String? = null,
     val action: String = "", // "accept", "drop", "reject"
     val enabled: Boolean = true,
+    val priority: Int = 100,
+    val description: String? = null,
 )
 
 // AI Insight
@@ -337,6 +339,8 @@ data class FirewallRuleCreateDto(
     @SerialName("dest_ip") val destIp: String? = null,
     val action: String, // "accept", "drop", "reject"
     val enabled: Boolean = true,
+    val priority: Int = 100,
+    val description: String? = null,
 )
 
 // VPN Peer Create
