@@ -22,6 +22,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+data class DeviceBandwidthPoint(
+    val uploadBps: Long,
+    val downloadBps: Long,
+)
+
 data class DeviceDetailUiState(
     val device: DeviceResponseDto? = null,
     val profiles: List<ProfileResponseDto> = emptyList(),
@@ -29,6 +34,7 @@ data class DeviceDetailUiState(
     val dnsLogs: List<DnsQueryLogDto> = emptyList(),
     val trafficSummary: DeviceTrafficSummaryDto? = null,
     val bandwidth: WsDeviceBandwidthDto? = null,
+    val bandwidthHistory: List<DeviceBandwidthPoint> = emptyList(),
     val liveFlows: List<LiveFlowDto> = emptyList(),
     val isLiveFlowsLoading: Boolean = false,
     val isLoading: Boolean = true,
@@ -53,9 +59,20 @@ class DeviceDetailViewModel(
         // Collect WS bandwidth for this device
         viewModelScope.launch {
             webSocketManager.messages.collect { update ->
+                val deviceBandwidth = update.bandwidth.devices[deviceId.toString()]
                 _uiState.update { state ->
+                    val newHistory = if (deviceBandwidth != null) {
+                        val newPoint = DeviceBandwidthPoint(
+                            uploadBps = deviceBandwidth.uploadBps,
+                            downloadBps = deviceBandwidth.downloadBps,
+                        )
+                        (state.bandwidthHistory + newPoint).takeLast(60)
+                    } else {
+                        state.bandwidthHistory
+                    }
                     state.copy(
-                        bandwidth = update.bandwidth.devices[deviceId.toString()]
+                        bandwidth = deviceBandwidth,
+                        bandwidthHistory = newHistory,
                     )
                 }
             }

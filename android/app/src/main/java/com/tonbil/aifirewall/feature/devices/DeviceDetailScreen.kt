@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -80,7 +81,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -90,6 +95,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tonbil.aifirewall.data.remote.dto.LiveFlowDto
 import com.tonbil.aifirewall.ui.components.GlassCard
+import com.tonbil.aifirewall.feature.devices.DeviceBandwidthPoint
 import com.tonbil.aifirewall.ui.theme.CyberpunkColors
 import com.tonbil.aifirewall.ui.theme.CyberpunkTheme
 import com.tonbil.aifirewall.ui.theme.GlassBg
@@ -471,6 +477,18 @@ private fun TrafficTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // Bandwidth chart card
+        if (uiState.bandwidthHistory.size >= 2) {
+            item {
+                DeviceBandwidthChart(
+                    history = uiState.bandwidthHistory,
+                    currentUpload = uiState.bandwidth?.uploadBps ?: 0L,
+                    currentDownload = uiState.bandwidth?.downloadBps ?: 0L,
+                    colors = colors,
+                )
+            }
+        }
+
         // Traffic summary card
         item {
             GlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -1229,6 +1247,107 @@ private fun InfoRow(label: String, value: String) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
+    }
+}
+
+@Composable
+private fun DeviceBandwidthChart(
+    history: List<DeviceBandwidthPoint>,
+    currentUpload: Long,
+    currentDownload: Long,
+    colors: CyberpunkColors,
+) {
+    val cyanColor = Color(0xFF00F0FF)
+    val magentaColor = Color(0xFFFF00E5)
+
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "Bant Genisligi",
+            style = MaterialTheme.typography.titleMedium,
+            color = colors.neonCyan,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "${formatBps(currentDownload)} / ${formatBps(currentUpload)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val downloadValues = remember(history) { history.map { it.downloadBps.toFloat() } }
+        val uploadValues = remember(history) { history.map { it.uploadBps.toFloat() } }
+        val maxVal = remember(history) {
+            (downloadValues + uploadValues).maxOrNull()?.coerceAtLeast(1f) ?: 1f
+        }
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp),
+        ) {
+            val w = size.width
+            val h = size.height
+            val padding = 4f
+            val chartH = h - padding * 2
+            val stepX = w / (downloadValues.size - 1).coerceAtLeast(1)
+
+            fun drawLineSeries(values: List<Float>, color: Color) {
+                if (values.size < 2) return
+                val path = Path()
+                values.forEachIndexed { i, v ->
+                    val x = i * stepX
+                    val y = padding + chartH * (1f - v / maxVal)
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                drawPath(path, color, style = Stroke(width = 3f, cap = StrokeCap.Round))
+            }
+
+            // Grid lines
+            for (i in 0..4) {
+                val y = padding + chartH * i / 4f
+                drawLine(
+                    start = Offset(0f, y),
+                    end = Offset(w, y),
+                    color = Color.White.copy(alpha = 0.06f),
+                    strokeWidth = 1f,
+                )
+            }
+
+            drawLineSeries(uploadValues, cyanColor)      // RX = cyan (upload'a eşlenmiş)
+            drawLineSeries(downloadValues, magentaColor) // TX = magenta (download'a eşlenmiş)
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(cyanColor),
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "Upload",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(magentaColor),
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "Download",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            )
+        }
     }
 }
 
