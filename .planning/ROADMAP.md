@@ -30,7 +30,7 @@
 - [ ] **Phase 7: Authentication** - JWT giris, biyometrik auth, token yonetimi, auto-discovery
 - [x] **Phase 8: Dashboard** - Ana dashboard ekrani, WebSocket canli veri, grafikler (completed 2026-03-06)
 - [ ] **Phase 9: Device Management** - Cihaz listesi, detay, engelleme, profil atama
-- [ ] **Phase 10: DNS Filtering** - DNS ozet, filtreleme toggle, kategoriler, profil yonetimi, guvenlik katmanlari
+- [x] **Phase 10: DNS Filtering** - DNS ozet, filtreleme toggle, kategoriler, profil yonetimi, guvenlik katmanlari (completed 2026-03-13)
 - [ ] **Phase 11: Network Security** - Firewall kurallari, VPN peer yonetimi, DDoS koruma izleme
 - [ ] **Phase 12: Traffic Monitoring** - Canli akislar, buyuk transferler, gecmis, grafikler
 - [ ] **Phase 13: Communication & Config** - Push notifications, AI Chat, Telegram, WiFi AP, DHCP, Guvenlik ayarlari
@@ -131,7 +131,7 @@ Plans:
   2. Tek dokunusla DNS filtreleme acilip kapatilabiliyor
   3. Icerik kategorileri goruntulenebiliyor ve blocklist baglama yonetimi yapilabiliyor
   4. Profil olusturulabiliyor/duzenlenebiliyor — kategori secimi ve bandwidth limiti ayarlanabiliyor
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 10-01-PLAN.md — Veri katmani: DTO guncellemeleri (DNS guvenlik katmanlari, source type), DnsFilteringViewModel, ProfilesViewModel genisletmesi
 - [ ] 10-02-PLAN.md — UI katmani: DnsFilteringScreen (4-tab hub: Ozet, Kategoriler, Profiller, Guvenlik), ProfilesScreen content_filters, navigasyon wiring
@@ -208,7 +208,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 7. Authentication | 1/2 | In Progress|  | - |
 | 8. Dashboard | 2/2 | Complete   | 2026-03-06 | - |
 | 9. Device Management | v2.0 | 0/2 | Planning | - |
-| 10. DNS Filtering | 1/2 | In Progress|  | - |
+| 10. DNS Filtering | 2/2 | Complete   | 2026-03-13 | - |
 | 11. Network Security | v2.0 | 0/? | Not started | - |
 | 12. Traffic Monitoring | v2.0 | 0/? | Not started | - |
 | 13. Communication & Config | v2.0 | 0/? | Not started | - |

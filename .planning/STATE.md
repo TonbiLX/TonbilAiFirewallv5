@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TonbilAiOS Android App
 status: unknown
-last_updated: "2026-03-13T16:29:59.779Z"
+last_updated: "2026-03-13T16:43:58.530Z"
 last_activity: "2026-03-10 - Quick 29: WS security events + Android system notifications"
 progress:
   total_phases: 15
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 16
-  completed_plans: 15
+  completed_plans: 16
   percent: 94
 ---
 
@@ -129,6 +129,8 @@ Progress: [██████░░░░] 40%
 - [09-02] Parallel async loading in DeviceDetailViewModel with async/coroutineScope
 - [Phase 10-01]: Global DNS toggle: backend tek boolean yok, 4 alani ayni anda guncelle (dnssec+tunneling+doh+dga)
 - [Phase 10-01]: SecurityConfigUpdateDto flat nullable alanlar: sadece degistirilen alan dolu, backend diger alanlari korur
+- [Phase 10-02]: ProfilesScreen Tab icinde onBack = {} ile kullanildi: DnsFilteringScreen zaten geri navigasyonu sagliyor
+- [Phase 10-02]: DnsBlockingRoute AppNavHost korundu, sadece NetworkHubScreen link guncellendi: backward compat
 
 ### Pending Todos
 
@@ -178,7 +180,7 @@ Progress: [██████░░░░] 40%
 
 ## Session Continuity
 
-Last session: 2026-03-13T16:29:59.774Z
+Last session: 2026-03-13T16:43:47.450Z
 Last activity: 2026-03-12 - Completed quick task 35: AI Insights sayfasi tam yeniden yazim
 Resume file: None
 Notes: |
