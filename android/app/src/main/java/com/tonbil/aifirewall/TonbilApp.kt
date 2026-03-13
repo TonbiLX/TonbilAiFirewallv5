@@ -1,5 +1,6 @@
 package com.tonbil.aifirewall
 
+import android.app.Activity
 import android.app.Application
 import android.util.Log
 import androidx.work.Constraints
@@ -10,6 +11,7 @@ import androidx.work.WorkManager
 import com.tonbil.aifirewall.data.remote.WebSocketManager
 import com.tonbil.aifirewall.di.appModule
 import com.tonbil.aifirewall.di.featureModules
+import com.tonbil.aifirewall.util.HapticHelper
 import com.tonbil.aifirewall.util.NotificationHelper
 import com.tonbil.aifirewall.widget.TonbilWidgetWorker
 import kotlinx.coroutines.CoroutineScope
@@ -73,6 +75,21 @@ class TonbilApp : Application() {
         // WebSocket security event'lerini dinle ve sistem bildirimi goster
         observeSecurityEvents()
 
+        // Aktif Activity takibi — HapticHelper icin WeakReference guncelleme
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityResumed(activity: Activity) {
+                HapticHelper.registerActivity(activity)
+            }
+            override fun onActivityPaused(activity: Activity) {
+                HapticHelper.unregisterActivity()
+            }
+            override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) {}
+            override fun onActivityStarted(activity: Activity) {}
+            override fun onActivityStopped(activity: Activity) {}
+            override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) {}
+            override fun onActivityDestroyed(activity: Activity) {}
+        })
+
         // Widget'i 15 dakikada bir guncelleyen WorkManager periyodik is
         scheduleWidgetRefresh()
     }
@@ -104,6 +121,10 @@ class TonbilApp : Application() {
                 val wsManager = getKoin().get<WebSocketManager>()
                 wsManager.securityEvents.collect { event ->
                     Log.d("TonbilApp", "Security event: ${event.eventType} - ${event.title}")
+                    // Uygulama on plandayken haptic tetikle (arka planda bildirim zaten vibrate icerir)
+                    if (event.severity in listOf("critical", "warning")) {
+                        HapticHelper.triggerHaptic(event.severity)
+                    }
                     NotificationHelper.showSecurityNotification(this@TonbilApp, event)
                 }
             } catch (e: Exception) {
