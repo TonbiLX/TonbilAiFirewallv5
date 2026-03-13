@@ -30,8 +30,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **DASH-02**: WebSocket canli veri akisi — bandwidth, DNS, cihaz guncellemeleri (lifecycle-safe)
 - [x] **DASH-03**: Istatistik kartlari — toplam trafik, engellenen sorgu, aktif cihaz, tehdit sayisi
 - [x] **DASH-04**: Bant genisligi grafigi (Vico chart)
-- [ ] **DASH-05**: Home screen widget (Glance) — bant genisligi, cihaz sayisi, son tehdit
-- [ ] **DASH-06**: Quick Settings tile — DNS filtreleme toggle + cihaz engelleme toggle
+- [x] **DASH-05**: Home screen widget (Glance) — bant genisligi, cihaz sayisi, son tehdit
+- [x] **DASH-06**: Quick Settings tile — DNS filtreleme toggle + cihaz engelleme toggle
 
 ### Device Management
 
@@ -155,8 +155,8 @@ Deferred to future release.
 | DASH-02 | Phase 8 | Complete |
 | DASH-03 | Phase 8 | Complete |
 | DASH-04 | Phase 8 | Complete |
-| DASH-05 | Phase 14 | Pending |
-| DASH-06 | Phase 14 | Pending |
+| DASH-05 | Phase 14 | Complete |
+| DASH-06 | Phase 14 | Complete |
 | DEV-01 | Phase 9 | Complete |
 | DEV-02 | Phase 9 | Complete |
 | DEV-03 | Phase 9 | Complete |

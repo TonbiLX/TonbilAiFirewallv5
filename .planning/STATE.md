@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TonbilAiOS Android App
 status: unknown
-last_updated: "2026-03-13T20:41:49.658Z"
+last_updated: "2026-03-13T21:28:28.965Z"
 last_activity: "2026-03-10 - Quick 29: WS security events + Android system notifications"
 progress:
   total_phases: 15
   completed_phases: 13
-  total_plans: 21
-  completed_plans: 21
+  total_plans: 23
+  completed_plans: 22
   percent: 94
 ---
 
@@ -141,6 +141,9 @@ Progress: [██████░░░░] 40%
 - [Phase 13-02]: DHCP lease delete uses local composable state (deleteConfirmMac) for confirmation, not ViewModel state
 - [Phase 13-02]: SecuritySettings: auto-save on slider change + explicit Save+ReloadConfig buttons for manual trigger
 - [Phase 13-02]: MAC validation: inline Regex in AddStaticLeaseDialog, isError+supportingText for UX feedback
+- [Phase 14-android-enhancements]: Widget DataStore ayri 'tonbil_widget' adinda — server_config ile cakismiyor
+- [Phase 14-android-enhancements]: TileService ve Worker'larda Koin DI kullanmadan dogrudan HttpClient — bagimsiz surec guvenilirligi icin
+- [Phase 14-android-enhancements]: DNS QS tile: 4 alani birden toggle (dnssec+tunneling+doh+dga) — backend tek boolean sunmuyor
 
 ### Pending Todos
 
@@ -190,7 +193,7 @@ Progress: [██████░░░░] 40%
 
 ## Session Continuity
 
-Last session: 2026-03-13T20:36:56.536Z
+Last session: 2026-03-13T21:28:22.399Z
 Last activity: 2026-03-12 - Completed quick task 35: AI Insights sayfasi tam yeniden yazim
 Resume file: None
 Notes: |

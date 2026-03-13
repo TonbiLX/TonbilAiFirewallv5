@@ -187,7 +187,7 @@ Plans:
   2. Quick Settings panelinde DNS filtreleme toggle ve cihaz engelleme toggle tile'lari calisiyor
   3. Kritik uyarilarda (DDoS, engellenen cihaz) telefon titriyor
   4. Uygulama ikonuna uzun basinca durum kontrol, cihaz engelle ve AI chat kisayollari gorunuyor
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 14-01-PLAN.md — Glance widget + Quick Settings DNS toggle tile
 - [ ] 14-02-PLAN.md — Haptic feedback + App shortcuts + deep link isleme
@@ -225,5 +225,5 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 11. Network Security | 2/2 | Complete    | 2026-03-13 | - |
 | 12. Traffic Monitoring | 1/1 | Complete    | 2026-03-13 | - |
 | 13. Communication & Config | 2/2 | Complete    | 2026-03-13 | - |
-| 14. Android Enhancements | v2.0 | 0/2 | Not started | - |
+| 14. Android Enhancements | 1/2 | In Progress|  | - |
 | 15. Release Build | v2.0 | 0/1 | Not started | - |
