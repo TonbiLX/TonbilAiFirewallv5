@@ -220,6 +220,32 @@ class DnsFilteringViewModel(
         }
     }
 
+    // Rate limit toggle
+    fun toggleRateLimit(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isTogglingFilter = true) }
+            val currentDns = _uiState.value.securityConfig?.dnsSecurity
+            val updatedDns = currentDns?.copy(rateLimitEnabled = enabled)
+                ?: com.tonbil.aifirewall.data.remote.dto.DnsSecurityConfigDto(rateLimitEnabled = enabled)
+            val update = SecurityConfigUpdateDto(dnsSecurity = updatedDns)
+            securityRepository.updateSecurityConfig(update)
+                .onSuccess { updated ->
+                    _uiState.update {
+                        it.copy(
+                            isTogglingFilter = false,
+                            securityConfig = updated,
+                            actionMessage = if (enabled) "Rate limit aktif" else "Rate limit devre disi",
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.update {
+                        it.copy(isTogglingFilter = false, actionMessage = "Hata: ${e.message}")
+                    }
+                }
+        }
+    }
+
     // Rate limit guncelle
     fun updateRateLimit(perSec: Int) {
         viewModelScope.launch {

@@ -523,7 +523,7 @@ private fun DnsSecurityTab(
                     }
                     Switch(
                         checked = config?.dnsSecurity?.rateLimitEnabled ?: false,
-                        onCheckedChange = { /* Rate limit toggle ileride eklenecek */ },
+                        onCheckedChange = { viewModel.toggleRateLimit(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = NeonGreen,
                             checkedTrackColor = NeonGreen.copy(alpha = 0.3f),
