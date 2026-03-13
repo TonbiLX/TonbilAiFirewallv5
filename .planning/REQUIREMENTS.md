@@ -63,9 +63,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### DDoS Protection
 
-- [ ] **DDOS-01**: DDoS koruma durumu ekrani
-- [ ] **DDOS-02**: Basitlestirilmis saldiri haritasi (mobil optimized)
-- [ ] **DDOS-03**: Canli saldiri akisi (son tehditler)
+- [x] **DDOS-01**: DDoS koruma durumu ekrani
+- [x] **DDOS-02**: Basitlestirilmis saldiri haritasi (mobil optimized)
+- [x] **DDOS-03**: Canli saldiri akisi (son tehditler)
 
 ### Traffic Monitoring
 
@@ -173,9 +173,9 @@ Deferred to future release.
 | VPN-02 | Phase 11 | Pending |
 | VPN-03 | Phase 11 | Pending |
 | VPN-04 | Phase 11 | Pending |
-| DDOS-01 | Phase 11 | Pending |
-| DDOS-02 | Phase 11 | Pending |
-| DDOS-03 | Phase 11 | Pending |
+| DDOS-01 | Phase 11 | Complete |
+| DDOS-02 | Phase 11 | Complete |
+| DDOS-03 | Phase 11 | Complete |
 | TRAF-01 | Phase 12 | Pending |
 | TRAF-02 | Phase 12 | Pending |
 | TRAF-03 | Phase 12 | Pending |

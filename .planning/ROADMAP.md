@@ -31,7 +31,7 @@
 - [x] **Phase 8: Dashboard** - Ana dashboard ekrani, WebSocket canli veri, grafikler (completed 2026-03-06)
 - [ ] **Phase 9: Device Management** - Cihaz listesi, detay, engelleme, profil atama
 - [x] **Phase 10: DNS Filtering** - DNS ozet, filtreleme toggle, kategoriler, profil yonetimi, guvenlik katmanlari (completed 2026-03-13)
-- [ ] **Phase 11: Network Security** - Firewall kurallari, VPN peer yonetimi, DDoS koruma izleme
+- [x] **Phase 11: Network Security** - Firewall kurallari, VPN peer yonetimi, DDoS koruma izleme (completed 2026-03-13)
 - [ ] **Phase 12: Traffic Monitoring** - Canli akislar, buyuk transferler, gecmis, grafikler
 - [ ] **Phase 13: Communication & Config** - Push notifications, AI Chat, Telegram, WiFi AP, DHCP, Guvenlik ayarlari
 - [ ] **Phase 14: Android Enhancements** - Home widget, Quick Settings tile, haptic feedback, app shortcuts
@@ -145,7 +145,7 @@ Plans:
   2. VPN peer listesi goruntulenebiliyor, yeni peer eklenebiliyor/silinebiliyor ve peer QR kodu goruntulenip paylasılabiliyor
   3. VPN durumu (aktif/pasif) goruntulenebiliyor
   4. DDoS koruma durumu, basitlestirilmis saldiri haritasi ve canli saldiri akisi goruntulenebiliyor
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 11-01-PLAN.md — Firewall edit dialog + priority siralama + VPN ShareSheet + VPN durum gostergesi
 - [ ] 11-02-PLAN.md — DDoS koruma durumu ozeti + saldiri listesi + harita navigasyonu
@@ -212,7 +212,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 8. Dashboard | 2/2 | Complete   | 2026-03-06 | - |
 | 9. Device Management | v2.0 | 0/2 | Planning | - |
 | 10. DNS Filtering | 2/2 | Complete    | 2026-03-13 | - |
-| 11. Network Security | v2.0 | 0/? | Not started | - |
+| 11. Network Security | 2/2 | Complete   | 2026-03-13 | - |
 | 12. Traffic Monitoring | v2.0 | 0/? | Not started | - |
 | 13. Communication & Config | v2.0 | 0/? | Not started | - |
 | 14. Android Enhancements | v2.0 | 0/? | Not started | - |
