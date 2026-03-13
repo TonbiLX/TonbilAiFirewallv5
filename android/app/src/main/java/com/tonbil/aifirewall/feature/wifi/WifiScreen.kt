@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.SignalWifi4Bar
 import androidx.compose.material.icons.outlined.SignalWifiOff
 import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,7 +44,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -67,12 +70,40 @@ fun WifiScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = CyberpunkTheme.colors
     val snackbarHostState = remember { SnackbarHostState() }
+    var showDisableDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.actionMessage) {
         uiState.actionMessage?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearActionMessage()
         }
+    }
+
+    if (showDisableDialog) {
+        AlertDialog(
+            onDismissRequest = { showDisableDialog = false },
+            title = { Text("WiFi AP Kapat", color = colors.neonCyan) },
+            text = {
+                Text(
+                    "WiFi erisim noktasini kapatmak tum bagli cihazlarin baglantilarini keser. Devam edilsin mi?",
+                    color = colors.neonAmber,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.toggleWifi()
+                        showDisableDialog = false
+                    },
+                ) { Text("Kapat", color = colors.neonRed) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisableDialog = false }) {
+                    Text("Vazgec", color = TextSecondary)
+                }
+            },
+            containerColor = colors.glassBg,
+        )
     }
 
     Scaffold(
@@ -165,7 +196,14 @@ fun WifiScreen(
                         item {
                             WifiStatusCard(
                                 status = uiState.status,
-                                onToggle = { viewModel.toggleWifi() },
+                                onToggle = {
+                                    val isRunning = uiState.status?.running == true
+                                    if (isRunning) {
+                                        showDisableDialog = true
+                                    } else {
+                                        viewModel.toggleWifi()
+                                    }
+                                },
                                 isActionLoading = uiState.isActionLoading,
                                 colors = colors,
                             )
