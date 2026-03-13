@@ -19,6 +19,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class DeviceServicesRoute(val deviceId: String, val deviceName: String = "")
 
 // ========== Network Section ==========
+@Serializable object DnsFilteringRoute
 @Serializable object DnsBlockingRoute
 @Serializable object DhcpRoute
 @Serializable object VpnServerRoute

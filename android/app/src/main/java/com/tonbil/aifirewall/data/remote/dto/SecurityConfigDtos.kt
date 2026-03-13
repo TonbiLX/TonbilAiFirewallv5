@@ -9,6 +9,14 @@ data class SecurityConfigDto(
     @SerialName("threat_analysis") val threatAnalysis: ThreatAnalysisConfigDto = ThreatAnalysisConfigDto(),
     @SerialName("dns_security") val dnsSecurity: DnsSecurityConfigDto = DnsSecurityConfigDto(),
     @SerialName("alert_settings") val alertSettings: AlertSettingsConfigDto = AlertSettingsConfigDto(),
+    // DNS Guvenlik Katmanlari (flat alanlar — backend SecurityConfigResponse)
+    @SerialName("dnssec_enabled") val dnssecEnabled: Boolean = true,
+    @SerialName("dnssec_mode") val dnssecMode: String = "log_only",
+    @SerialName("dns_tunneling_enabled") val dnsTunnelingEnabled: Boolean = true,
+    @SerialName("dns_tunneling_max_subdomain_len") val dnsTunnelingMaxSubdomainLen: Int = 50,
+    @SerialName("dns_tunneling_max_labels_per_min") val dnsTunnelingMaxLabelsPerMin: Int = 100,
+    @SerialName("dns_tunneling_txt_ratio_threshold") val dnsTunnelingTxtRatioThreshold: Int = 30,
+    @SerialName("doh_enabled") val dohEnabled: Boolean = true,
 )
 
 // Tehdit analizi ayarlari
@@ -47,6 +55,15 @@ data class SecurityConfigUpdateDto(
     @SerialName("threat_analysis") val threatAnalysis: ThreatAnalysisConfigDto? = null,
     @SerialName("dns_security") val dnsSecurity: DnsSecurityConfigDto? = null,
     @SerialName("alert_settings") val alertSettings: AlertSettingsConfigDto? = null,
+    // DNS Guvenlik Katmanlari (flat, null ise backend mevcut degeri korur)
+    @SerialName("dnssec_enabled") val dnssecEnabled: Boolean? = null,
+    @SerialName("dnssec_mode") val dnssecMode: String? = null,
+    @SerialName("dns_tunneling_enabled") val dnsTunnelingEnabled: Boolean? = null,
+    @SerialName("dns_tunneling_max_subdomain_len") val dnsTunnelingMaxSubdomainLen: Int? = null,
+    @SerialName("dns_tunneling_max_labels_per_min") val dnsTunnelingMaxLabelsPerMin: Int? = null,
+    @SerialName("dns_tunneling_txt_ratio_threshold") val dnsTunnelingTxtRatioThreshold: Int? = null,
+    @SerialName("doh_enabled") val dohEnabled: Boolean? = null,
+    @SerialName("dga_detection_enabled") val dgaDetectionEnabled: Boolean? = null,
 )
 
 // GET /security/defaults response

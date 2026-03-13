@@ -13,6 +13,10 @@ data class DnsStatsDto(
     @SerialName("active_blocklists") val activeBlocklists: Int = 0,
     @SerialName("top_blocked_domains") val topBlockedDomains: List<TopDomainDto> = emptyList(),
     @SerialName("top_queried_domains") val topQueriedDomains: List<TopDomainDto> = emptyList(),
+    // Kaynak turu bazli sorgu sayilari (DNS source_type loglama)
+    @SerialName("external_queries_24h") val externalQueries24h: Int = 0,
+    @SerialName("dot_queries_24h") val dotQueries24h: Int = 0,
+    @SerialName("internal_queries_24h") val internalQueries24h: Int = 0,
 )
 
 // Firewall Stats
