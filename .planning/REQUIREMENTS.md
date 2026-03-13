@@ -43,10 +43,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### DNS Filtering
 
-- [ ] **DNS-01**: DNS ozet ekrani — toplam sorgu, engelleme sayisi, en cok sorgulanan/engellenen domainler
-- [ ] **DNS-02**: DNS filtreleme hizli toggle (tek dokunusla ac/kapa)
-- [ ] **DNS-03**: Icerik kategorileri goruntuleme + blocklist baglama yonetimi
-- [ ] **DNS-04**: Profil yonetimi — profil olusturma/duzenleme, kategori secimi, bandwidth limiti
+- [x] **DNS-01**: DNS ozet ekrani — toplam sorgu, engelleme sayisi, en cok sorgulanan/engellenen domainler
+- [x] **DNS-02**: DNS filtreleme hizli toggle (tek dokunusla ac/kapa)
+- [x] **DNS-03**: Icerik kategorileri goruntuleme + blocklist baglama yonetimi
+- [x] **DNS-04**: Profil yonetimi — profil olusturma/duzenleme, kategori secimi, bandwidth limiti
 
 ### Firewall
 
@@ -162,10 +162,10 @@ Deferred to future release.
 | DEV-03 | Phase 9 | Complete |
 | DEV-04 | Phase 9 | Complete |
 | DEV-05 | Phase 9 | Complete |
-| DNS-01 | Phase 10 | Pending |
-| DNS-02 | Phase 10 | Pending |
-| DNS-03 | Phase 10 | Pending |
-| DNS-04 | Phase 10 | Pending |
+| DNS-01 | Phase 10 | Complete |
+| DNS-02 | Phase 10 | Complete |
+| DNS-03 | Phase 10 | Complete |
+| DNS-04 | Phase 10 | Complete |
 | FW-01 | Phase 11 | Pending |
 | FW-02 | Phase 11 | Pending |
 | FW-03 | Phase 11 | Pending |

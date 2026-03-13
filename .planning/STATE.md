@@ -3,9 +3,24 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TonbilAiOS Android App
 status: unknown
+last_updated: "2026-03-13T16:29:59.779Z"
+last_activity: "2026-03-10 - Quick 29: WS security events + Android system notifications"
+progress:
+  total_phases: 15
+  completed_phases: 9
+  total_plans: 16
+  completed_plans: 15
+  percent: 94
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: TonbilAiOS Android App
+status: unknown
 last_updated: "2026-03-06T12:29:35.088Z"
 progress:
-  total_phases: 9
+  [█████████░] 94%
   completed_phases: 9
   total_plans: 14
   completed_plans: 14
@@ -70,6 +85,7 @@ Progress: [██████░░░░] 40%
 | 07-authentication | 2/2 | 6 min | 3 min |
 | 08-dashboard | 2/2 | 4 min | 2 min |
 | 09-device-management | 2/2 | 6 min | 3 min |
+| Phase 10-dns-filtering P01 | 6 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -111,6 +127,8 @@ Progress: [██████░░░░] 40%
 - [09-02] parametersOf pattern for DeviceDetailViewModel deviceId injection (simpler than SavedStateHandle)
 - [09-02] ExposedDropdownMenuBox with MenuAnchorType.PrimaryNotEditable for profile selector
 - [09-02] Parallel async loading in DeviceDetailViewModel with async/coroutineScope
+- [Phase 10-01]: Global DNS toggle: backend tek boolean yok, 4 alani ayni anda guncelle (dnssec+tunneling+doh+dga)
+- [Phase 10-01]: SecurityConfigUpdateDto flat nullable alanlar: sadece degistirilen alan dolu, backend diger alanlari korur
 
 ### Pending Todos
 
@@ -160,9 +178,9 @@ Progress: [██████░░░░] 40%
 
 ## Session Continuity
 
-Last session: 2026-03-12
+Last session: 2026-03-13T16:29:59.774Z
 Last activity: 2026-03-12 - Completed quick task 35: AI Insights sayfasi tam yeniden yazim
-Resume file: .planning/quick/23-android-complete-app/EXECUTION-GUIDE.md
+Resume file: None
 Notes: |
   - Quick 28: Push bildirim API (GET /channels, POST toggle, POST register), Android screen geri butonu + Build.MODEL
   - Quick 27: Android IP Reputation tam uyarlama (17 DTO, 13 endpoint, 4-tab UI, ulke engelleme)

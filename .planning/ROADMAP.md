@@ -131,7 +131,7 @@ Plans:
   2. Tek dokunusla DNS filtreleme acilip kapatilabiliyor
   3. Icerik kategorileri goruntulenebiliyor ve blocklist baglama yonetimi yapilabiliyor
   4. Profil olusturulabiliyor/duzenlenebiliyor — kategori secimi ve bandwidth limiti ayarlanabiliyor
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 10-01-PLAN.md — Veri katmani: DTO guncellemeleri (DNS guvenlik katmanlari, source type), DnsFilteringViewModel, ProfilesViewModel genisletmesi
 - [ ] 10-02-PLAN.md — UI katmani: DnsFilteringScreen (4-tab hub: Ozet, Kategoriler, Profiller, Guvenlik), ProfilesScreen content_filters, navigasyon wiring
@@ -208,7 +208,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 7. Authentication | 1/2 | In Progress|  | - |
 | 8. Dashboard | 2/2 | Complete   | 2026-03-06 | - |
 | 9. Device Management | v2.0 | 0/2 | Planning | - |
-| 10. DNS Filtering | v2.0 | 0/2 | Planning | - |
+| 10. DNS Filtering | 1/2 | In Progress|  | - |
 | 11. Network Security | v2.0 | 0/? | Not started | - |
 | 12. Traffic Monitoring | v2.0 | 0/? | Not started | - |
 | 13. Communication & Config | v2.0 | 0/? | Not started | - |
