@@ -24,6 +24,18 @@
             </intent-filter>
         </activity>
 
+        <!-- TonbilAiOS Ana Ekran Widget -->
+        <receiver
+            android:name=".widget.TonbilWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tonbil_widget_info" />
+        </receiver>
+
     </application>
 
 </manifest>

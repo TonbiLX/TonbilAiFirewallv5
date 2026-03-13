@@ -2,10 +2,16 @@ package com.tonbil.aifirewall
 
 import android.app.Application
 import android.util.Log
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.tonbil.aifirewall.data.remote.WebSocketManager
 import com.tonbil.aifirewall.di.appModule
 import com.tonbil.aifirewall.di.featureModules
 import com.tonbil.aifirewall.util.NotificationHelper
+import com.tonbil.aifirewall.widget.TonbilWidgetWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,6 +20,7 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.java.KoinJavaComponent.getKoin
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 class TonbilApp : Application() {
 
@@ -65,6 +72,30 @@ class TonbilApp : Application() {
 
         // WebSocket security event'lerini dinle ve sistem bildirimi goster
         observeSecurityEvents()
+
+        // Widget'i 15 dakikada bir guncelleyen WorkManager periyodik is
+        scheduleWidgetRefresh()
+    }
+
+    private fun scheduleWidgetRefresh() {
+        try {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+
+            val request = PeriodicWorkRequestBuilder<TonbilWidgetWorker>(15, TimeUnit.MINUTES)
+                .setConstraints(constraints)
+                .build()
+
+            WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                "tonbil_widget_refresh",
+                ExistingPeriodicWorkPolicy.KEEP,
+                request
+            )
+            Log.d("TonbilApp", "Widget guncelleme is planlandi (15 dk)")
+        } catch (e: Exception) {
+            Log.e("TonbilApp", "Widget is planlamasi basarisiz: ${e.message}")
+        }
     }
 
     private fun observeSecurityEvents() {
