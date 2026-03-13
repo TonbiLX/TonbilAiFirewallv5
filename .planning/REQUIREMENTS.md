@@ -69,10 +69,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Traffic Monitoring
 
-- [ ] **TRAF-01**: Canli akislar ekrani — per-flow baglanti listesi (5s yenileme)
-- [ ] **TRAF-02**: Buyuk transferler listesi (>1MB flowlar)
-- [ ] **TRAF-03**: Trafik gecmisi ekrani (sayfalama destegi)
-- [ ] **TRAF-04**: Per-device bant genisligi zaman serisi grafikleri (Vico)
+- [x] **TRAF-01**: Canli akislar ekrani — per-flow baglanti listesi (5s yenileme)
+- [x] **TRAF-02**: Buyuk transferler listesi (>1MB flowlar)
+- [x] **TRAF-03**: Trafik gecmisi ekrani (sayfalama destegi)
+- [x] **TRAF-04**: Per-device bant genisligi zaman serisi grafikleri (Vico)
 
 ### Push Notifications
 
@@ -176,10 +176,10 @@ Deferred to future release.
 | DDOS-01 | Phase 11 | Complete |
 | DDOS-02 | Phase 11 | Complete |
 | DDOS-03 | Phase 11 | Complete |
-| TRAF-01 | Phase 12 | Pending |
-| TRAF-02 | Phase 12 | Pending |
-| TRAF-03 | Phase 12 | Pending |
-| TRAF-04 | Phase 12 | Pending |
+| TRAF-01 | Phase 12 | Complete |
+| TRAF-02 | Phase 12 | Complete |
+| TRAF-03 | Phase 12 | Complete |
+| TRAF-04 | Phase 12 | Complete |
 | NOTIF-01 | Phase 13 | Pending |
 | NOTIF-02 | Phase 13 | Pending |
 | NOTIF-03 | Phase 13 | Pending |

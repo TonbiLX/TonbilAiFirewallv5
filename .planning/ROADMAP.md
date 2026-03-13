@@ -32,7 +32,7 @@
 - [ ] **Phase 9: Device Management** - Cihaz listesi, detay, engelleme, profil atama
 - [x] **Phase 10: DNS Filtering** - DNS ozet, filtreleme toggle, kategoriler, profil yonetimi, guvenlik katmanlari (completed 2026-03-13)
 - [x] **Phase 11: Network Security** - Firewall kurallari, VPN peer yonetimi, DDoS koruma izleme (completed 2026-03-13)
-- [ ] **Phase 12: Traffic Monitoring** - Canli akislar, buyuk transferler, gecmis, grafikler
+- [x] **Phase 12: Traffic Monitoring** - Canli akislar, buyuk transferler, gecmis, grafikler (completed 2026-03-13)
 - [ ] **Phase 13: Communication & Config** - Push notifications, AI Chat, Telegram, WiFi AP, DHCP, Guvenlik ayarlari
 - [ ] **Phase 14: Android Enhancements** - Home widget, Quick Settings tile, haptic feedback, app shortcuts
 - [ ] **Phase 15: Release Build** - Imzali APK build ve S24 Ultra'ya yukleme
@@ -159,7 +159,7 @@ Plans:
   2. Buyuk transferler listesinde >1MB flow'lar ayri goruntulenebiliyor
   3. Trafik gecmisi ekraninda sayfalama ile eski kayitlar goruntulenebiliyor
   4. Per-device bant genisligi zaman serisi grafigi goruntulenebiliyor
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
 - [ ] 12-01-PLAN.md — TrafficScreen ince ayar + DeviceDetailScreen Vico grafik
 
@@ -221,7 +221,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 9. Device Management | v2.0 | 0/2 | Planning | - |
 | 10. DNS Filtering | 2/2 | Complete    | 2026-03-13 | - |
 | 11. Network Security | 2/2 | Complete    | 2026-03-13 | - |
-| 12. Traffic Monitoring | v2.0 | 0/? | Not started | - |
+| 12. Traffic Monitoring | 1/1 | Complete   | 2026-03-13 | - |
 | 13. Communication & Config | v2.0 | 0/? | Not started | - |
 | 14. Android Enhancements | v2.0 | 0/? | Not started | - |
 | 15. Release Build | v2.0 | 0/? | Not started | - |
