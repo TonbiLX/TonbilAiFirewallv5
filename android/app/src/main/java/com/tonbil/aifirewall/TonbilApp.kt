@@ -60,8 +60,8 @@ class TonbilApp : Application() {
             modules(appModule, featureModules)
         }
 
-        // Bildirim kanalini olustur
-        NotificationHelper.createNotificationChannel(this)
+        // 4 bildirim kanalini olustur (security_threats, device_events, traffic_alerts, system_notifications)
+        NotificationHelper.createNotificationChannels(this)
 
         // WebSocket security event'lerini dinle ve sistem bildirimi goster
         observeSecurityEvents()
