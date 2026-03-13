@@ -234,8 +234,11 @@ fun SecurityScreen(
                             1 -> FirewallTab(viewModel, uiState.firewallStats, uiState.firewallRules)
                             2 -> VpnTab(viewModel, uiState.vpnStats, uiState.vpnPeers)
                             3 -> DdosTab(
+                                viewModel = viewModel,
                                 protections = uiState.ddosProtections,
                                 counters = uiState.ddosCounters,
+                                attackMap = uiState.ddosAttackMap,
+                                onNavigateToDdosMap = onNavigateToDdosMap,
                             )
                             4 -> TrafficTab(uiState.liveFlows, uiState.flowStats)
                             5 -> AiTab(uiState.insights, uiState.securityStats)
