@@ -17,7 +17,9 @@ import androidx.navigation.compose.rememberNavController
 import com.tonbil.aifirewall.data.local.TokenManager
 import com.tonbil.aifirewall.ui.navigation.AppNavHost
 import com.tonbil.aifirewall.ui.navigation.CyberpunkBottomNav
+import com.tonbil.aifirewall.ui.navigation.ChatRoute
 import com.tonbil.aifirewall.ui.navigation.DashboardRoute
+import com.tonbil.aifirewall.ui.navigation.DevicesRoute
 import com.tonbil.aifirewall.ui.navigation.LoginRoute
 import com.tonbil.aifirewall.ui.navigation.ServerSettingsRoute
 import com.tonbil.aifirewall.ui.navigation.SplashRoute
@@ -57,13 +59,24 @@ class MainActivity : ComponentActivity() {
             crashFile.delete()
         }
 
+        // Shortcut / deep link intent kontrolu
+        val navigateTo = intent?.getStringExtra("navigate_to")
+
         // Splash intro: only once per day, at app launch (before login)
         val showSplash = tokenManager.shouldShowSplashToday()
         if (showSplash) {
             tokenManager.markSplashShownToday()
         }
 
-        val startDestination: Any = if (showSplash) {
+        // Deep link ile acilmissa ve kullanici giris yapmissa dogrudan hedef ekrana git
+        val startDestination: Any = if (navigateTo != null && tokenManager.isLoggedIn()) {
+            when (navigateTo) {
+                "dashboard" -> DashboardRoute
+                "devices" -> DevicesRoute
+                "chat" -> ChatRoute
+                else -> DashboardRoute
+            }
+        } else if (showSplash) {
             SplashRoute
         } else if (tokenManager.isLoggedIn() && !tokenManager.isBiometricEnabled()) {
             DashboardRoute

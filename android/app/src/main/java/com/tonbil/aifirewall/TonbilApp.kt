@@ -13,6 +13,7 @@ import com.tonbil.aifirewall.di.appModule
 import com.tonbil.aifirewall.di.featureModules
 import com.tonbil.aifirewall.util.HapticHelper
 import com.tonbil.aifirewall.util.NotificationHelper
+import com.tonbil.aifirewall.util.ShortcutHelper
 import com.tonbil.aifirewall.widget.TonbilWidgetWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -89,6 +90,9 @@ class TonbilApp : Application() {
             override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) {}
             override fun onActivityDestroyed(activity: Activity) {}
         })
+
+        // Dinamik uygulama kisayollarini kaydet (Durum, Cihazlar, AI Chat)
+        ShortcutHelper.setupDynamicShortcuts(this)
 
         // Widget'i 15 dakikada bir guncelleyen WorkManager periyodik is
         scheduleWidgetRefresh()
