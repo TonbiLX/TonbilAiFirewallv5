@@ -70,7 +70,7 @@
 **Requirements**: SETUP-01, SETUP-02, SETUP-03, SETUP-04, SETUP-05
 **Success Criteria** (what must be TRUE):
   1. Komut satirindan `./gradlew assembleDebug` basarili APK uretiyor ve S24 Ultra'da aciliyor
-  2. Uygulama acildiginda cyberpunk koyu tema gorунuyor (neon cyan/magenta vurgu renkleri, koyu arka plan)
+  2. Uygulama acildiginda cyberpunk koyu tema gorunuyor (neon cyan/magenta vurgu renkleri, koyu arka plan)
   3. Bottom navigation ile en az 4 ana ekran arasinda gecis yapilabiliyor
   4. API client wall.tonbilx.com adresine test istegi gonderebiliyor ve JSON yanit aliyor
 **Plans:** 2 plans
@@ -187,9 +187,10 @@ Plans:
   2. Quick Settings panelinde DNS filtreleme toggle ve cihaz engelleme toggle tile'lari calisiyor
   3. Kritik uyarilarda (DDoS, engellenen cihaz) telefon titriyor
   4. Uygulama ikonuna uzun basinca durum kontrol, cihaz engelle ve AI chat kisayollari gorunuyor
-**Plans:** 1 plan
+**Plans:** 2 plans
 Plans:
-- [ ] 12-01-PLAN.md — TrafficScreen ince ayar + DeviceDetailScreen Vico grafik
+- [ ] 14-01-PLAN.md — Glance widget + Quick Settings DNS toggle tile
+- [ ] 14-02-PLAN.md — Haptic feedback + App shortcuts + deep link isleme
 
 ### Phase 15: Release Build
 **Goal**: Imzali APK uretilip S24 Ultra'ya basariyla yuklenmis — uygulama production-ready
@@ -201,7 +202,7 @@ Plans:
   3. Arka planda push bildirimler calisiyor, uygulama kapatilsa bile bildirim geliyor
 **Plans:** 1 plan
 Plans:
-- [ ] 12-01-PLAN.md — TrafficScreen ince ayar + DeviceDetailScreen Vico grafik
+- [ ] 15-01-PLAN.md — Release APK build + S24 Ultra sideload
 
 ## Progress
 
@@ -224,5 +225,5 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 | 11. Network Security | 2/2 | Complete    | 2026-03-13 | - |
 | 12. Traffic Monitoring | 1/1 | Complete    | 2026-03-13 | - |
 | 13. Communication & Config | 2/2 | Complete    | 2026-03-13 | - |
-| 14. Android Enhancements | v2.0 | 0/? | Not started | - |
-| 15. Release Build | v2.0 | 0/? | Not started | - |
+| 14. Android Enhancements | v2.0 | 0/2 | Not started | - |
+| 15. Release Build | v2.0 | 0/1 | Not started | - |
