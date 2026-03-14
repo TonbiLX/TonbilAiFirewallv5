@@ -197,11 +197,12 @@ Progress: [██████░░░░] 40%
 | 31 | IP itibar API kullanim ust bari — 3 havuz (Check/Blacklist/Check-Block) birlesik bar, endpoint siralama fix, DAILY_LIMIT 1000, 429 header okuma | 2026-03-11 | - | [31-ip-itibar-api-kullanim-ust-bari](./quick/31-ip-itibar-api-kullanim-ust-bari/) |
 | 34 | IP Reputation tam optimizasyon — API israf fix (3 endpoint sifir hak), HTTP pool, GeoIP batch, akilli TTL (6h-7d), lokal blocklist (5 kaynak), hibrit skor, frontend cache | 2026-03-12 | 913f052, 49f2f87, d2cb03e | [34-ip-reputation-tam-optimizasyon](./quick/34-ip-reputation-tam-optimizasyon-5-faz-api/) |
 | 35 | AI Insights sayfasi tam yeniden yazim — saatlik trend grafik (AreaChart), domain reputation sorgulama, severity filtre tablari, goreceli zaman, acilir IP listesi | 2026-03-12 | 657580c | [35-ai-insights](./quick/35-ai-insights-sayfas-n-temizle-ve-anlaml-h/) |
+| 38 | DNS sorgu loglari ekrani + dis baglantilar (DoT/DoH/DNS) cihaz tespiti | 2026-03-14 | 3201c15, 708f55c, bb5da38 | [38-dns-sorgu-loglari](./quick/38-dns-sorgu-loglari-ekrani-dis-baglantilar/) |
 
 ## Session Continuity
 
 Last session: 2026-03-14T02:58:24.111Z
-Last activity: 2026-03-12 - Completed quick task 35: AI Insights sayfasi tam yeniden yazim
+Last activity: 2026-03-14 - Completed quick task 38: DNS sorgu loglari + dis baglantilar tespiti
 Resume file: None
 Notes: |
   - Quick 28: Push bildirim API (GET /channels, POST toggle, POST register), Android screen geri butonu + Build.MODEL
