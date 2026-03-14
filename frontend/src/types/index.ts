@@ -32,6 +32,9 @@ export interface Device {
   bandwidth_limit_mbps: number | null;
   // IPTV cihaz modu
   is_iptv: boolean;
+  // Dış DNS istemcisi
+  is_external: boolean;
+  connection_type: string | null;  // "dns" | "dot" | "doh"
   // Risk Degerlendirme
   risk_score: number;
   risk_level: "safe" | "suspicious" | "dangerous";

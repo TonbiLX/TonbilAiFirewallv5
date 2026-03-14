@@ -104,6 +104,8 @@ class DeviceResponse(BaseModel):
     last_online_start: Optional[datetime] = None
     bandwidth_limit_mbps: Optional[int] = None
     is_iptv: bool = False
+    is_external: bool = False
+    connection_type: Optional[str] = None
     device_type: Optional[str] = None
     risk_score: int = 0
     risk_level: str = "safe"

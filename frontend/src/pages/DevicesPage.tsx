@@ -35,6 +35,7 @@ import {
   RefreshCw,
   Loader2,
   ShieldX,
+  Globe,
 } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { GlassCard } from "../components/common/GlassCard";
@@ -49,7 +50,6 @@ import {
   fetchDeviceConnectionHistory,
   setDeviceBandwidthLimit,
   scanDevices,
-  fetchExternalDnsConnections,
 } from "../services/deviceApi";
 import { fetchProfiles } from "../services/profileApi";
 import { createStaticLease } from "../services/dhcpApi";
@@ -57,6 +57,7 @@ import type { Device, Profile, DeviceConnectionLog } from "../types";
 
 // --- Cihaz tipi ikonu ---
 function getDeviceIcon(device: Device) {
+  if (device.is_external) return Globe;
   const t = device.device_type;
   if (t === "phone") return Smartphone;
   if (t === "tv") return Tv;
@@ -67,6 +68,16 @@ function getDeviceIcon(device: Device) {
   if (t === "network_device") return Router;
   return Monitor;
 }
+
+// --- Bağlantı tipi etiketi ---
+const connectionTypeLabels: Record<string, string> = {
+  dns: "DNS", dot: "DoT", doh: "DoH",
+};
+const connectionTypeColors: Record<string, string> = {
+  dns: "text-neon-cyan",
+  dot: "text-purple-400",
+  doh: "text-neon-amber",
+};
 
 // --- Risk renkleri ---
 function getRiskColor(level: string) {
@@ -150,22 +161,6 @@ export function DevicesPage() {
   // Ag taramasi
   const [scanning, setScanning] = useState(false);
 
-  // Dis Baglantilar
-  const [extConnections, setExtConnections] = useState<any[]>([]);
-  const [extConnLoading, setExtConnLoading] = useState(false);
-
-  const loadExternalConnections = useCallback(async () => {
-    setExtConnLoading(true);
-    try {
-      const res = await fetchExternalDnsConnections(1);
-      setExtConnections(res.data.connections || []);
-    } catch {
-      setExtConnections([]);
-    } finally {
-      setExtConnLoading(false);
-    }
-  }, []);
-
   // Geri bildirim
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
@@ -190,14 +185,10 @@ export function DevicesPage() {
   }, [activeTab, sortBy, sortOrder]);
 
   useEffect(() => {
-    if (activeTab === "external") {
-      loadExternalConnections();
-    } else {
-      loadData();
-      const interval = setInterval(loadData, 10000);
-      return () => clearInterval(interval);
-    }
-  }, [loadData, loadExternalConnections, activeTab]);
+    loadData();
+    const interval = setInterval(loadData, 10000);
+    return () => clearInterval(interval);
+  }, [loadData]);
 
   // --- Ag taramasi ---
   const handleScanDevices = async () => {
@@ -369,6 +360,10 @@ export function DevicesPage() {
 
   // --- Arama filtresi (client-side) ---
   const filteredDevices = devices.filter((device) => {
+    // Tab filtresi: "external" tab'inda sadece dış cihazları göster
+    if (activeTab === "external" && !device.is_external) return false;
+    // Diğer tablarda dış cihazları gizle (kendi tab'larında gösterilir)
+    if (activeTab !== "external" && activeTab !== "all" && device.is_external) return false;
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -380,8 +375,9 @@ export function DevicesPage() {
   });
 
   // Sayimlar
-  const onlineCount = devices.filter((d) => d.is_online).length;
-  const offlineCount = devices.filter((d) => !d.is_online).length;
+  const onlineCount = devices.filter((d) => d.is_online && !d.is_external).length;
+  const offlineCount = devices.filter((d) => !d.is_online && !d.is_external).length;
+  const externalCount = devices.filter((d) => d.is_external).length;
 
   // --- Loading ekrani ---
   if (loading) return <LoadingSpinner />;
@@ -453,18 +449,13 @@ export function DevicesPage() {
                 : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10"
             }`}
           >
-            <ShieldX size={14} />
-            Dış Bağlantılar
-            {extConnections.length > 0 && (
-              <span className="bg-red-500/20 text-red-400 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                {extConnections.length}
-              </span>
-            )}
+            <Globe size={14} />
+            Dış İstemciler ({externalCount})
           </button>
         </div>
 
-        {/* Arama + Siralama - sadece cihaz tablarinda */}
-        {activeTab !== "external" && <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        {/* Arama + Siralama */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="relative w-full sm:w-72">
             <Search
               size={16}
@@ -501,7 +492,7 @@ export function DevicesPage() {
               {sortOrder === "asc" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
           </div>
-        </div>}
+        </div>
       </div>
 
       {/* Geri bildirim mesaji */}
@@ -522,82 +513,8 @@ export function DevicesPage() {
         </div>
       )}
 
-      {/* Dis Baglantilar Tab icerik */}
-      {activeTab === "external" && (
-        <GlassCard>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <ShieldX className="w-5 h-5 text-neon-amber" />
-              <span className="text-neon-amber font-bold">Dış Bağlantılar</span>
-              <span className="text-xs text-gray-400">(DoT / DoH / DNS Bypass)</span>
-            </div>
-            <button
-              onClick={loadExternalConnections}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-neon-cyan border border-neon-cyan/20 bg-neon-cyan/5 hover:bg-neon-cyan/10 transition-all"
-            >
-              <RefreshCw size={12} />
-              Yenile
-            </button>
-          </div>
-          {extConnLoading ? (
-            <div className="flex justify-center py-10">
-              <Loader2 className="w-6 h-6 text-neon-cyan animate-spin" />
-            </div>
-          ) : extConnections.length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-8">Son 1 saatte DoT/DoH/Bypass bağlantısı tespit edilmedi.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-gray-400 text-xs border-b border-white/10">
-                    <th className="text-left pb-2 pr-4">Tespit Türü</th>
-                    <th className="text-left pb-2 pr-4">Cihaz</th>
-                    <th className="text-left pb-2 pr-4">MAC Adresi</th>
-                    <th className="text-left pb-2 pr-4">Cihaz Tipi</th>
-                    <th className="text-left pb-2 pr-4">Hedef IP</th>
-                    <th className="text-left pb-2 pr-4">Port</th>
-                    <th className="text-left pb-2">Son Görülme</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {extConnections.map((conn: any, i: number) => {
-                    const typeColors: Record<string, string> = {
-                      dot: "text-purple-400 bg-purple-400/10 border-purple-400/30",
-                      doh: "text-neon-amber bg-neon-amber/10 border-neon-amber/30",
-                      dns_bypass: "text-neon-red bg-neon-red/10 border-neon-red/30",
-                    };
-                    const typeLabels: Record<string, string> = {
-                      dot: "DoT", doh: "DoH", dns_bypass: "DNS Bypass",
-                    };
-                    const cls = typeColors[conn.detection_type] || "text-gray-400";
-                    return (
-                      <tr key={i} className="border-b border-white/5 hover:bg-white/5">
-                        <td className="py-2 pr-4">
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded border ${cls}`}>
-                            {typeLabels[conn.detection_type] || conn.detection_type}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-4 text-white">{conn.hostname || conn.device_ip || "-"}</td>
-                        <td className="py-2 pr-4 text-gray-400 font-mono text-xs">{conn.mac_address || "-"}</td>
-                        <td className="py-2 pr-4 text-gray-400">{conn.os_type || "-"}</td>
-                        <td className="py-2 pr-4 text-neon-cyan font-mono text-xs">{conn.dst_ip}</td>
-                        <td className="py-2 pr-4 text-gray-400">{conn.dst_port}</td>
-                        <td className="py-2 text-gray-500 text-xs">
-                          {conn.last_seen ? new Date(conn.last_seen).toLocaleString("tr-TR") : "-"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </GlassCard>
-      )}
-
       {/* Cihaz listesi */}
-      {activeTab !== "external" && (
-        filteredDevices.length === 0 ? (
+      {filteredDevices.length === 0 ? (
           <GlassCard>
             <p className="text-gray-500 text-center py-8">
               {searchQuery
@@ -669,6 +586,12 @@ export function DevicesPage() {
                             >
                               {device.hostname || "Bilinmeyen Cihaz"}
                             </p>
+                            {device.is_external && (
+                              <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-neon-amber/10 text-neon-amber border border-neon-amber/20 shrink-0`}>
+                                <Globe size={10} />
+                                Dış {connectionTypeLabels[device.connection_type || ""] || "DNS"}
+                              </span>
+                            )}
                             {device.is_iptv && (
                               <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 shrink-0">
                                 <Tv size={10} />
@@ -917,7 +840,6 @@ export function DevicesPage() {
             );
           })}
         </div>
-        )
       )}
     </div>
   );

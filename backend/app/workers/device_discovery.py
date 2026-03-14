@@ -1060,3 +1060,143 @@ async def start_device_discovery_worker():
         for ip in stale:
             _known_ips.pop(ip, None)
             _FAILED_IPS.pop(ip, None)
+
+
+def _ip_to_virtual_mac(ip: str) -> str:
+    """Dış IP adresinden deterministik sanal MAC adresi üret.
+    Format: 02:E0:AA:BB:CC:DD (locally administered + E0 prefix)
+    02 = locally administered bit, E0 = External identifier."""
+    try:
+        parts = ip.split(".")
+        if len(parts) == 4:
+            return "02:E0:{:02X}:{:02X}:{:02X}:{:02X}".format(
+                int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
+            )
+    except (ValueError, IndexError):
+        pass
+    # IPv6 veya hatalı IP için hash bazlı MAC
+    import hashlib
+    h = hashlib.md5(ip.encode()).hexdigest()
+    return f"02:E0:{h[0:2].upper()}:{h[2:4].upper()}:{h[4:6].upper()}:{h[6:8].upper()}"
+
+
+# Dış cihaz güncelleme aralığı önbelleği
+_known_external_ips: dict[str, datetime] = {}
+_EXTERNAL_UPDATE_INTERVAL = 60  # 60 saniyede bir güncelle
+
+
+async def discover_external_device(client_ip: str, connection_type: str = "dns"):
+    """Pi'ye dışarıdan DNS istemcisi olarak bağlanan cihazı kaydet/güncelle.
+    connection_type: 'dns' (port 53), 'dot' (port 853), 'doh' (HTTPS).
+
+    Dış cihazlar için MAC adresi fiziksel olarak tespit edilemez,
+    IP'den deterministik sanal MAC üretilir (02:E0:xx:xx:xx:xx).
+    """
+    if not client_ip or client_ip in ("unknown", "0.0.0.0", "127.0.0.1"):
+        return
+
+    # Yerel IP'ler bu fonksiyona gelmemeli
+    if _is_discoverable_ip(client_ip):
+        return
+
+    now = datetime.now()
+
+    # Güncelleme aralığı kontrolü
+    last = _known_external_ips.get(client_ip)
+    if last and (now - last).total_seconds() < _EXTERNAL_UPDATE_INTERVAL:
+        return
+
+    _known_external_ips[client_ip] = now
+
+    virtual_mac = _ip_to_virtual_mac(client_ip)
+
+    try:
+        # Reverse DNS ile hostname çözümleme
+        try:
+            loop = asyncio.get_event_loop()
+            hostname = await asyncio.wait_for(
+                loop.run_in_executor(
+                    _hostname_executor,
+                    lambda: socket.gethostbyaddr(client_ip)[0],
+                ),
+                timeout=3.0,
+            )
+        except Exception:
+            hostname = f"ext-{client_ip}"
+
+        async with async_session_factory() as session:
+            # Önce sanal MAC ile ara (aynı IP'den daha önce kaydedilmiş olabilir)
+            result = await session.execute(
+                select(Device).where(Device.mac_address == virtual_mac)
+            )
+            device = result.scalar_one_or_none()
+
+            if device:
+                # Mevcut dış cihaz — güncelle
+                device.ip_address = client_ip
+                device.last_seen = now
+                device.is_online = True
+                if not device.last_online_start:
+                    device.last_online_start = now
+                # Bağlantı tipini güncelle (doh → dot geçişi olabilir)
+                if connection_type and device.connection_type != connection_type:
+                    device.connection_type = connection_type
+                await session.commit()
+            else:
+                # Yeni dış cihaz — oluştur
+                device = Device(
+                    mac_address=virtual_mac,
+                    ip_address=client_ip,
+                    hostname=hostname,
+                    is_online=True,
+                    is_external=True,
+                    connection_type=connection_type,
+                    first_seen=now,
+                    last_seen=now,
+                    last_online_start=now,
+                    detected_os=None,
+                    device_type="external",
+                )
+                session.add(device)
+                await session.flush()
+
+                # Bağlantı logu
+                log_entry = DeviceConnectionLog(
+                    device_id=device.id,
+                    event_type="connect",
+                    ip_address=client_ip,
+                    timestamp=now,
+                )
+                session.add(log_entry)
+                await session.commit()
+
+                logger.info(
+                    f"Yeni dış DNS istemcisi: {client_ip} ({hostname}) "
+                    f"MAC={virtual_mac} tip={connection_type}"
+                )
+
+                # Telegram bildirimi
+                asyncio.ensure_future(
+                    notify_new_device(
+                        ip=client_ip,
+                        hostname=hostname,
+                        mac=virtual_mac,
+                        manufacturer="Dış Cihaz",
+                        device_type="external",
+                        detected_os=None,
+                    )
+                )
+
+            # Redis cache
+            try:
+                redis_client = await get_redis()
+                await redis_client.set(
+                    f"dns:ip_to_device:{client_ip}",
+                    str(device.id),
+                    ex=600,
+                )
+            except Exception as e:
+                logger.debug(f"Redis dış cihaz cache hatası: {e}")
+
+    except Exception as e:
+        logger.error(f"Dış cihaz keşfi hatası ({client_ip}): {e}")

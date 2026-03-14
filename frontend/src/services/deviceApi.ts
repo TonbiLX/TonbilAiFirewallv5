@@ -22,5 +22,3 @@ export const fetchDeviceConnectionHistory = (id: number, limit = 20) =>
 export const setDeviceBandwidthLimit = (id: number, limit_mbps: number | null) =>
   api.patch(`/devices/${id}/bandwidth`, { limit_mbps });
 export const scanDevices = () => api.post('/devices/scan');
-export const fetchExternalDnsConnections = (hours = 1) =>
-  api.get('/devices/external-dns-connections', { params: { hours } });

@@ -34,6 +34,10 @@ class Device(Base):
     # IPTV cihaz modu: DNS filtreleme bypass + multicast öncelik
     is_iptv = Column(Boolean, default=False)
 
+    # Dış DNS istemcisi: Pi'ye dışarıdan bağlanan cihaz (DoT/DoH/DNS)
+    is_external = Column(Boolean, default=False)
+    connection_type = Column(String(10), nullable=True)  # "dns" | "dot" | "doh"
+
     # Risk Degerlendirme (Faz 3.5 v3)
     risk_score = Column(Integer, default=0)                 # 0-100 risk puani
     risk_level = Column(String(20), default="safe")         # safe/suspicious/dangerous

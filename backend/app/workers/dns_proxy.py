@@ -17,7 +17,7 @@ from collections import deque
 
 import redis.asyncio as aioredis
 
-from app.workers.device_discovery import discover_device
+from app.workers.device_discovery import discover_device, discover_external_device
 from app.workers.threat_analyzer import (
     is_ip_blocked, report_external_query, report_local_query,
     is_trusted_ip,
@@ -668,33 +668,11 @@ class DnsProxyProtocol(asyncio.DatagramProtocol):
         _is_external = not is_local_ip(client_ip)
         _source_type = "EXTERNAL" if _is_external else "INTERNAL"
 
-        # Dış IP kontrolü - yerel ag disindaki sorgulari reddet
-        # ama guvenilir IP'leri yerel gibi isle (sorguyu ilet)
+        # Dış IP kontrolü — dış DNS istemcilerini kabul et ve cihaz olarak kaydet
         if _is_external:
-            if not is_trusted_ip(client_ip):
-                asyncio.ensure_future(
-                    report_external_query(client_ip, domain, qtype_name)
-                )
-                # Dış IP'yi logla (yanıtsız bırakılıyor ama loglanıyor)
-                logger.info(f"EXTERNAL REJECTED {domain} ({qtype_name}) from {client_ip}")
-                self.query_log.append({
-                    "client_ip": client_ip,
-                    "domain": domain,
-                    "query_type": qtype_name,
-                    "blocked": True,
-                    "block_reason": "external_rejected",
-                    "upstream_response_ms": 0,
-                    "answer_ip": "",
-                    "timestamp": datetime.utcnow(),
-                    "destination_port": 53,
-                    "wan_ip": get_wan_ip(),
-                    "source_type": "EXTERNAL",
-                    "dnssec_status": "skipped",
-                    "protocol": "udp",
-                })
-                return  # Dış IP, sorguyu yanitsiz birak
-            # Guvenilir dis IP: yerel gibi isle, sorguyu upstream'e ilet
-            logger.debug(f"Guvenilir dis IP sorgusu kabul edildi: {client_ip} -> {domain}")
+            # Dış cihaz keşfi tetikle (is_external=True olarak kaydedilir)
+            asyncio.ensure_future(discover_external_device(client_ip, "dns"))
+            logger.debug(f"Dış DNS istemcisi kabul edildi: {client_ip} -> {domain}")
 
         self.stats["total_queries"] += 1
 
@@ -854,7 +832,10 @@ class DnsProxyProtocol(asyncio.DatagramProtocol):
             self.transport.sendto(response, addr)
 
         # Cihaz otomatik kesfi - DNS sorgusu yapan IP'yi kaydet
-        asyncio.ensure_future(discover_device(client_ip))
+        if _is_external:
+            asyncio.ensure_future(discover_external_device(client_ip, "dns"))
+        else:
+            asyncio.ensure_future(discover_device(client_ip))
 
         # DNS Fingerprinting - sorgu pattern'inden cihaz tipi tespit et
         asyncio.ensure_future(analyze_fingerprint(client_ip, domain, qtype_name))
@@ -1196,8 +1177,11 @@ async def handle_dot_client(
             writer.write(struct.pack("!H", len(response)) + response)
             await writer.drain()
 
-            # Cihaz kesfi - DoT istemcisi (public IP'ler de kabul edilir)
-            asyncio.ensure_future(discover_device(client_ip, is_dot=True))
+            # Cihaz kesfi - DoT istemcisi
+            if _is_local_client(client_ip):
+                asyncio.ensure_future(discover_device(client_ip, is_dot=True))
+            else:
+                asyncio.ensure_future(discover_external_device(client_ip, "dot"))
 
             # Tehdit analizi - DoT sorgulari için de
             if qtype_name in THREAT_SUSPICIOUS_QTYPES or not blocked:
@@ -1352,17 +1336,9 @@ async def handle_doh_query(
     _is_external = not is_local_ip(client_ip)
     _source_type = "DOH"
 
-    # Dis IP kontrolu
-    if _is_external and not is_trusted_ip(client_ip):
-        query_log.append({
-            "client_ip": client_ip, "domain": domain, "query_type": qtype_name,
-            "blocked": True, "block_reason": "external_rejected",
-            "upstream_response_ms": 0, "answer_ip": "",
-            "timestamp": datetime.utcnow(), "destination_port": 443,
-            "wan_ip": get_wan_ip(), "source_type": _source_type,
-            "dnssec_status": "skipped", "protocol": "doh",
-        })
-        return b''
+    # Dış IP: cihaz keşfi tetikle (dış DNS istemcisi olarak kaydet)
+    if _is_external:
+        asyncio.ensure_future(discover_external_device(client_ip, "doh"))
 
     # Engelleme kararı (qtype, cihaz ozel kural, servis, profil/global, reputation)
     blocked = False
