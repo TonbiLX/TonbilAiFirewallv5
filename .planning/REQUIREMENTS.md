@@ -112,7 +112,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **UX-01**: Haptic feedback — kritik uyarilarda titresim
 - [x] **UX-02**: App shortcuts — uzun basma menusu (durum kontrol, cihaz engelle, AI chat)
-- [ ] **UX-03**: APK build — imzali release APK olusturma ve S24 Ultra'ya yukleme
+- [x] **UX-03**: APK build — imzali release APK olusturma ve S24 Ultra'ya yukleme
 
 ## v2 Requirements
 
@@ -198,7 +198,7 @@ Deferred to future release.
 | SEC-02 | Phase 13 | Complete |
 | UX-01 | Phase 14 | Complete |
 | UX-02 | Phase 14 | Complete |
-| UX-03 | Phase 15 | Pending |
+| UX-03 | Phase 15 | Complete |
 
 **Coverage:**
 - v1 requirements: 59 total

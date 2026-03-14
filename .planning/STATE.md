@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: TonbilAiOS Android App
 status: unknown
-last_updated: "2026-03-13T21:39:02.964Z"
+last_updated: "2026-03-14T02:58:24.116Z"
 last_activity: "2026-03-10 - Quick 29: WS security events + Android system notifications"
 progress:
   total_phases: 15
-  completed_phases: 14
-  total_plans: 23
-  completed_plans: 23
+  completed_phases: 15
+  total_plans: 24
+  completed_plans: 24
   percent: 94
 ---
 
@@ -90,6 +90,7 @@ Progress: [██████░░░░] 40%
 | Phase 13-communication-config P01 | 2 | 2 tasks | 3 files |
 | Phase 13-communication-config P02 | 5 | 2 tasks | 3 files |
 | Phase 14-android-enhancements P02 | 12 | 2 tasks | 4 files |
+| Phase 15-release-build P01 | 7 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -147,6 +148,9 @@ Progress: [██████░░░░] 40%
 - [Phase 14-android-enhancements]: DNS QS tile: 4 alani birden toggle (dnssec+tunneling+doh+dga) — backend tek boolean sunmuyor
 - [Phase 14-android-enhancements]: HapticFeedbackConstants.REJECT critical icin, CONFIRM warning icin — izin gerektirmiyor
 - [Phase 14-android-enhancements]: navigate_to deep link: giris yapildiysa dogrudan hedef, giris yapilmamissa normal Login akisi
+- [Phase 15-01]: versionCode 2 / versionName 2.0.0 ile ilk release build uretildi
+- [Phase 15-01]: lint abortOnError=false — Kotlin analysis API lint bug nedeniyle (ServerConfig.kt interface was expected hatasi)
+- [Phase 15-01]: Google Tink ErrorProne dontwarn kurallari — security-crypto bagimliligi gerekli kildi
 
 ### Pending Todos
 
@@ -196,7 +200,7 @@ Progress: [██████░░░░] 40%
 
 ## Session Continuity
 
-Last session: 2026-03-13T21:34:32.131Z
+Last session: 2026-03-14T02:58:24.111Z
 Last activity: 2026-03-12 - Completed quick task 35: AI Insights sayfasi tam yeniden yazim
 Resume file: None
 Notes: |
