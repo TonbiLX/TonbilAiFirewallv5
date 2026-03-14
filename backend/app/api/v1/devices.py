@@ -2,10 +2,11 @@
 # Cihaz API endpointleri: CRUD + canlı cihazlar + engelleme/engel kaldirma.
 
 import time
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, asc, desc
+from sqlalchemy import select, asc, desc, or_, and_
 from typing import List, Optional
 
 import logging
@@ -21,6 +22,7 @@ from app.models.device import Device
 from app.schemas.device import DeviceCreate, DeviceUpdate, DeviceResponse, BandwidthLimitUpdate
 from app.models.device_connection_log import DeviceConnectionLog
 from app.schemas.device_connection_log import DeviceConnectionLogResponse
+from app.models.connection_flow import ConnectionFlow
 from app.hal.base_driver import BaseNetworkDriver
 
 router = APIRouter()
@@ -303,3 +305,107 @@ async def get_connection_history(
         .limit(limit)
     )
     return result.scalars().all()
+
+
+# Bilinen DoH sunucusu IP'leri
+_DOH_IPS = {
+    "8.8.8.8", "8.8.4.4",           # Google
+    "1.1.1.1", "1.0.0.1",           # Cloudflare
+    "9.9.9.9", "149.112.112.112",    # Quad9
+    "208.67.222.222", "208.67.220.220",  # OpenDNS
+    "94.140.14.14", "94.140.15.15",  # AdGuard
+}
+
+_PI_IP = "192.168.1.2"
+
+
+@router.get("/external-dns-connections")
+async def get_external_dns_connections(
+    hours: int = Query(default=1, ge=1, le=24, description="Kaç saat geriye bakılsın"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Dış DNS bağlantıları tespiti: DoT (port 853), DoH (port 443 + bilinen IP),
+    DNS Bypass (port 53 -> Pi dışı hedef) yapan cihazları listele.
+
+    Gerçek trafik verilerinden (connection_flows tablosu) hesaplanır.
+    """
+    since = datetime.utcnow() - timedelta(hours=hours)
+
+    # DoT: port 853 herhangi bir hedefe
+    dot_condition = ConnectionFlow.dst_port == 853
+
+    # DoH: port 443 + bilinen DoH IP'lerinden birine
+    doh_condition = and_(
+        ConnectionFlow.dst_port == 443,
+        or_(*[ConnectionFlow.dst_ip == ip for ip in _DOH_IPS]),
+    )
+
+    # DNS Bypass: port 53 + Pi'nin IP'si değil
+    bypass_condition = and_(
+        ConnectionFlow.dst_port == 53,
+        ConnectionFlow.dst_ip != _PI_IP,
+    )
+
+    query = (
+        select(
+            ConnectionFlow.device_id,
+            ConnectionFlow.src_ip,
+            ConnectionFlow.dst_ip,
+            ConnectionFlow.dst_port,
+            ConnectionFlow.dst_domain,
+            ConnectionFlow.last_seen,
+        )
+        .where(
+            and_(
+                ConnectionFlow.last_seen >= since,
+                or_(dot_condition, doh_condition, bypass_condition),
+            )
+        )
+        .order_by(ConnectionFlow.last_seen.desc())
+        .limit(200)
+    )
+
+    rows = (await db.execute(query)).all()
+
+    # Cihaz bilgilerini toplu çek
+    device_ids = {r.device_id for r in rows if r.device_id}
+    devices_map: dict = {}
+    if device_ids:
+        dev_result = await db.execute(
+            select(Device).where(Device.id.in_(device_ids))
+        )
+        for dev in dev_result.scalars().all():
+            devices_map[dev.id] = dev
+
+    results = []
+    seen = set()
+    for r in rows:
+        # detection_type belirle
+        if r.dst_port == 853:
+            detection_type = "dot"
+        elif r.dst_port == 443 and r.dst_ip in _DOH_IPS:
+            detection_type = "doh"
+        else:
+            detection_type = "dns_bypass"
+
+        key = (r.src_ip, r.dst_ip, r.dst_port, detection_type)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        dev = devices_map.get(r.device_id) if r.device_id else None
+        results.append({
+            "device_id": r.device_id,
+            "device_ip": r.src_ip,
+            "mac_address": dev.mac_address if dev else None,
+            "hostname": dev.hostname if dev else None,
+            "os_type": dev.device_type if dev else None,
+            "detection_type": detection_type,
+            "dst_ip": r.dst_ip,
+            "dst_port": r.dst_port,
+            "dst_domain": r.dst_domain,
+            "last_seen": r.last_seen.isoformat() if r.last_seen else None,
+        })
+
+    return {"connections": results, "total": len(results), "hours": hours}
