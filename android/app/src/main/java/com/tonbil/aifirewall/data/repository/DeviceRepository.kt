@@ -9,6 +9,7 @@ import com.tonbil.aifirewall.data.remote.dto.DeviceUpdateDto
 import com.tonbil.aifirewall.data.remote.dto.DeviceBandwidthDto
 import com.tonbil.aifirewall.data.remote.dto.DeviceScanResponseDto
 import com.tonbil.aifirewall.data.remote.dto.DnsQueryLogDto
+import com.tonbil.aifirewall.data.remote.dto.ExternalDnsConnectionDto
 import com.tonbil.aifirewall.data.remote.dto.LiveFlowDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -141,6 +142,18 @@ class DeviceRepository(private val client: HttpClient) {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun getExternalDnsConnections(hours: Int = 1): Result<List<ExternalDnsConnectionDto>> = runCatching {
+        val response = client.get("devices/external-dns-connections") {
+            url { parameters.append("hours", hours.toString()) }
+        }
+        val wrapper = response.body<kotlinx.serialization.json.JsonObject>()
+        val arr = wrapper["connections"]
+        kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromJsonElement(
+            kotlinx.serialization.builtins.ListSerializer(ExternalDnsConnectionDto.serializer()),
+            arr ?: kotlinx.serialization.json.JsonArray(emptyList())
+        )
     }
 
     suspend fun getDeviceLiveFlows(deviceId: Int): Result<List<LiveFlowDto>> {

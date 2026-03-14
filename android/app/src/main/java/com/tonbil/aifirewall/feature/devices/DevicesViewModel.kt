@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tonbil.aifirewall.data.remote.WebSocketManager
 import com.tonbil.aifirewall.data.remote.dto.DeviceResponseDto
+import com.tonbil.aifirewall.data.remote.dto.ExternalDnsConnectionDto
 import com.tonbil.aifirewall.data.remote.dto.WsDeviceBandwidthDto
 import com.tonbil.aifirewall.data.repository.DeviceRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +19,9 @@ enum class DeviceSort { NAME, IP, LAST_SEEN }
 data class DevicesUiState(
     val devices: List<DeviceResponseDto> = emptyList(),
     val bandwidthMap: Map<String, WsDeviceBandwidthDto> = emptyMap(),
+    val externalConnections: List<ExternalDnsConnectionDto> = emptyList(),
+    val externalConnectionsLoading: Boolean = false,
+    val showExternalConnections: Boolean = false,
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val error: String? = null,
@@ -119,6 +123,27 @@ class DevicesViewModel(
                 deviceRepository.blockDevice(device.id)
             }
             result.onSuccess { loadDevices() }
+        }
+    }
+
+    fun toggleExternalConnectionsPanel() {
+        val show = !_uiState.value.showExternalConnections
+        _uiState.update { it.copy(showExternalConnections = show) }
+        if (show && _uiState.value.externalConnections.isEmpty()) {
+            loadExternalConnections()
+        }
+    }
+
+    fun loadExternalConnections() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(externalConnectionsLoading = true) }
+            deviceRepository.getExternalDnsConnections(hours = 1)
+                .onSuccess { list ->
+                    _uiState.update { it.copy(externalConnectionsLoading = false, externalConnections = list) }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(externalConnectionsLoading = false) }
+                }
         }
     }
 }

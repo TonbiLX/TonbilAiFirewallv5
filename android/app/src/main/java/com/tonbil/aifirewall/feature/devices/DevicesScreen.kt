@@ -16,14 +16,26 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.ShieldMoon
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.SortByAlpha
+import androidx.compose.material.icons.outlined.Warning
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.tonbil.aifirewall.ui.theme.CyberpunkColors
+import com.tonbil.aifirewall.ui.theme.TextPrimary
+import com.tonbil.aifirewall.ui.theme.TextSecondary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,6 +59,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tonbil.aifirewall.data.remote.dto.DeviceResponseDto
+import com.tonbil.aifirewall.data.remote.dto.ExternalDnsConnectionDto
 import com.tonbil.aifirewall.data.remote.dto.WsDeviceBandwidthDto
 import com.tonbil.aifirewall.ui.components.GlassCard
 import com.tonbil.aifirewall.ui.theme.CyberpunkTheme
@@ -264,6 +277,19 @@ fun DevicesScreen(
                             onClick = { onNavigateToDetail(device.id.toString()) },
                         )
                     }
+
+                    // Dis Baglantilar panel
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ExternalConnectionsPanel(
+                            connections = uiState.externalConnections,
+                            isLoading = uiState.externalConnectionsLoading,
+                            isExpanded = uiState.showExternalConnections,
+                            onToggle = { viewModel.toggleExternalConnectionsPanel() },
+                            onRefresh = { viewModel.loadExternalConnections() },
+                        )
+                    }
+                    item { Spacer(modifier = Modifier.height(24.dp)) }
                 }
             }
         }
@@ -358,6 +384,131 @@ private fun DeviceCard(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ExternalConnectionsPanel(
+    connections: List<ExternalDnsConnectionDto>,
+    isLoading: Boolean,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    onRefresh: () -> Unit,
+) {
+    val colors = CyberpunkTheme.colors
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        // Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.Warning,
+                    contentDescription = null,
+                    tint = colors.neonAmber,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Dış Bağlantılar",
+                    color = colors.neonAmber,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                )
+                if (connections.isNotEmpty()) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.neonRed.copy(alpha = 0.18f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text("${connections.size}", color = colors.neonRed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            Row {
+                if (isExpanded) {
+                    IconButton(onClick = onRefresh, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = "Yenile", tint = colors.neonCyan, modifier = Modifier.size(16.dp))
+                    }
+                }
+                Icon(
+                    if (isExpanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = TextSecondary,
+                )
+            }
+        }
+
+        if (isExpanded) {
+            Spacer(modifier = Modifier.height(8.dp))
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = colors.neonCyan, modifier = Modifier.size(24.dp))
+                }
+            } else if (connections.isEmpty()) {
+                Text(
+                    "Son 1 saatte DoT/DoH/Bypass bağlantısı tespit edilmedi",
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            } else {
+                connections.forEach { conn ->
+                    ExternalConnectionRow(conn = conn, colors = colors)
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExternalConnectionRow(conn: ExternalDnsConnectionDto, colors: CyberpunkColors) {
+    val (typeColor, typeLabel) = when (conn.detectionType) {
+        "dot" -> colors.neonMagenta to "DoT"
+        "doh" -> colors.neonAmber to "DoH"
+        else -> colors.neonRed to "DNS Bypass"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .background(typeColor.copy(alpha = 0.06f))
+            .border(1.dp, typeColor.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(typeColor.copy(alpha = 0.18f))
+                .padding(horizontal = 6.dp, vertical = 3.dp),
+        ) {
+            Text(typeLabel, color = typeColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                conn.hostname ?: conn.deviceIp,
+                color = TextPrimary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+            )
+            if (conn.macAddress != null) {
+                Text(conn.macAddress, color = TextSecondary, fontSize = 10.sp)
+            }
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(conn.dstIp, color = TextSecondary, fontSize = 10.sp)
+            Text(":${conn.dstPort}", color = typeColor, fontSize = 10.sp)
         }
     }
 }
