@@ -16,12 +16,14 @@ import kotlinx.coroutines.launch
 enum class DeviceFilter { ALL, ONLINE, OFFLINE }
 enum class DeviceSort { NAME, IP, LAST_SEEN }
 
+enum class DevicesTab { DEVICES, EXTERNAL }
+
 data class DevicesUiState(
     val devices: List<DeviceResponseDto> = emptyList(),
     val bandwidthMap: Map<String, WsDeviceBandwidthDto> = emptyMap(),
     val externalConnections: List<ExternalDnsConnectionDto> = emptyList(),
     val externalConnectionsLoading: Boolean = false,
-    val showExternalConnections: Boolean = false,
+    val activeTab: DevicesTab = DevicesTab.DEVICES,
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val error: String? = null,
@@ -126,10 +128,9 @@ class DevicesViewModel(
         }
     }
 
-    fun toggleExternalConnectionsPanel() {
-        val show = !_uiState.value.showExternalConnections
-        _uiState.update { it.copy(showExternalConnections = show) }
-        if (show && _uiState.value.externalConnections.isEmpty()) {
+    fun setTab(tab: DevicesTab) {
+        _uiState.update { it.copy(activeTab = tab) }
+        if (tab == DevicesTab.EXTERNAL && _uiState.value.externalConnections.isEmpty()) {
             loadExternalConnections()
         }
     }

@@ -1,6 +1,7 @@
 package com.tonbil.aifirewall.feature.devices
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,26 +17,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.FilterList
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.ShieldMoon
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.SortByAlpha
 import androidx.compose.material.icons.outlined.Warning
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
-import com.tonbil.aifirewall.ui.theme.CyberpunkColors
-import com.tonbil.aifirewall.ui.theme.TextPrimary
-import com.tonbil.aifirewall.ui.theme.TextSecondary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,6 +37,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.pullToRefresh
@@ -56,13 +50,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tonbil.aifirewall.data.remote.dto.DeviceResponseDto
 import com.tonbil.aifirewall.data.remote.dto.ExternalDnsConnectionDto
 import com.tonbil.aifirewall.data.remote.dto.WsDeviceBandwidthDto
 import com.tonbil.aifirewall.ui.components.GlassCard
+import com.tonbil.aifirewall.ui.theme.CyberpunkColors
 import com.tonbil.aifirewall.ui.theme.CyberpunkTheme
+import com.tonbil.aifirewall.ui.theme.TextPrimary
+import com.tonbil.aifirewall.ui.theme.TextSecondary
 import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -126,170 +126,81 @@ fun DevicesScreen(
                 }
             }
             else -> {
-                val onlineCount = uiState.devices.count { it.isOnline }
-                val offlineCount = uiState.devices.size - onlineCount
-                val displayDevices = uiState.filteredDevices
-
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    // Header
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = "Cihazlar",
-                                style = MaterialTheme.typography.headlineLarge,
-                                color = colors.neonCyan,
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Tab row
+                    val tabIndex = if (uiState.activeTab == DevicesTab.DEVICES) 0 else 1
+                    TabRow(
+                        selectedTabIndex = tabIndex,
+                        containerColor = MaterialTheme.colorScheme.background,
+                        contentColor = colors.neonCyan,
+                        indicator = { tabPositions ->
+                            TabRowDefaults.SecondaryIndicator(
+                                modifier = Modifier.tabIndicatorOffset(tabPositions[tabIndex]),
+                                color = if (uiState.activeTab == DevicesTab.DEVICES) colors.neonCyan else colors.neonAmber,
                             )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(colors.neonGreen.copy(alpha = 0.2f))
-                                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                            ) {
+                        },
+                    ) {
+                        Tab(
+                            selected = uiState.activeTab == DevicesTab.DEVICES,
+                            onClick = { viewModel.setTab(DevicesTab.DEVICES) },
+                            text = {
                                 Text(
-                                    text = "$onlineCount aktif",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = colors.neonGreen,
-                                )
-                            }
-                        }
-                    }
-
-                    // Search bar
-                    item {
-                        OutlinedTextField(
-                            value = uiState.searchQuery,
-                            onValueChange = { viewModel.setSearchQuery(it) },
-                            placeholder = { Text("Isim, IP veya MAC ara...") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Outlined.Search,
-                                    contentDescription = null,
-                                    tint = colors.neonCyan,
+                                    "Cihazlar",
+                                    color = if (uiState.activeTab == DevicesTab.DEVICES) colors.neonCyan else TextSecondary,
+                                    fontSize = 13.sp,
                                 )
                             },
-                            trailingIcon = {
-                                if (uiState.searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Clear,
-                                            contentDescription = "Temizle",
-                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                        )
+                        )
+                        Tab(
+                            selected = uiState.activeTab == DevicesTab.EXTERNAL,
+                            onClick = { viewModel.setTab(DevicesTab.EXTERNAL) },
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        "Dış Bağlantılar",
+                                        color = if (uiState.activeTab == DevicesTab.EXTERNAL) colors.neonAmber else TextSecondary,
+                                        fontSize = 13.sp,
+                                    )
+                                    if (uiState.externalConnections.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(colors.neonRed.copy(alpha = 0.18f))
+                                                .padding(horizontal = 5.dp, vertical = 1.dp),
+                                        ) {
+                                            Text(
+                                                "${uiState.externalConnections.size}",
+                                                color = colors.neonRed,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                            )
+                                        }
                                     }
                                 }
                             },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = colors.neonCyan,
-                                unfocusedBorderColor = colors.glassBorder,
-                                focusedLeadingIconColor = colors.neonCyan,
-                                cursorColor = colors.neonCyan,
-                            ),
                         )
                     }
 
-                    // Filter chips
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            FilterChip(
-                                selected = uiState.filter == DeviceFilter.ALL,
-                                onClick = { viewModel.setFilter(DeviceFilter.ALL) },
-                                label = { Text("Tumu (${uiState.devices.size})") },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = colors.neonCyan.copy(alpha = 0.2f),
-                                    selectedLabelColor = colors.neonCyan,
-                                ),
-                            )
-                            FilterChip(
-                                selected = uiState.filter == DeviceFilter.ONLINE,
-                                onClick = { viewModel.setFilter(DeviceFilter.ONLINE) },
-                                label = { Text("Online ($onlineCount)") },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = colors.neonGreen.copy(alpha = 0.2f),
-                                    selectedLabelColor = colors.neonGreen,
-                                ),
-                            )
-                            FilterChip(
-                                selected = uiState.filter == DeviceFilter.OFFLINE,
-                                onClick = { viewModel.setFilter(DeviceFilter.OFFLINE) },
-                                label = { Text("Offline ($offlineCount)") },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = colors.neonRed.copy(alpha = 0.2f),
-                                    selectedLabelColor = colors.neonRed,
-                                ),
-                            )
-                        }
-                    }
-
-                    // Sort chips
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.SortByAlpha,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                modifier = Modifier.size(16.dp),
-                            )
-                            FilterChip(
-                                selected = uiState.sort == DeviceSort.NAME,
-                                onClick = { viewModel.setSort(DeviceSort.NAME) },
-                                label = { Text("Isim") },
-                            )
-                            FilterChip(
-                                selected = uiState.sort == DeviceSort.LAST_SEEN,
-                                onClick = { viewModel.setSort(DeviceSort.LAST_SEEN) },
-                                label = { Text("Son Gorulme") },
-                            )
-                            FilterChip(
-                                selected = uiState.sort == DeviceSort.IP,
-                                onClick = { viewModel.setSort(DeviceSort.IP) },
-                                label = { Text("IP") },
-                            )
-                        }
-                    }
-
-                    // Device cards
-                    items(
-                        items = displayDevices,
-                        key = { it.id },
-                    ) { device ->
-                        DeviceCard(
-                            device = device,
-                            bandwidth = uiState.bandwidthMap[device.id.toString()],
-                            onToggleBlock = { viewModel.toggleBlock(device) },
-                            onClick = { onNavigateToDetail(device.id.toString()) },
+                    // Tab content
+                    if (uiState.activeTab == DevicesTab.DEVICES) {
+                        DevicesTabContent(
+                            uiState = uiState,
+                            colors = colors,
+                            onNavigateToDetail = onNavigateToDetail,
+                            onToggleBlock = { viewModel.toggleBlock(it) },
+                            onSetFilter = { viewModel.setFilter(it) },
+                            onSetSort = { viewModel.setSort(it) },
+                            onSetSearch = { viewModel.setSearchQuery(it) },
                         )
-                    }
-
-                    // Dis Baglantilar panel
-                    item {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ExternalConnectionsPanel(
+                    } else {
+                        ExternalConnectionsTabContent(
                             connections = uiState.externalConnections,
                             isLoading = uiState.externalConnectionsLoading,
-                            isExpanded = uiState.showExternalConnections,
-                            onToggle = { viewModel.toggleExternalConnectionsPanel() },
+                            colors = colors,
                             onRefresh = { viewModel.loadExternalConnections() },
                         )
                     }
-                    item { Spacer(modifier = Modifier.height(24.dp)) }
                 }
             }
         }
@@ -300,6 +211,244 @@ fun DevicesScreen(
             isRefreshing = uiState.isRefreshing,
             modifier = Modifier.align(Alignment.TopCenter),
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DevicesTabContent(
+    uiState: DevicesUiState,
+    colors: CyberpunkColors,
+    onNavigateToDetail: (String) -> Unit,
+    onToggleBlock: (DeviceResponseDto) -> Unit,
+    onSetFilter: (DeviceFilter) -> Unit,
+    onSetSort: (DeviceSort) -> Unit,
+    onSetSearch: (String) -> Unit,
+) {
+    val onlineCount = uiState.devices.count { it.isOnline }
+    val offlineCount = uiState.devices.size - onlineCount
+    val displayDevices = uiState.filteredDevices
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // Header
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Cihazlar",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = colors.neonCyan,
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(colors.neonGreen.copy(alpha = 0.2f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        text = "$onlineCount aktif",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.neonGreen,
+                    )
+                }
+            }
+        }
+
+        // Search bar
+        item {
+            OutlinedTextField(
+                value = uiState.searchQuery,
+                onValueChange = onSetSearch,
+                placeholder = { Text("Isim, IP veya MAC ara...") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Search,
+                        contentDescription = null,
+                        tint = colors.neonCyan,
+                    )
+                },
+                trailingIcon = {
+                    if (uiState.searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { onSetSearch("") }) {
+                            Icon(
+                                imageVector = Icons.Outlined.Clear,
+                                contentDescription = "Temizle",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            )
+                        }
+                    }
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = colors.neonCyan,
+                    unfocusedBorderColor = colors.glassBorder,
+                    focusedLeadingIconColor = colors.neonCyan,
+                    cursorColor = colors.neonCyan,
+                ),
+            )
+        }
+
+        // Filter chips
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = uiState.filter == DeviceFilter.ALL,
+                    onClick = { onSetFilter(DeviceFilter.ALL) },
+                    label = { Text("Tumu (${uiState.devices.size})") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = colors.neonCyan.copy(alpha = 0.2f),
+                        selectedLabelColor = colors.neonCyan,
+                    ),
+                )
+                FilterChip(
+                    selected = uiState.filter == DeviceFilter.ONLINE,
+                    onClick = { onSetFilter(DeviceFilter.ONLINE) },
+                    label = { Text("Online ($onlineCount)") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = colors.neonGreen.copy(alpha = 0.2f),
+                        selectedLabelColor = colors.neonGreen,
+                    ),
+                )
+                FilterChip(
+                    selected = uiState.filter == DeviceFilter.OFFLINE,
+                    onClick = { onSetFilter(DeviceFilter.OFFLINE) },
+                    label = { Text("Offline ($offlineCount)") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = colors.neonRed.copy(alpha = 0.2f),
+                        selectedLabelColor = colors.neonRed,
+                    ),
+                )
+            }
+        }
+
+        // Sort chips
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.SortByAlpha,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    modifier = Modifier.size(16.dp),
+                )
+                FilterChip(
+                    selected = uiState.sort == DeviceSort.NAME,
+                    onClick = { onSetSort(DeviceSort.NAME) },
+                    label = { Text("Isim") },
+                )
+                FilterChip(
+                    selected = uiState.sort == DeviceSort.LAST_SEEN,
+                    onClick = { onSetSort(DeviceSort.LAST_SEEN) },
+                    label = { Text("Son Gorulme") },
+                )
+                FilterChip(
+                    selected = uiState.sort == DeviceSort.IP,
+                    onClick = { onSetSort(DeviceSort.IP) },
+                    label = { Text("IP") },
+                )
+            }
+        }
+
+        // Device cards
+        items(
+            items = displayDevices,
+            key = { it.id },
+        ) { device ->
+            DeviceCard(
+                device = device,
+                bandwidth = uiState.bandwidthMap[device.id.toString()],
+                onToggleBlock = { onToggleBlock(device) },
+                onClick = { onNavigateToDetail(device.id.toString()) },
+            )
+        }
+
+        item { Spacer(modifier = Modifier.height(24.dp)) }
+    }
+}
+
+@Composable
+private fun ExternalConnectionsTabContent(
+    connections: List<ExternalDnsConnectionDto>,
+    isLoading: Boolean,
+    colors: CyberpunkColors,
+    onRefresh: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.Warning,
+                    contentDescription = null,
+                    tint = colors.neonAmber,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Dış DNS Bağlantıları",
+                    color = colors.neonAmber,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                )
+            }
+            IconButton(onClick = onRefresh, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Outlined.Refresh, contentDescription = "Yenile", tint = colors.neonCyan, modifier = Modifier.size(18.dp))
+            }
+        }
+
+        Text(
+            "DoT / DoH / DNS Bypass tespitleri (son 1 saat)",
+            color = TextSecondary,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
+        )
+
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = colors.neonCyan, modifier = Modifier.size(28.dp))
+            }
+        } else if (connections.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                GlassCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "Dış DNS bağlantısı tespit edilmedi",
+                        color = TextSecondary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                }
+            }
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(connections) { conn ->
+                    ExternalConnectionRow(conn = conn, colors = colors)
+                }
+                item { Spacer(modifier = Modifier.height(24.dp)) }
+            }
+        }
     }
 }
 
@@ -389,90 +538,9 @@ private fun DeviceCard(
 }
 
 @Composable
-private fun ExternalConnectionsPanel(
-    connections: List<ExternalDnsConnectionDto>,
-    isLoading: Boolean,
-    isExpanded: Boolean,
-    onToggle: () -> Unit,
-    onRefresh: () -> Unit,
-) {
-    val colors = CyberpunkTheme.colors
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onToggle),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Outlined.Warning,
-                    contentDescription = null,
-                    tint = colors.neonAmber,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    "Dış Bağlantılar",
-                    color = colors.neonAmber,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                )
-                if (connections.isNotEmpty()) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.neonRed.copy(alpha = 0.18f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text("${connections.size}", color = colors.neonRed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-            Row {
-                if (isExpanded) {
-                    IconButton(onClick = onRefresh, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "Yenile", tint = colors.neonCyan, modifier = Modifier.size(16.dp))
-                    }
-                }
-                Icon(
-                    if (isExpanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = TextSecondary,
-                )
-            }
-        }
-
-        if (isExpanded) {
-            Spacer(modifier = Modifier.height(8.dp))
-            if (isLoading) {
-                Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = colors.neonCyan, modifier = Modifier.size(24.dp))
-                }
-            } else if (connections.isEmpty()) {
-                Text(
-                    "Son 1 saatte DoT/DoH/Bypass bağlantısı tespit edilmedi",
-                    color = TextSecondary,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            } else {
-                connections.forEach { conn ->
-                    ExternalConnectionRow(conn = conn, colors = colors)
-                    Spacer(modifier = Modifier.height(6.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun ExternalConnectionRow(conn: ExternalDnsConnectionDto, colors: CyberpunkColors) {
     val (typeColor, typeLabel) = when (conn.detectionType) {
-        "dot" -> colors.neonMagenta to "DoT"
+        "dot" -> Color(0xFFBB86FC) to "DoT"
         "doh" -> colors.neonAmber to "DoH"
         else -> colors.neonRed to "DNS Bypass"
     }
@@ -482,7 +550,7 @@ private fun ExternalConnectionRow(conn: ExternalDnsConnectionDto, colors: Cyberp
             .clip(RoundedCornerShape(6.dp))
             .background(typeColor.copy(alpha = 0.06f))
             .border(1.dp, typeColor.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -505,10 +573,16 @@ private fun ExternalConnectionRow(conn: ExternalDnsConnectionDto, colors: Cyberp
             if (conn.macAddress != null) {
                 Text(conn.macAddress, color = TextSecondary, fontSize = 10.sp)
             }
+            if (conn.osType != null) {
+                Text(conn.osType, color = TextSecondary, fontSize = 10.sp)
+            }
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(conn.dstIp, color = TextSecondary, fontSize = 10.sp)
             Text(":${conn.dstPort}", color = typeColor, fontSize = 10.sp)
+            if (conn.lastSeen != null) {
+                Text(conn.lastSeen.take(16).replace("T", " "), color = TextSecondary, fontSize = 9.sp)
+            }
         }
     }
 }

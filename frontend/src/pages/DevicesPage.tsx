@@ -127,7 +127,7 @@ export function DevicesPage() {
   const [loading, setLoading] = useState(true);
 
   // Tab filtre
-  const [activeTab, setActiveTab] = useState<"all" | "online" | "offline">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "online" | "offline" | "external">("all");
 
   // Siralama
   const [sortBy, setSortBy] = useState("last_seen");
@@ -151,7 +151,6 @@ export function DevicesPage() {
   const [scanning, setScanning] = useState(false);
 
   // Dis Baglantilar
-  const [extConnOpen, setExtConnOpen] = useState(false);
   const [extConnections, setExtConnections] = useState<any[]>([]);
   const [extConnLoading, setExtConnLoading] = useState(false);
 
@@ -167,12 +166,6 @@ export function DevicesPage() {
     }
   }, []);
 
-  const toggleExtConn = () => {
-    const next = !extConnOpen;
-    setExtConnOpen(next);
-    if (next && extConnections.length === 0) loadExternalConnections();
-  };
-
   // Geri bildirim
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
@@ -182,7 +175,7 @@ export function DevicesPage() {
   // --- Veri yükleme ---
   const loadData = useCallback(async () => {
     try {
-      const status = activeTab === "all" ? undefined : activeTab;
+      const status = (activeTab === "all" || activeTab === "external") ? undefined : activeTab;
       const [deviceRes, profileRes] = await Promise.all([
         fetchDevices({ sort_by: sortBy, sort_order: sortOrder, status }),
         fetchProfiles(),
@@ -197,10 +190,14 @@ export function DevicesPage() {
   }, [activeTab, sortBy, sortOrder]);
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 10000);
-    return () => clearInterval(interval);
-  }, [loadData]);
+    if (activeTab === "external") {
+      loadExternalConnections();
+    } else {
+      loadData();
+      const interval = setInterval(loadData, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [loadData, loadExternalConnections, activeTab]);
 
   // --- Ag taramasi ---
   const handleScanDevices = async () => {
@@ -448,10 +445,26 @@ export function DevicesPage() {
           >
             Çevrimdışı ({offlineCount})
           </button>
+          <button
+            onClick={() => setActiveTab("external")}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+              activeTab === "external"
+                ? "bg-neon-amber/20 text-neon-amber border border-neon-amber/30"
+                : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10"
+            }`}
+          >
+            <ShieldX size={14} />
+            Dış Bağlantılar
+            {extConnections.length > 0 && (
+              <span className="bg-red-500/20 text-red-400 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                {extConnections.length}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* Arama + Siralama */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        {/* Arama + Siralama - sadece cihaz tablarinda */}
+        {activeTab !== "external" && <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="relative w-full sm:w-72">
             <Search
               size={16}
@@ -488,7 +501,7 @@ export function DevicesPage() {
               {sortOrder === "asc" ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* Geri bildirim mesaji */}
@@ -509,16 +522,90 @@ export function DevicesPage() {
         </div>
       )}
 
-      {/* Cihaz listesi */}
-      {filteredDevices.length === 0 ? (
+      {/* Dis Baglantilar Tab icerik */}
+      {activeTab === "external" && (
         <GlassCard>
-          <p className="text-gray-500 text-center py-8">
-            {searchQuery
-              ? "Aramanızla eşleşen cihaz bulunamadı."
-              : "Kayıtlı cihaz bulunamadı."}
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <ShieldX className="w-5 h-5 text-neon-amber" />
+              <span className="text-neon-amber font-bold">Dış Bağlantılar</span>
+              <span className="text-xs text-gray-400">(DoT / DoH / DNS Bypass)</span>
+            </div>
+            <button
+              onClick={loadExternalConnections}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-neon-cyan border border-neon-cyan/20 bg-neon-cyan/5 hover:bg-neon-cyan/10 transition-all"
+            >
+              <RefreshCw size={12} />
+              Yenile
+            </button>
+          </div>
+          {extConnLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="w-6 h-6 text-neon-cyan animate-spin" />
+            </div>
+          ) : extConnections.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-8">Son 1 saatte DoT/DoH/Bypass bağlantısı tespit edilmedi.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-gray-400 text-xs border-b border-white/10">
+                    <th className="text-left pb-2 pr-4">Tespit Türü</th>
+                    <th className="text-left pb-2 pr-4">Cihaz</th>
+                    <th className="text-left pb-2 pr-4">MAC Adresi</th>
+                    <th className="text-left pb-2 pr-4">Cihaz Tipi</th>
+                    <th className="text-left pb-2 pr-4">Hedef IP</th>
+                    <th className="text-left pb-2 pr-4">Port</th>
+                    <th className="text-left pb-2">Son Görülme</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {extConnections.map((conn: any, i: number) => {
+                    const typeColors: Record<string, string> = {
+                      dot: "text-purple-400 bg-purple-400/10 border-purple-400/30",
+                      doh: "text-neon-amber bg-neon-amber/10 border-neon-amber/30",
+                      dns_bypass: "text-neon-red bg-neon-red/10 border-neon-red/30",
+                    };
+                    const typeLabels: Record<string, string> = {
+                      dot: "DoT", doh: "DoH", dns_bypass: "DNS Bypass",
+                    };
+                    const cls = typeColors[conn.detection_type] || "text-gray-400";
+                    return (
+                      <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+                        <td className="py-2 pr-4">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded border ${cls}`}>
+                            {typeLabels[conn.detection_type] || conn.detection_type}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-4 text-white">{conn.hostname || conn.device_ip || "-"}</td>
+                        <td className="py-2 pr-4 text-gray-400 font-mono text-xs">{conn.mac_address || "-"}</td>
+                        <td className="py-2 pr-4 text-gray-400">{conn.os_type || "-"}</td>
+                        <td className="py-2 pr-4 text-neon-cyan font-mono text-xs">{conn.dst_ip}</td>
+                        <td className="py-2 pr-4 text-gray-400">{conn.dst_port}</td>
+                        <td className="py-2 text-gray-500 text-xs">
+                          {conn.last_seen ? new Date(conn.last_seen).toLocaleString("tr-TR") : "-"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </GlassCard>
-      ) : (
+      )}
+
+      {/* Cihaz listesi */}
+      {activeTab !== "external" && (
+        filteredDevices.length === 0 ? (
+          <GlassCard>
+            <p className="text-gray-500 text-center py-8">
+              {searchQuery
+                ? "Aramanızla eşleşen cihaz bulunamadı."
+                : "Kayıtlı cihaz bulunamadı."}
+            </p>
+          </GlassCard>
+        ) : (
         <div className="space-y-3">
           {filteredDevices.map((device) => {
             const profileName = getProfileName(device.profile_id);
@@ -830,98 +917,8 @@ export function DevicesPage() {
             );
           })}
         </div>
+        )
       )}
-
-      {/* Dis Baglantilar Paneli */}
-      <div className="mt-6">
-        <GlassCard>
-          <div
-            className="flex items-center justify-between cursor-pointer select-none"
-            onClick={toggleExtConn}
-          >
-            <div className="flex items-center gap-2">
-              <ShieldX className="w-5 h-5 text-amber-400" />
-              <span className="text-amber-400 font-bold text-sm">Dış Bağlantılar</span>
-              <span className="text-xs text-gray-400">(DoT / DoH / DNS Bypass)</span>
-              {extConnections.length > 0 && (
-                <span className="bg-red-500/20 text-red-400 text-xs font-bold px-2 py-0.5 rounded-full">
-                  {extConnections.length}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {extConnOpen && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); loadExternalConnections(); }}
-                  className="text-cyan-400 hover:text-cyan-300 p-1"
-                  title="Yenile"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-              )}
-              {extConnOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-            </div>
-          </div>
-
-          {extConnOpen && (
-            <div className="mt-4">
-              {extConnLoading ? (
-                <div className="flex justify-center py-6">
-                  <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
-                </div>
-              ) : extConnections.length === 0 ? (
-                <p className="text-gray-500 text-sm">Son 1 saatte DoT/DoH/Bypass bağlantısı tespit edilmedi.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-gray-400 text-xs border-b border-white/10">
-                        <th className="text-left pb-2">Tespit Türü</th>
-                        <th className="text-left pb-2">Cihaz</th>
-                        <th className="text-left pb-2">MAC Adresi</th>
-                        <th className="text-left pb-2">Cihaz Tipi</th>
-                        <th className="text-left pb-2">Hedef IP</th>
-                        <th className="text-left pb-2">Port</th>
-                        <th className="text-left pb-2">Son Görülme</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {extConnections.map((conn: any, i: number) => {
-                        const typeColors: Record<string, string> = {
-                          dot: "text-purple-400 bg-purple-400/10 border-purple-400/30",
-                          doh: "text-amber-400 bg-amber-400/10 border-amber-400/30",
-                          dns_bypass: "text-red-400 bg-red-400/10 border-red-400/30",
-                        };
-                        const typeLabels: Record<string, string> = {
-                          dot: "DoT", doh: "DoH", dns_bypass: "DNS Bypass",
-                        };
-                        const cls = typeColors[conn.detection_type] || "text-gray-400";
-                        return (
-                          <tr key={i} className="border-b border-white/5 hover:bg-white/5">
-                            <td className="py-2">
-                              <span className={`text-xs font-bold px-2 py-0.5 rounded border ${cls}`}>
-                                {typeLabels[conn.detection_type] || conn.detection_type}
-                              </span>
-                            </td>
-                            <td className="py-2 text-white">{conn.hostname || conn.device_ip || "-"}</td>
-                            <td className="py-2 text-gray-400 font-mono text-xs">{conn.mac_address || "-"}</td>
-                            <td className="py-2 text-gray-400">{conn.os_type || "-"}</td>
-                            <td className="py-2 text-cyan-400 font-mono text-xs">{conn.dst_ip}</td>
-                            <td className="py-2 text-gray-400">{conn.dst_port}</td>
-                            <td className="py-2 text-gray-500 text-xs">
-                              {conn.last_seen ? new Date(conn.last_seen).toLocaleString("tr-TR") : "-"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-        </GlassCard>
-      </div>
     </div>
   );
 }
