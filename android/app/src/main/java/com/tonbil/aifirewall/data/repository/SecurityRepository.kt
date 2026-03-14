@@ -55,6 +55,20 @@ class SecurityRepository(private val client: HttpClient) {
         client.delete(ApiRoutes.dnsRuleDetail(id))
     }
 
+    suspend fun getDnsQueries(
+        limit: Int = 100,
+        blockedOnly: Boolean = false,
+        domainSearch: String? = null,
+    ): Result<List<DnsQueryLogDto>> = runCatching {
+        client.get(ApiRoutes.DNS_QUERIES) {
+            url {
+                parameters.append("limit", limit.toString())
+                if (blockedOnly) parameters.append("blocked_only", "true")
+                if (!domainSearch.isNullOrBlank()) parameters.append("domain_search", domainSearch)
+            }
+        }.body()
+    }
+
     // ========== FIREWALL ==========
 
     suspend fun getFirewallStats(): Result<FirewallStatsDto> = runCatching {

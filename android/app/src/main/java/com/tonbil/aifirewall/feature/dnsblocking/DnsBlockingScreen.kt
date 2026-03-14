@@ -16,11 +16,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -59,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tonbil.aifirewall.data.remote.dto.BlocklistDto
+import com.tonbil.aifirewall.data.remote.dto.DnsQueryLogDto
 import com.tonbil.aifirewall.data.remote.dto.DnsRuleDto
 import com.tonbil.aifirewall.data.remote.dto.DnsStatsDto
 import com.tonbil.aifirewall.ui.components.GlassCard
@@ -69,6 +73,8 @@ import com.tonbil.aifirewall.ui.theme.TextPrimary
 import com.tonbil.aifirewall.ui.theme.TextSecondary
 import org.koin.androidx.compose.koinViewModel
 
+private val DNS_TABS = listOf("İstatistik", "Listeler", "Kurallar", "Sorgular")
+
 @Composable
 fun DnsBlockingScreen(
     onBack: () -> Unit,
@@ -77,6 +83,7 @@ fun DnsBlockingScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = CyberpunkTheme.colors
     val snackbarHostState = remember { SnackbarHostState() }
+    var selectedTab by remember { mutableStateOf(0) }
 
     LaunchedEffect(uiState.actionMessage) {
         uiState.actionMessage?.let {
@@ -135,16 +142,50 @@ fun DnsBlockingScreen(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
                 )
-                IconButton(onClick = { viewModel.loadAll() }) {
+                IconButton(onClick = {
+                    if (selectedTab == 3) viewModel.loadQueries() else viewModel.loadAll()
+                }) {
                     Icon(Icons.Outlined.Refresh, contentDescription = "Yenile", tint = colors.neonAmber)
                 }
             }
 
-            if (uiState.isLoading) {
+            // Tab bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                DNS_TABS.forEachIndexed { index, label ->
+                    val selected = selectedTab == index
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (selected) colors.neonCyan.copy(alpha = 0.18f) else colors.glassBg)
+                            .border(1.dp, if (selected) colors.neonCyan else colors.glassBorder, RoundedCornerShape(8.dp))
+                            .clickable {
+                                selectedTab = index
+                                if (index == 3 && uiState.queries.isEmpty()) viewModel.loadQueries()
+                            }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            label,
+                            color = if (selected) colors.neonCyan else TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    }
+                }
+            }
+
+            if (uiState.isLoading && selectedTab != 3) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = colors.neonCyan)
                 }
-            } else if (uiState.error != null) {
+            } else if (uiState.error != null && selectedTab != 3) {
                 Box(
                     modifier = Modifier.fillMaxSize().padding(16.dp),
                     contentAlignment = Alignment.Center,
@@ -167,83 +208,95 @@ fun DnsBlockingScreen(
                 ) {
                     item { Spacer(modifier = Modifier.height(4.dp)) }
 
-                    // Stats summary
-                    item {
-                        DnsStatsRow(stats = uiState.stats, colors = colors)
-                    }
-
-                    // Blocklists header + refresh all button
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "Engelleme Listeleri",
-                                color = colors.neonMagenta,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                            )
-                            Row {
-                                IconButton(onClick = { viewModel.refreshAllBlocklists() }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Outlined.Refresh, contentDescription = "Tumu Guncelle", tint = colors.neonGreen, modifier = Modifier.size(18.dp))
+                    when (selectedTab) {
+                        0 -> {
+                            // Stats summary
+                            item {
+                                DnsStatsRow(stats = uiState.stats, colors = colors)
+                            }
+                        }
+                        1 -> {
+                            // Blocklists header + refresh all button
+                            item {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        "Engelleme Listeleri",
+                                        color = colors.neonMagenta,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                    )
+                                    Row {
+                                        IconButton(onClick = { viewModel.refreshAllBlocklists() }, modifier = Modifier.size(36.dp)) {
+                                            Icon(Icons.Outlined.Refresh, contentDescription = "Tumu Guncelle", tint = colors.neonGreen, modifier = Modifier.size(18.dp))
+                                        }
+                                        IconButton(onClick = { viewModel.showAddBlocklistDialog() }, modifier = Modifier.size(36.dp)) {
+                                            Icon(Icons.Outlined.Add, contentDescription = "Liste Ekle", tint = colors.neonCyan, modifier = Modifier.size(18.dp))
+                                        }
+                                    }
                                 }
-                                IconButton(onClick = { viewModel.showAddBlocklistDialog() }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Outlined.Add, contentDescription = "Liste Ekle", tint = colors.neonCyan, modifier = Modifier.size(18.dp))
+                            }
+
+                            if (uiState.blocklists.isEmpty()) {
+                                item {
+                                    GlassCard(modifier = Modifier.fillMaxWidth()) {
+                                        Text("Engelleme listesi bulunamadi", color = TextSecondary, modifier = Modifier.padding(8.dp))
+                                    }
+                                }
+                            } else {
+                                items(uiState.blocklists, key = { "bl_${it.id}" }) { blocklist ->
+                                    BlocklistCard(
+                                        blocklist = blocklist,
+                                        onToggle = { viewModel.toggleBlocklist(blocklist.id) },
+                                        onDelete = { viewModel.deleteBlocklist(blocklist.id) },
+                                        colors = colors,
+                                    )
                                 }
                             }
                         }
-                    }
+                        2 -> {
+                            // DNS Rules header
+                            item {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        "Ozel Kurallar",
+                                        color = colors.neonMagenta,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                    )
+                                    IconButton(onClick = { viewModel.showAddRuleDialog() }, modifier = Modifier.size(36.dp)) {
+                                        Icon(Icons.Outlined.Add, contentDescription = "Kural Ekle", tint = colors.neonCyan, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
 
-                    if (uiState.blocklists.isEmpty()) {
-                        item {
-                            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                                Text("Engelleme listesi bulunamadi", color = TextSecondary, modifier = Modifier.padding(8.dp))
+                            if (uiState.rules.isEmpty()) {
+                                item {
+                                    GlassCard(modifier = Modifier.fillMaxWidth()) {
+                                        Text("Ozel kural bulunamadi", color = TextSecondary, modifier = Modifier.padding(8.dp))
+                                    }
+                                }
+                            } else {
+                                items(uiState.rules, key = { "rule_${it.id}" }) { rule ->
+                                    RuleCard(
+                                        rule = rule,
+                                        onDelete = { viewModel.deleteRule(rule.id) },
+                                        colors = colors,
+                                    )
+                                }
                             }
                         }
-                    } else {
-                        items(uiState.blocklists, key = { "bl_${it.id}" }) { blocklist ->
-                            BlocklistCard(
-                                blocklist = blocklist,
-                                onToggle = { viewModel.toggleBlocklist(blocklist.id) },
-                                onDelete = { viewModel.deleteBlocklist(blocklist.id) },
-                                colors = colors,
-                            )
-                        }
-                    }
-
-                    // DNS Rules header
-                    item {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "Ozel Kurallar",
-                                color = colors.neonMagenta,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                            )
-                            IconButton(onClick = { viewModel.showAddRuleDialog() }, modifier = Modifier.size(36.dp)) {
-                                Icon(Icons.Outlined.Add, contentDescription = "Kural Ekle", tint = colors.neonCyan, modifier = Modifier.size(18.dp))
-                            }
-                        }
-                    }
-
-                    if (uiState.rules.isEmpty()) {
-                        item {
-                            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                                Text("Ozel kural bulunamadi", color = TextSecondary, modifier = Modifier.padding(8.dp))
-                            }
-                        }
-                    } else {
-                        items(uiState.rules, key = { "rule_${it.id}" }) { rule ->
-                            RuleCard(
-                                rule = rule,
-                                onDelete = { viewModel.deleteRule(rule.id) },
+                        3 -> {
+                            dnsQueriesTabContent(
+                                uiState = uiState,
+                                viewModel = viewModel,
                                 colors = colors,
                             )
                         }
@@ -541,6 +594,146 @@ private fun AddRuleDialog(
             TextButton(onClick = onDismiss) { Text("Iptal", color = TextSecondary) }
         },
     )
+}
+
+private fun LazyListScope.dnsQueriesTabContent(
+    uiState: DnsBlockingUiState,
+    viewModel: DnsBlockingViewModel,
+    colors: CyberpunkColors,
+) {
+    item {
+        // Search bar
+        OutlinedTextField(
+            value = uiState.queriesDomainSearch,
+            onValueChange = { viewModel.setQueriesDomainSearch(it) },
+            placeholder = { Text("Domain ara...", color = TextSecondary.copy(alpha = 0.5f)) },
+            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp)) },
+            trailingIcon = {
+                if (uiState.queriesDomainSearch.isNotBlank()) {
+                    IconButton(onClick = {
+                        viewModel.setQueriesDomainSearch("")
+                        viewModel.applyQueriesSearch()
+                    }, modifier = Modifier.size(32.dp)) {
+                        Text("x", color = TextSecondary, fontSize = 14.sp)
+                    }
+                }
+            },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = colors.neonCyan,
+                unfocusedBorderColor = colors.glassBorder,
+                cursorColor = colors.neonCyan,
+                focusedTextColor = TextPrimary,
+                unfocusedTextColor = TextPrimary,
+            ),
+        )
+    }
+    item {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = uiState.queriesBlockedOnly,
+                    onCheckedChange = { viewModel.setQueriesBlockedOnly(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.Black,
+                        checkedTrackColor = colors.neonRed,
+                        uncheckedThumbColor = TextSecondary,
+                        uncheckedTrackColor = colors.glassBg,
+                    ),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sadece engellenenler", color = TextSecondary, fontSize = 12.sp)
+            }
+            Button(
+                onClick = { viewModel.applyQueriesSearch() },
+                colors = ButtonDefaults.buttonColors(containerColor = colors.neonCyan.copy(alpha = 0.18f)),
+                modifier = Modifier.height(36.dp),
+            ) {
+                Text("Ara", color = colors.neonCyan, fontSize = 12.sp)
+            }
+        }
+    }
+    if (uiState.queriesLoading) {
+        item {
+            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = colors.neonCyan, modifier = Modifier.size(28.dp))
+            }
+        }
+    } else if (uiState.queries.isEmpty()) {
+        item {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Text("DNS sorgu logu bulunamadi", color = TextSecondary, modifier = Modifier.padding(8.dp))
+            }
+        }
+    } else {
+        items(uiState.queries, key = { "q_${it.id}" }) { query ->
+            DnsQueryLogCard(query = query, colors = colors)
+        }
+    }
+}
+
+@Composable
+private fun DnsQueryLogCard(
+    query: DnsQueryLogDto,
+    colors: CyberpunkColors,
+) {
+    val blockedColor = if (query.blocked) colors.neonRed else colors.neonGreen
+    val blockedLabel = if (query.blocked) "ENGELLENDI" else "IZIN"
+    val sourceColor = when (query.sourceType) {
+        "EXTERNAL" -> colors.neonAmber
+        "DOT" -> colors.neonMagenta
+        else -> colors.neonCyan
+    }
+
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    query.domain,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(query.clientIp, color = TextSecondary, fontSize = 10.sp)
+                    Text("•", color = TextSecondary, fontSize = 10.sp)
+                    // Format timestamp: show only time portion if today
+                    Text(
+                        query.timestamp.substringAfter("T").substringBefore(".").take(8),
+                        color = TextSecondary,
+                        fontSize = 10.sp,
+                    )
+                }
+            }
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(blockedColor.copy(alpha = 0.15f))
+                        .border(1.dp, blockedColor.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                ) {
+                    Text(blockedLabel, color = blockedColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(sourceColor.copy(alpha = 0.12f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                ) {
+                    Text(query.sourceType, color = sourceColor, fontSize = 9.sp)
+                }
+            }
+        }
+    }
 }
 
 private fun formatNumber(n: Int): String {

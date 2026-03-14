@@ -115,6 +115,20 @@ data class DhcpLeaseDto(
     val expiry: String? = null,
 )
 
+// External DNS Connection (DoT/DoH/Bypass tespiti)
+@Serializable
+data class ExternalDnsConnectionDto(
+    @SerialName("device_id") val deviceId: Int? = null,
+    @SerialName("device_ip") val deviceIp: String = "",
+    @SerialName("mac_address") val macAddress: String? = null,
+    val hostname: String? = null,
+    @SerialName("os_type") val osType: String? = null,
+    @SerialName("detection_type") val detectionType: String = "", // dot, doh, dns_bypass
+    @SerialName("dst_ip") val dstIp: String = "",
+    @SerialName("dst_port") val dstPort: Int = 0,
+    @SerialName("last_seen") val lastSeen: String = "",
+)
+
 // DNS Blocklist
 @Serializable
 data class BlocklistDto(

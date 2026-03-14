@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tonbil.aifirewall.data.remote.dto.BlocklistCreateDto
 import com.tonbil.aifirewall.data.remote.dto.BlocklistDto
+import com.tonbil.aifirewall.data.remote.dto.DnsQueryLogDto
 import com.tonbil.aifirewall.data.remote.dto.DnsRuleCreateDto
 import com.tonbil.aifirewall.data.remote.dto.DnsRuleDto
 import com.tonbil.aifirewall.data.remote.dto.DnsStatsDto
@@ -20,6 +21,10 @@ data class DnsBlockingUiState(
     val stats: DnsStatsDto? = null,
     val blocklists: List<BlocklistDto> = emptyList(),
     val rules: List<DnsRuleDto> = emptyList(),
+    val queries: List<DnsQueryLogDto> = emptyList(),
+    val queriesLoading: Boolean = false,
+    val queriesBlockedOnly: Boolean = false,
+    val queriesDomainSearch: String = "",
     val isLoading: Boolean = true,
     val isActionLoading: Boolean = false,
     val error: String? = null,
@@ -167,6 +172,35 @@ class DnsBlockingViewModel(
                     _uiState.update { it.copy(isActionLoading = false, actionMessage = "Hata: ${e.message}") }
                 }
         }
+    }
+
+    fun loadQueries() {
+        val state = _uiState.value
+        viewModelScope.launch {
+            _uiState.update { it.copy(queriesLoading = true) }
+            securityRepository.getDnsQueries(
+                limit = 100,
+                blockedOnly = state.queriesBlockedOnly,
+                domainSearch = state.queriesDomainSearch.takeIf { it.isNotBlank() },
+            ).onSuccess { list ->
+                _uiState.update { it.copy(queriesLoading = false, queries = list) }
+            }.onFailure { e ->
+                _uiState.update { it.copy(queriesLoading = false, actionMessage = "Sorgu logları yüklenemedi: ${e.message}") }
+            }
+        }
+    }
+
+    fun setQueriesBlockedOnly(value: Boolean) {
+        _uiState.update { it.copy(queriesBlockedOnly = value) }
+        loadQueries()
+    }
+
+    fun setQueriesDomainSearch(value: String) {
+        _uiState.update { it.copy(queriesDomainSearch = value) }
+    }
+
+    fun applyQueriesSearch() {
+        loadQueries()
     }
 
     fun showAddBlocklistDialog() = _uiState.update { it.copy(showAddBlocklistDialog = true) }
